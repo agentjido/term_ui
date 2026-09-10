@@ -47,7 +47,8 @@ defmodule TermUI.MixProject do
       preferred_envs: [
         coveralls: :test,
         "coveralls.detail": :test,
-        "coveralls.html": :test
+        "coveralls.html": :test,
+        spex: :test
       ]
     ]
   end
@@ -141,6 +142,7 @@ defmodule TermUI.MixProject do
 
       # Testing
       {:excoveralls, "~> 0.18", only: :test},
+      {:sexy_spex, "~> 0.2.1", only: :test, runtime: false},
 
       # LLM usage rules
       {:usage_rules, "~> 0.1", only: :dev, runtime: false},
