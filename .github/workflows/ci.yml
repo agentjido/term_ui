@@ -27,6 +27,20 @@ jobs:
       docs_command: mix docs --warnings-as-errors -f html && mix doctor --raise
       test_command: mix coveralls --warnings-as-errors
 
+  acceptance:
+    name: Acceptance specifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+      - name: Run acceptance specifications
+        run: |
+          mix deps.get
+          mix spex
+
   tty-nif-policy:
     name: TTY NIF (${{ matrix.mode }}, OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }})
     runs-on: ubuntu-latest
