@@ -76,7 +76,7 @@ defmodule TermUI.MixProject do
       {:gen_stage, "~> 1.2"},
 
       # Markdown processing
-      {:mdex, "~> 0.13.2"},
+      {:mdex, "~> 0.14"},
 
       # Syntax highlighting for code blocks
       {:makeup, "~> 1.1"},
