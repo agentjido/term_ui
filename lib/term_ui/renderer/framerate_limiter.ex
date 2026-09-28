@@ -464,7 +464,7 @@ defmodule TermUI.Renderer.FramerateLimiter do
     # Calculate actual FPS from timestamps
     actual_fps =
       case state.frame_timestamps do
-        [latest | rest] when length(rest) >= 1 ->
+        [latest | rest] when rest != [] ->
           oldest = List.last(rest)
           duration_s = (latest - oldest) / 1_000_000
           count = length(rest)

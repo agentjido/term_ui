@@ -177,7 +177,7 @@ defmodule TermUI.Test.Assertions do
 
       positions = TestRenderer.find_text(renderer, text)
 
-      if length(positions) > 0 do
+      if positions != [] do
         true
       else
         raise ExUnit.AssertionError,

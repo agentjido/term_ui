@@ -190,7 +190,7 @@ defmodule TermUI.Widget.BlockTest do
       result = Block.render(state, small_area)
 
       assert %RenderNode{type: :cells, cells: cells} = result
-      assert length(cells) > 0
+      assert cells != []
     end
 
     test "handles zero width" do

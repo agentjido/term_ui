@@ -207,7 +207,7 @@ defmodule TermUI.Widgets.LogViewer do
 
     # Start at bottom if tail mode
     state =
-      if props.tail_mode and length(lines) > 0 do
+      if props.tail_mode and lines != [] do
         %{
           state
           | cursor: length(lines) - 1,
@@ -727,7 +727,7 @@ defmodule TermUI.Widgets.LogViewer do
 
     # Jump to first match if any
     state =
-      if length(matches) > 0 do
+      if matches != [] do
         first_match = hd(matches)
         visible_lines = get_visible_line_indices(state)
         visible_idx = Enum.find_index(visible_lines, &(&1 == first_match)) || 0
@@ -745,7 +745,7 @@ defmodule TermUI.Widgets.LogViewer do
   end
 
   defp next_search_match(state, direction) do
-    if state.search && length(state.search.matches) > 0 do
+    if state.search && state.search.matches != [] do
       matches = state.search.matches
       current = state.search.current_match
       next_idx = rem(current + direction + length(matches), length(matches))

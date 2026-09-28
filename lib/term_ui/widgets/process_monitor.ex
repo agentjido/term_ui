@@ -300,7 +300,7 @@ defmodule TermUI.Widgets.ProcessMonitor do
   # k - kill process
   def handle_event(%Event.Key{char: "k"}, state)
       when state.filter_input == nil and state.pending_action == nil do
-    if length(state.processes) > 0 do
+    if state.processes != [] do
       {:ok, %{state | pending_action: :kill}}
     else
       {:ok, state}
@@ -905,7 +905,7 @@ defmodule TermUI.Widgets.ProcessMonitor do
     border = text(String.duplicate("-", 60), fg_color(Theme.get_color(:primary)))
 
     links_text =
-      if length(process.links) > 0 do
+      if process.links != [] do
         process.links
         |> Enum.take(5)
         |> Enum.map_join(", ", &inspect/1)
@@ -914,7 +914,7 @@ defmodule TermUI.Widgets.ProcessMonitor do
       end
 
     monitors_text =
-      if length(process.monitors) > 0 do
+      if process.monitors != [] do
         process.monitors
         |> Enum.take(5)
         |> Enum.map_join(", ", &inspect/1)
@@ -923,7 +923,7 @@ defmodule TermUI.Widgets.ProcessMonitor do
       end
 
     monitored_by_text =
-      if length(process.monitored_by) > 0 do
+      if process.monitored_by != [] do
         process.monitored_by
         |> Enum.take(5)
         |> Enum.map_join(", ", &inspect/1)
@@ -949,7 +949,7 @@ defmodule TermUI.Widgets.ProcessMonitor do
     trace = get_stack_trace(process.pid)
 
     trace_lines =
-      if trace && length(trace) > 0 do
+      if trace && trace != [] do
         trace
         |> Enum.take(6)
         |> Enum.map(fn {m, f, a, loc} ->

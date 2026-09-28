@@ -184,7 +184,7 @@ defmodule TermUI.Widget.Block do
       # Left padding
       top_cells =
         if left_pad > 0 do
-          top_cells ++ for(x <- 1..left_pad, do: positioned_cell_safe(x, 0, chars.h, style))
+          top_cells ++ render_top_padding(left_pad, 1, chars.h, style)
         else
           top_cells
         end
@@ -203,15 +203,19 @@ defmodule TermUI.Widget.Block do
       top_cells =
         if right_pad > 0 do
           top_cells ++
-            for i <- 0..(right_pad - 1) do
-              positioned_cell_safe(1 + left_pad + title_len + i, 0, chars.h, style)
-            end
+            render_top_padding(right_pad, 1 + left_pad + title_len, chars.h, style)
         else
           top_cells
         end
 
       top_cells ++ [positioned_cell_safe(area.width - 1, 0, chars.tr, style)]
     end
+  end
+
+  defp render_top_padding(count, offset, char, style) do
+    Enum.map(0..(count - 1), fn i ->
+      positioned_cell_safe(offset + i, 0, char, style)
+    end)
   end
 
   defp render_side_borders(chars, area, style) do

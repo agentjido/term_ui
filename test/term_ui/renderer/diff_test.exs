@@ -53,7 +53,7 @@ defmodule TermUI.Renderer.DiffTest do
           _ -> false
         end)
 
-      assert length(move_ops) >= 1
+      assert move_ops != []
 
       Buffer.destroy(current)
       Buffer.destroy(previous)
@@ -151,7 +151,7 @@ defmodule TermUI.Renderer.DiffTest do
           _ -> false
         end)
 
-      assert length(style_ops) >= 1
+      assert style_ops != []
 
       Buffer.destroy(current)
       Buffer.destroy(previous)
@@ -300,7 +300,7 @@ defmodule TermUI.Renderer.DiffTest do
           _ -> false
         end)
 
-      assert length(style_ops) >= 1
+      assert style_ops != []
     end
 
     test "splits on style changes" do
@@ -394,7 +394,7 @@ defmodule TermUI.Renderer.DiffTest do
           _ -> false
         end)
 
-      assert length(text_ops) >= 1
+      assert text_ops != []
       text = Enum.map_join(text_ops, "", fn {:text, t} -> t end)
       assert text == "Hello World"
 
@@ -417,7 +417,7 @@ defmodule TermUI.Renderer.DiffTest do
           _ -> false
         end)
 
-      assert length(style_ops) >= 1
+      assert style_ops != []
 
       Buffer.destroy(current)
       Buffer.destroy(previous)

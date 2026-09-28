@@ -45,7 +45,7 @@ defmodule TermUI.Widgets.ProcessMonitorTest do
       {:ok, state} = ProcessMonitor.init(props)
 
       assert is_list(state.processes)
-      assert length(state.processes) > 0
+      assert state.processes != []
       assert state.selected_idx == 0
       assert state.sort_field == :reductions
       assert state.sort_direction == :desc
@@ -381,7 +381,7 @@ defmodule TermUI.Widgets.ProcessMonitorTest do
 
       assert result.type == :stack
       assert result.direction == :vertical
-      assert length(result.children) > 0
+      assert result.children != []
     end
 
     test "renders header with sort info", %{state: state} do

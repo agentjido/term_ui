@@ -244,7 +244,7 @@ defmodule TermUI.Widgets.VisualizationHelper do
   def calculate_range(values, opts \\ [])
   def calculate_range([], _opts), do: {0, 1}
 
-  def calculate_range(values, opts) when is_list(values) and length(values) > 0 do
+  def calculate_range(values, opts) when is_list(values) and values != [] do
     min_val = Keyword.get_lazy(opts, :min, fn -> Enum.min(values) end)
     max_val = Keyword.get_lazy(opts, :max, fn -> Enum.max(values) end)
     {min_val, max_val}

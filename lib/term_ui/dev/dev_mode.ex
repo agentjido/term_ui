@@ -408,7 +408,7 @@ defmodule TermUI.Dev.DevMode do
 
     # Calculate FPS from average frame time
     avg_time =
-      if length(frame_times) > 0 do
+      if frame_times != [] do
         Enum.sum(frame_times) / length(frame_times)
       else
         # Default to ~60 FPS

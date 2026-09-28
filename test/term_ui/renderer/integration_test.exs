@@ -509,7 +509,7 @@ defmodule TermUI.Renderer.IntegrationTest do
       assert time_us < 15_000
 
       # Should produce operations
-      assert length(operations) > 0
+      assert operations != []
 
       cells = 40 * 120
       cells_per_ms = cells / (time_us / 1000)

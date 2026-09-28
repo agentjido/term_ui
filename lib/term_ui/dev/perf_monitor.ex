@@ -110,13 +110,16 @@ defmodule TermUI.Dev.PerfMonitor do
 
       chars =
         Enum.map_join(times, "", fn time ->
-          if time >= threshold, do: "▄", else: " "
+          graph_character(time, threshold)
         end)
 
       padded = String.pad_trailing(chars, graph_width)
       text("│ " <> padded <> " │")
     end
   end
+
+  defp graph_character(time, threshold) when time >= threshold, do: "▄"
+  defp graph_character(_time, _threshold), do: " "
 
   @doc """
   Formats bytes into human-readable string.
