@@ -12,6 +12,7 @@ defmodule TermUI.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_ignore_filters: [&String.ends_with?(&1, "_spex.exs")],
       compilers: tty_nif_compilers(),
       make_targets: ["all"],
       make_clean: ["clean"],
@@ -145,7 +146,7 @@ defmodule TermUI.MixProject do
       {:sexy_spex, "~> 0.2.1", only: :test, runtime: false},
 
       # LLM usage rules
-      {:usage_rules, "~> 0.1", only: :dev, runtime: false},
+      {:usage_rules, "~> 1.2", only: :dev, runtime: false},
 
       # Release tooling
       {:git_ops, "~> 2.9", only: :dev, runtime: false}

@@ -1,0 +1,312 @@
+# TermUI repository cleanup and v2 release plan
+
+Prepared on 29 September 2026.
+
+## Goal
+
+Address all 12 open issues and all 3 open pull requests in
+`agentjido/term_ui`. Repair confirmed defects on the correct version branch.
+Verify the runtime in real terminals and in Jido Console. Clean up repository
+documents, CI, branch rules, and release data. Prepare and ship TermUI 2.0.0
+after the separate release decision required by `AGENTS.md`.
+
+Issue #70 is part of this goal. The plan includes its web backend and optional
+Ghostty sessions before the final 2.0.0 release. Moving that work to a later
+release requires a scope decision. It is not a default closure reason.
+
+An issue is addressed only when its acceptance checks pass, or when evidence
+supports another clear resolution. Age and lack of recent comments are not
+closure reasons. Preserve published tags and release history.
+
+## Checked starting state
+
+| Item | State |
+| --- | --- |
+| Authoritative repository | `agentjido/term_ui`; local remote `agentjido` |
+| Local `origin` | `mikehostetler/term_ui`; a fork with different branch history |
+| Local `upstream` | `pcharbon70/term_ui`; do not use it as the release target |
+| Default branch | `develop`, commit `4c70486`; older v1 code |
+| V1 release tag | `v1.0.0`, commit `560d992` |
+| V1 maintenance branch | `maint/1.x`, commit `560d992`; three commits behind `main` |
+| `main` | Commit `0e0e8e4`; v1 code with later dependency and CI fixes |
+| V2 integration branch | `next/v2`, commit `048ae09` |
+| V2 package version | Still `1.0.0-rc.1`; this must become a 2.0 version |
+| Published Hex version | Stable `1.0.0` is listed on Hex |
+| GitHub releases | The release list returned no entries; tags still exist |
+| PR #67 | Draft from `next/v2` to `develop`; release review record |
+| PR #69 | Targets `next/v2`; five failed checks in its latest run |
+| PR #33 | V1 SSH contribution; targets `develop`; has merge conflicts |
+| Branch protection | `develop` and `main` require old check names absent from the v2 workflow |
+| Current working tree | Clean before this plan was added |
+
+The last successful v2 branch CI run was on 1 September. It is historical
+evidence. It does not establish the current release state.
+
+PR #69 failed two Elixir 1.20 test jobs, two TTY jobs, and the dependency audit.
+The run reports advisories for `igniter`, `mint`, and `usage_rules`. Read all
+failure logs and run current checks before choosing dependency versions.
+
+The v1 LogViewer now creates regexes in private functions. This suggests that
+#7 is already fixed. V2 already has complete SSH session support. These are
+code findings. Closure still needs verification.
+
+## Branch rules
+
+| Branch | Purpose and merge target |
+| --- | --- |
+| `maint/1.x` | Supported v1 fixes. Base all new v1 work on this branch. |
+| `fix/v1-*`, `docs/v1-*`, `chore/v1-*` | Small v1 PRs into `maint/1.x`. |
+| `next/v2` | V2 integration. Base all new v2 work on this branch. |
+| `fix/v2-*`, `test/v2-*`, `feat/v2-*`, `docs/v2-*`, `chore/v2-*` | Small v2 PRs into `next/v2`. |
+| `test/sexy-spex-acceptance-spec` | Existing head for PR #69. Update and verify it against the repaired v2 base. |
+| `develop` | Keep its current release role until the separate v2 release decision. PR #67 is the only planned v2 entry. |
+| `release/2.0.0` | Create after the release decision, from the verified v2 code on `develop`. Release changes only. |
+| `main` | Stable release history. Merge the reviewed release branch here and tag its exact approved commit. |
+
+Use `agentjido` explicitly for fetches, pushes, and repository checks. Do not
+assume that `origin/develop` and `agentjido/develop` contain the same version.
+Use separate worktrees for v1 and v2 work. Keep build output separate too.
+
+Repair a defect on each version where it occurs. Port tests and behavior
+between versions as needed. Do not copy the v2 runtime into v1. Do not merge
+`next/v2` into `maint/1.x`.
+
+Use Conventional Commits and focused, non-draft PRs for new work. Keep the
+existing PR #67 draft until the release checks pass. Run `mix quality` and
+`mix coveralls` before every commit. Terminal lifecycle changes also need a
+real terminal check.
+
+## Open issue work list
+
+Branch names below are proposed. Create a fix branch only when a defect needs
+a code change. Use a test or documentation branch for a verified old fix.
+
+| Issue | Version and branch | Work and required evidence |
+| --- | --- | --- |
+| [#5: Windows control characters](https://github.com/agentjido/term_ui/issues/5) | Both; `fix/v1-windows-input` to `maint/1.x`, `fix/v2-windows-input` to `next/v2` | Reproduce in Windows Terminal and Command Prompt. Check Git Bash separately. Verify terminal setup, raw/TTY selection, escape output, size, and cleanup. Record supported terminals and test results. |
+| [#6: Windows controls](https://github.com/agentjido/term_ui/issues/6) | Both; same Windows branches as #5 | Verify navigation, Enter, space, q, control keys, paste, and resize. Check the reported width problem with a full-width example. CI compilation alone does not prove that input works. |
+| [#7: Regex attribute compile error](https://github.com/agentjido/term_ui/issues/7) | V1 report; `test/v1-log-viewer-compile` to `maint/1.x`; verify v2 LogViewer too | Confirm the existing fix in a clean Elixir 1.19 build. Verify LogViewer behavior. Record FreeBSD support from actual checks if available. Close as already fixed only with the fix commit and supported-version evidence. |
+| [#9: Community examples and discussion](https://github.com/agentjido/term_ui/issues/9) | Documents; `docs/v2-community` to `next/v2`; add v1 guidance to `maint/1.x` where needed | Provide one clear route for discussion and contributed examples. Use existing project channels where possible. Record the decision on prompt examples. Close as an answered request after the guidance is available. |
+| [#10: Oracle Linux release build](https://github.com/agentjido/term_ui/issues/10) | Both; `docs/v1-linux-release` to `maint/1.x`, `docs/v2-linux-release` to `next/v2` | Provide a repeatable release build for the target Linux environment. Check libc, BEAM, and native dependencies, including MDEx. Run the release on an Oracle Linux 8 compatible system. Test terminal use separately from the container build. Document any supported-platform limit. |
+| [#11: Layout constraints disappear](https://github.com/agentjido/term_ui/issues/11) | V1 fix; `fix/v1-layout-constraints` to `maint/1.x`; `test/v2-layout-constraints` to `next/v2` | Run the exact nested constrained-stack example on v1. Repair tuple handling or correct the documented API. Verify the equivalent v2 fixed/fill layout, bounds, small sizes, and resize. Publish the migration example. |
+| [#19: Full screen redraw](https://github.com/agentjido/term_ui/issues/19) | Both; `fix/v1-redraw-recovery` to `maint/1.x`, `fix/v2-redraw-recovery` to `next/v2` | Verify that forced redraw repairs terminal output, even when application state is unchanged. Check pane orientation changes, removed cells, and resize. An existing `force_render/1` function is not sufficient evidence. |
+| [#25: Colors change after update](https://github.com/agentjido/term_ui/issues/25) | Both; `fix/v1-style-diff` to `maint/1.x`, `fix/v2-style-diff` to `next/v2` | Use a fixed sequence of matrix updates from the report. Check style-only changes, adjacent colors, ANSI reset state, and the final cell. Verify emitted terminal output as well as frame values. |
+| [#35: macOS Option+Delete](https://github.com/agentjido/term_ui/issues/35) | Both; `fix/v1-option-delete` to `maint/1.x`, `fix/v2-option-delete` to `next/v2` | Capture the real key bytes. Test ESC+DEL, ESC+Backspace, split input chunks, and any observed CSI encoding. Check parser recovery and word deletion in text widgets. Verify Unicode, selections, and continued input after the key. Use a real macOS terminal. |
+| [#36: Foreground/background recovery](https://github.com/agentjido/term_ui/issues/36) | Both; same redraw branches as #19 | Check suspend, external terminal output, resume, and focus changes. Restore terminal modes and invalidate the last-output cache through the backend owner. Verify that a real full redraw repairs the screen without a state change. |
+| [#68: SexySpex evaluation](https://github.com/agentjido/term_ui/issues/68) | V2; existing PR #69 to `next/v2` | Finish the PR checks. Verify state, frame output, cleanup, and the separate `mix spex` job. Record the adoption decision and test-only dependency use. |
+| [#70: Web backend and Ghostty](https://github.com/agentjido/term_ui/issues/70) | V2; `feat/v2-web-protocol`, `feat/v2-web-backend`, `test/v2-web-browser`, and `feat/v2-ghostty-session`, all to `next/v2` | Complete the frame protocol, browser transport, renderer, browser tests, and optional terminal sessions. Use the detailed checks below. No v1 backport is planned. |
+
+## Open pull request work list
+
+| PR | Action |
+| --- | --- |
+| [#69: SexySpex](https://github.com/agentjido/term_ui/pull/69) | Repair shared CI and dependency failures on `next/v2` first. Update this PR to that base. Review its cleanup and dependency isolation. Run `mix quality`, `mix coveralls`, and `mix spex`. Merge only when all required checks pass. Then resolve #68 explicitly if it remains open. |
+| [#33: SSH sessions](https://github.com/agentjido/term_ui/pull/33) | Compare every requested behavior with v2 and closed migration issue #48. Verify concurrent OTP SSH sessions, resize, shrinking rows, spaces, bottom-right output, backpressure, and disconnect cleanup. Add missing v2 behavior on `fix/v2-ssh-parity` to `next/v2`. The planned resolution is to close #33 as superseded after parity passes. Do not merge its old runtime changes into v2. If v1 users still require this new backend, use a separate `feat/v1-ssh-sessions` PR to `maint/1.x`; use a v1 minor release for a new public feature. |
+| [#67: V2 release review](https://github.com/agentjido/term_ui/pull/67) | Keep it open and draft during cleanup. Update its description with the final scope, migration changes, test records, and release checks. Resolve review findings. Mark it ready after verification. Merge into `develop` only after the separate release decision. |
+
+GitHub automatic issue closure depends on the default branch. A merge into
+`maint/1.x` or `next/v2` may leave an issue open. Confirm the state and close it
+with evidence when its work is complete.
+
+## Work order
+
+### 1. Establish reliable v1 and v2 checks
+
+- Record fresh branch heads, tags, package versions, issue states, and CI runs.
+- Compare the three v1 commits on `main` with `maint/1.x`. Run v1 checks, then
+  include those fixes through a reviewed maintenance update. Keep `v1.0.0`
+  unchanged.
+- Use `chore/v1-maintenance-baseline` into `maint/1.x` for the v1 CI baseline.
+  Add a `mix quality` alias if it is absent. Enable PR and push CI for
+  `maint/1.x`. Preserve the supported v1 runtime range.
+- Use `chore/v2-cleanup-baseline` into `next/v2` for current audit failures,
+  warning failures, platform CI, and inconsistent branch instructions.
+- Read the PR #69 failure logs in full. Capture expected warning output in
+  tests where it is part of the contract. Repair unexpected warnings. Keep
+  warnings-as-errors and the coverage threshold.
+- Update vulnerable dependencies to verified compatible versions. Check
+  transitive dependencies and each example lockfile. Run the current audit.
+- Check the CI summary: it must fail when a required child job fails. PR #69
+  had a successful summary despite failed child jobs.
+- Add real platform checks for v2. Keep the declared v2 pairs: Elixir 1.18.4,
+  1.19, and 1.20 on OTP 28; Elixir 1.20 on OTP 29.
+- Align branch protection with checks that actually run. Keep review and test
+  requirements. Stage the `develop` and `main` rule change with the release
+  transition. Protect `maint/1.x` and `next/v2` with their own passing checks.
+
+Exit check: clean v1 and v2 builds, passing current CI, and working merge checks
+for maintenance PRs. Do not use historical green runs as the exit check.
+
+### 2. Resolve the existing reports
+
+- Verify #7 first. Record an existing fix where the report no longer occurs.
+- Complete #35, #5, and #6. Input stalls and Windows input failures have high
+  priority.
+- Complete #19 and #36 together. Check actual output recovery.
+- Complete #25 and #11 with reproductions from the issue bodies.
+- Complete the deployment guide and target checks for #10.
+- Complete the community guidance for #9.
+- For each version, keep the fix, regression test, documents, and check record
+  in the same focused PR where practical.
+
+Exit check: each old report has a verified fix or an evidence-based resolution.
+Do not close an unverified platform defect to make the open count zero.
+
+### 3. Finish the pending contributions
+
+- Finish and merge #69. Resolve #68.
+- Verify SSH parity and resolve #33 as described above.
+- Recheck the closed migration work in #47 and its child issues. Correct stale
+  checklists where the underlying work is complete. Verify the actual API.
+
+Exit check: #69 and #33 have final resolutions. #67 remains the release PR.
+
+### 4. Complete issue #70
+
+Use a transport-neutral frame protocol as the first design. Keep the server
+transport optional. A normal TermUI application must not need Phoenix or
+Ghostty to run.
+
+- Define full frames, row changes, dimensions, styles, cursor state, protocol
+  versions, and reconnect behavior. Confirm size order at each boundary.
+- Keep the complete `TermUI.Frame` as the backend rendering contract. Apply
+  wire changes against a known successful frame. Reconnect must start from a
+  full frame.
+- Implement a simple DOM renderer first. Normalize keyboard, mouse, paste,
+  focus, and resize input to existing `TermUI.Event` values.
+- Keep connection ownership, input validation, size, capabilities, and cleanup
+  in the backend owner. Keep widgets pure. Bound queued output for slow clients.
+- Add protocol tests and real browser tests for Unicode, wide cells, colors,
+  attributes, cursor state, input, resize, disconnect, and shutdown.
+- Measure full-frame and changed-row updates on a representative large frame.
+  Use the results to decide if Canvas is needed. Avoid two permanent renderers.
+- Check the current Ghostty APIs, dependency limits, and supported platforms
+  before selecting the version.
+- Add optional session support. One session owner manages the PTY and emulator.
+  It converts emulator output to a TermUI frame region. It handles responses,
+  input, resize, scrollback, output bounds, and shutdown.
+- Test a shell and an alternate-screen application. Test two concurrent
+  sessions. Confirm that no PTY process remains after shutdown.
+- Test unsupported platforms and normal TermUI use without Ghostty. Report a
+  clear unsupported result without breaking local, SSH, or browser backends.
+- Demonstrate both ordinary frames and embedded terminal frames in the same
+  browser renderer. Check every acceptance item in #70 before closure.
+
+Exit check: #70 has a usable example, protocol tests, browser results, terminal
+session results, and all acceptance items complete.
+
+### 5. Clean up repository and release documents
+
+Use `docs/v2-release-guide` and `chore/v2-repository-cleanup` into `next/v2`.
+
+- Change the v2 package version, README dependency, and migration guide to the
+  2.0 release series. Choose the next unused candidate version from current
+  tags and Hex data. Do not publish another incompatible 1.0 candidate.
+- Replace the current migration-to-1.0 guide with an accurate v1-to-v2 guide.
+  Update module links, examples, package metadata, and usage rules.
+- Preserve `TermUI` and the Jido Console runtime contract. Keep one state owner,
+  complete frames, one backend owner, pure widgets, and commands as data.
+- Mark v1 planning notes and the old 1.0 runbook as historical. Remove dead
+  links and duplicate current instructions. Preserve useful design history.
+- Check examples from a clean checkout. Remove local paths, build products,
+  temporary files, and stale generated output from tracked files.
+- Classify each old branch as active, merged, superseded, or unmerged. Preserve
+  unmerged commits and release branches. Remove a branch only after its useful
+  work has been preserved and its PR has a final resolution.
+- Align default-branch contribution guidance, CI filters, Dependabot targets,
+  labels, issue templates, and the v1 support statement with the chosen release
+  topology. Future dependencies need to reach the maintained version branches.
+- Check GitHub release records against tags and Hex. Repair missing records
+  from verified release data. Never move or recreate a published tag.
+
+Exit check: current documents describe v2 correctly, v1 guidance remains
+available, and repository cleanup does not discard unmerged work.
+
+### 6. Verify the release candidate
+
+Record the commit SHA, toolchain, platform, command, and result for each check.
+
+- Run `mix quality` and `mix coveralls` from clean checkouts. Keep v2 coverage
+  at or above the current 90% threshold.
+- Run `mix spex` and every declared CI pair. Test source and disabled NIF modes.
+  Test automatic selection and missing-tool behavior too.
+- Run dependency audit, unused-dependency checks, documentation build, package
+  build, and Hex publication dry run.
+- Inspect package contents. Install the built archive in a small clean consumer
+  project and run it. The package must work without a repository checkout.
+- Check local raw, local TTY/IEx, SSH, deterministic, and web backends.
+- Check macOS, Linux, and Windows terminals. Add the target Linux release check
+  from #10. Record any platform that remains unverified.
+- Use real terminals for start, resize, paste, control keys, suspend/resume,
+  normal exit, application error, backend error, and forced runtime exit. Check
+  cursor, colors, input mode, mouse, paste, focus, and screen restoration.
+- Run the counter and showcase. Run Jido Console with the candidate package.
+  Verify commands, events, streaming output, resize, and shutdown.
+- Run browser and Ghostty integration checks from #70.
+- Review PR #67 at the final candidate SHA. Confirm that each open issue and
+  PR has a final result or is the current release review itself.
+
+Exit check: a complete release record with no known unresolved release defects.
+An inaccessible terminal or consumer is an unverified check, not a pass.
+
+### 7. Make the release decision and ship
+
+`AGENTS.md` requires a separate decision before v2 enters `develop`. Prepare
+the candidate and test record first. Obtain that decision at this stage.
+
+- Mark #67 ready and satisfy its review requirements. Merge the approved v2
+  code into `develop` after the release decision.
+- Create `release/2.0.0` from the verified v2 code on `develop`.
+- Use the existing release tooling for version and changelog preparation.
+  Use an explicit 2.0 version. Inspect the dry run and the final package.
+- Merge the reviewed release PR into `main`. Run required checks on the final
+  release commit. Tag that exact commit as `v2.0.0`.
+- Publish the same commit to Hex, HexDocs, and GitHub. Do not skip tests or
+  publish from a dirty checkout. Confirm that publishing access is available.
+- Install the published version in a clean consumer. Check the published docs
+  and Jido Console once more.
+- Align `develop` with the released code. Retire `next/v2` only after its work
+  is merged and no active PR needs it. Keep `maint/1.x` for the v1 support line.
+
+## Completion record
+
+Maintain one table during execution with: issue or PR, version, branch, fix
+commit, regression check, platform check, merged PR, and closure reason.
+
+For bug fixes, closure needs a reproduction or a verified existing fix, passing
+checks, and the version that contains the fix. For a duplicate or superseded
+request, link the completed replacement. For an information request, link the
+answer or published guide. Prepare a short evidence comment when closing an
+item; the cleanup request authorizes these repository updates.
+
+The goal is complete when all original issues and PRs have final resolutions,
+needed v1 changes are on `maint/1.x`, v2 passes the release checks, TermUI 2.0.0
+is published from its approved tag, and a clean consumer can use that release.
+If release access or a required check is unavailable, keep the remaining work
+explicit. Do not mark the release complete.
+
+## Sources
+
+- [Open issues](https://github.com/agentjido/term_ui/issues)
+- [Open pull requests](https://github.com/agentjido/term_ui/pulls)
+- [PR #69 failed CI run](https://github.com/agentjido/term_ui/actions/runs/34540585249)
+- [Prior v2 CI run](https://github.com/agentjido/term_ui/actions/runs/33505073620)
+- [Migration work #47](https://github.com/agentjido/term_ui/issues/47)
+- [Published TermUI package](https://hex.pm/packages/term_ui)
+- Repository files: `AGENTS.md`, `CONTRIBUTING.md`, `mix.exs`,
+  `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
+  `release-1.0.0.md`, and the current backend and migration guides.
+
+## Execution state
+
+Phase 1 is in progress. The original issue and PR scope is unchanged.
+
+| Work | Branch or PR | Evidence and remaining work |
+| --- | --- | --- |
+| V1 maintenance baseline | `chore/v1-maintenance-baseline`; [PR #71](https://github.com/agentjido/term_ui/pull/71) into `maint/1.x`; head `bf5f19b` | Includes the three commits from `main`. Adds maintenance CI and `mix quality`. Replaces a fixed sleep in the async input test with a completion message. The first macOS CI run found a 100 ms command-result timeout; the test now uses its existing one-second eventual timeout. Local quality and audit pass. Elixir 1.19.3 / OTP 28.1.1: 5,311 tests, 0 failures, 78.2% coverage. Elixir 1.15.8 / OTP 26.2.1: 5,324 tests, 0 failures, 78.1% coverage. Remote CI is running again. |
+| V2 CI and audit baseline | `chore/v2-cleanup-baseline`; [PR #72](https://github.com/agentjido/term_ui/pull/72) into `next/v2`; head `db49bf6` | Updates `usage_rules`, `igniter`, `mint`, and release-tool dependencies. Adds macOS/Windows source and disabled NIF jobs, a final required-check job, and correct contribution targets. Windows CI stopped in setup-beam before compilation because its old pin did not recognize `win25-vs2026`. The pin now uses verified release 1.24.1, which adds that mapping. Local quality passes. Elixir 1.20.4 / OTP 28.5.0.5: 965 passed, 1 excluded, 90.2% coverage. Audit, unused-dependency checks, workflow syntax, and required-check failure cases pass. Remote checks remain. |
+| PR #69 repair | `test/sexy-spex-acceptance-spec` | The failing Elixir 1.20 runs flag `test/spex/counter_spex.exs` as a file outside the configured test discovery filters. An explicit spec ignore filter is now present, and the separate acceptance job is a required check. Local quality passes. The Elixir 1.20 normal suite passes all 965 tests with warnings-as-errors and 90.2% coverage. `mix spex` passes its one acceptance test. Push, corrected PR description, and remote checks remain. |
+| Issue #7 resolution | Published tag `v1.0.0`; [resolution comment](https://github.com/agentjido/term_ui/issues/7#issuecomment-5897486537) | Closed as fixed in 1.0.0. Commit `3b665ff` is an ancestor of the tag. The tag contains private `level_patterns/0` and `timestamp_pattern/0` functions. Clean Elixir 1.19 compilation and tests pass locally and in Linux CI. FreeBSD terminal behavior is not verified. |
+
+All other issue fixes, release checks, repository branch rules, and the final
+release remain pending. No v2 code has entered `develop`.
