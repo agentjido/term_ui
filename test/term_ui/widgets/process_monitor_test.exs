@@ -313,7 +313,13 @@ defmodule TermUI.Widgets.ProcessMonitorTest do
       end
     end
 
-    test "p key triggers suspend confirmation", %{state: state} do
+    test "p key triggers suspend confirmation" do
+      test_pid = start_supervised!({Agent, fn -> :test end})
+      {:ok, state} = ProcessMonitor.init(ProcessMonitor.new(show_system_processes: true))
+      process = Enum.find(state.processes, &(&1.pid == test_pid))
+      assert process
+      state = %{state | processes: [process], selected_idx: 0}
+
       {:ok, state} = ProcessMonitor.handle_event(%Event.Key{char: "p"}, state)
       assert state.pending_action == :suspend
     end
