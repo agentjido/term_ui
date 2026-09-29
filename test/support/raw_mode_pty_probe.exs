@@ -2,7 +2,12 @@ defmodule TermUI.Test.RawModePtyProbe do
   alias TermUI.Terminal.RawMode
 
   def run do
-    case RawMode.enter() do
+    options =
+      if System.get_env("TERM_UI_CONSOLE_FORCE_NATIVE") == "1",
+        do: [signals_api?: false],
+        else: []
+
+    case RawMode.enter(options) do
       {:ok, session} ->
         IO.write("__TERM_UI_READY__\n")
         bytes = read_bytes(4, [])
