@@ -20,6 +20,7 @@ defmodule TermUI.MixProject do
       source_url: @source_url,
       homepage_url: @source_url,
       docs: docs(),
+      aliases: aliases(),
 
       # Test coverage
       test_coverage: [tool: ExCoveralls],
@@ -50,6 +51,18 @@ defmodule TermUI.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support", "mix/tasks"]
   defp elixirc_paths(_), do: ["lib", "mix/tasks"]
+
+  defp aliases do
+    [
+      quality: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "dialyzer",
+        "docs --warnings-as-errors"
+      ]
+    ]
+  end
 
   def application do
     [
