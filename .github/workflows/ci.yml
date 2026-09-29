@@ -27,6 +27,20 @@ jobs:
       docs_command: mix docs --warnings-as-errors -f html && mix doctor --raise
       test_command: mix coveralls --warnings-as-errors
 
+  acceptance:
+    name: Acceptance specifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+      - name: Run acceptance specifications
+        run: |
+          mix deps.get
+          mix spex
+
   tty-nif-policy:
     name: TTY NIF (${{ matrix.mode }}, OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }})
     runs-on: ubuntu-latest
@@ -126,7 +140,7 @@ jobs:
   required-checks:
     name: Required checks
     if: always()
-    needs: [ci, tty-nif-policy, platform, examples]
+    needs: [ci, tty-nif-policy, platform, examples, acceptance]
     runs-on: ubuntu-latest
     steps:
       - name: Require all CI jobs to pass
@@ -135,8 +149,9 @@ jobs:
           TTY_POLICY_RESULT: ${{ needs.tty-nif-policy.result }}
           PLATFORM_RESULT: ${{ needs.platform.result }}
           EXAMPLES_RESULT: ${{ needs.examples.result }}
+          ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
         run: |
-          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT"; do
+          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A required CI job did not pass: $result"
               exit 1

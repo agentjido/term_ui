@@ -75,10 +75,11 @@ defmodule TermUI.TermUtilsTest do
         Process.sleep(:infinity)
       end
 
+      # The deadline also includes starting an external command on CI workers.
       assert {:error, :timeout} =
-               TermUtils.safe_test(["-n", "term_ui"], timeout: 250, validate: validate)
+               TermUtils.safe_test(["-n", "term_ui"], timeout: 5_000, validate: validate)
 
-      assert_receive {:validator, validator}
+      assert_receive {:validator, validator}, 1_000
       refute Process.alive?(validator)
     end
   end
