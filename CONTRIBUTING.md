@@ -1,7 +1,9 @@
 # Contributing to TermUI
 
-Use the `develop` branch as the pull request target. Keep changes focused and
-include tests for behavior changes.
+Use `next/v2` as the pull request target for v2 work. Use `maint/1.x` for v1
+fixes. Base each change on its target branch. Keep changes focused and include
+tests for behavior changes. Keep v2 out of `develop` until the separate release
+decision is complete.
 
 Before you submit a pull request, run:
 
