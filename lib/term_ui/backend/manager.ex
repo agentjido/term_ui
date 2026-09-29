@@ -263,6 +263,18 @@ defmodule TermUI.Backend.Manager do
 
   defp register_resume_handler(_backend), do: :ok
 
+  defp unregister_resume_handler(backend) when backend in [Raw, TTY] do
+    if match?({:unix, _}, :os.type()) do
+      :gen_event.delete_handler(:erl_signal_server, {SignalHandler, self()}, :normal)
+    end
+
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp unregister_resume_handler(_backend), do: :ok
+
   defp wait_for_otp_signal(backend) when backend in [Raw, TTY] do
     case :gen_event.call(:erl_signal_server, {SignalHandler, self()}, :sync, 1_000) do
       :ok -> :ok
@@ -445,6 +457,7 @@ defmodule TermUI.Backend.Manager do
     do: {:error, backend_error(backend, :size, {:invalid_result, other})}
 
   defp close_backend(module, state, reason) do
+    unregister_resume_handler(module)
     module.shutdown(state, reason)
   rescue
     _exception -> :ok
