@@ -16,6 +16,9 @@ defmodule TermUI.Widget.TextInput do
   and returns `{:changed, value}`. Mouse press and drag use zero-based local
   columns from `mouse/3`.
 
+  Alt+Backspace (Option+Delete on macOS) removes trailing spaces and the
+  preceding word. An active selection is removed first.
+
   ## Example
 
       input = TermUI.Widget.TextInput.init(placeholder: "Name", max_length: 80)
@@ -87,11 +90,11 @@ defmodule TermUI.Widget.TextInput do
   def update(%Event.Key{key: :end, modifiers: modifiers}, state),
     do: navigate(state, grapheme_count(state.value), modifiers)
 
-  def update(%Event.Key{key: :backspace}, state) do
+  def update(%Event.Key{key: :backspace, modifiers: modifiers}, state) do
     cond do
       not Selection.empty?(state.selection) -> delete_selection(state)
       state.cursor == 0 -> {state, []}
-      true -> delete_before_cursor(state)
+      true -> delete_before_cursor(state, modifiers)
     end
   end
 
@@ -235,10 +238,15 @@ defmodule TermUI.Widget.TextInput do
     changed(%{state | value: value, cursor: cursor, selection: selection})
   end
 
-  defp delete_before_cursor(state) do
-    graphemes = String.graphemes(state.value)
-    value = graphemes |> List.delete_at(state.cursor - 1) |> Enum.join()
-    changed(%{state | value: value, cursor: state.cursor - 1})
+  defp delete_before_cursor(state, modifiers) do
+    start =
+      if :alt in modifiers,
+        do: Helpers.previous_word_start(state.value, state.cursor),
+        else: state.cursor - 1
+
+    {before, rest} = String.split_at(state.value, start)
+    {_deleted, after_cursor} = String.split_at(rest, state.cursor - start)
+    changed(%{state | value: before <> after_cursor, cursor: start})
   end
 
   defp delete_at_cursor(state) do

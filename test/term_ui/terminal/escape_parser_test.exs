@@ -9,6 +9,38 @@ defmodule TermUI.Terminal.EscapeParserTest do
              EscapeParser.parse("\e[<0;0;0M")
   end
 
+  test "Option+Delete consumes ESC DEL and ESC BS without blocking later input" do
+    for byte <- [8, 127] do
+      assert {[
+                %Event.Key{key: :backspace, modifiers: [:alt]},
+                %Event.Text{text: "x"},
+                %Event.Key{key: :up}
+              ], ""} = EscapeParser.parse(<<27, byte>> <> "x\e[A")
+    end
+  end
+
+  test "Option+Delete recovers at every input chunk boundary" do
+    for byte <- [8, 127] do
+      input = "a" <> <<27, byte>> <> "界\e[A"
+
+      for split <- 1..(byte_size(input) - 1) do
+        {first, buffered} = EscapeParser.parse(binary_part(input, 0, split))
+
+        {second, remaining} =
+          EscapeParser.parse(buffered <> binary_part(input, split, byte_size(input) - split))
+
+        assert remaining == ""
+
+        assert [
+                 %Event.Text{text: "a"},
+                 %Event.Key{key: :backspace, modifiers: [:alt]},
+                 %Event.Text{text: "界"},
+                 %Event.Key{key: :up}
+               ] = first ++ second
+      end
+    end
+  end
+
   describe "parse/1 - single characters" do
     test "parses lowercase letters" do
       {events, remaining} = EscapeParser.parse("a")

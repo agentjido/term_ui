@@ -10,6 +10,10 @@ defmodule TermUI.Widget.TextArea do
   Shift with navigation keys changes the selection. Ctrl+A selects all text.
   Ctrl+C returns `{:copy, text}`. Ctrl+X also removes the selection. Mouse
   press and drag use zero-based local coordinates from `mouse/3`.
+
+  Alt+Backspace (Option+Delete on macOS) removes trailing spaces and the
+  preceding word on the current line. It preserves line breaks. An active
+  selection is removed first.
   """
 
   @behaviour TermUI.Widget
@@ -85,11 +89,11 @@ defmodule TermUI.Widget.TextArea do
   def update(%Event.Key{key: :down, modifiers: modifiers}, state),
     do: navigate(state, vertical(state, 1), modifiers)
 
-  def update(%Event.Key{key: :backspace}, state) do
+  def update(%Event.Key{key: :backspace, modifiers: modifiers}, state) do
     cond do
       not Selection.empty?(state.selection) -> delete_selection(state)
       state.cursor == 0 -> {state, []}
-      true -> delete_before_cursor(state)
+      true -> delete_before_cursor(state, modifiers)
     end
   end
 
@@ -235,14 +239,19 @@ defmodule TermUI.Widget.TextArea do
     changed(%{state | value: value, cursor: cursor, selection: selection})
   end
 
-  defp delete_before_cursor(state) do
-    graphemes = String.graphemes(state.value)
+  defp delete_before_cursor(state, modifiers) do
+    start =
+      if :alt in modifiers,
+        do: Helpers.previous_word_start(state.value, state.cursor),
+        else: state.cursor - 1
 
-    changed(%{
-      state
-      | value: graphemes |> List.delete_at(state.cursor - 1) |> Enum.join(),
-        cursor: state.cursor - 1
-    })
+    if start == state.cursor do
+      {state, []}
+    else
+      {before, rest} = String.split_at(state.value, start)
+      {_deleted, after_cursor} = String.split_at(rest, state.cursor - start)
+      changed(%{state | value: before <> after_cursor, cursor: start})
+    end
   end
 
   defp delete_at_cursor(state) do

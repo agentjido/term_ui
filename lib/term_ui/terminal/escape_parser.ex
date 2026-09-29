@@ -128,6 +128,11 @@ defmodule TermUI.Terminal.EscapeParser do
     parse_ss3_sequence(rest)
   end
 
+  # Option+Delete / Alt+Backspace uses ESC DEL or ESC BS.
+  defp parse_escape_sequence(<<char, rest::binary>>) when char in [8, @delete] do
+    {:ok, Input.special_key(:backspace, modifiers: [:alt]), rest}
+  end
+
   # Alt+key (ESC followed by printable character)
   defp parse_escape_sequence(<<char, rest::binary>>) when char in 32..126 do
     char_str = <<char>>
