@@ -217,6 +217,7 @@ defmodule TermUI.MixProject do
         "guides/architecture.md": [title: "Architecture"],
         "guides/ui-context.md": [title: "UI Context Decision"],
         "guides/backend.md": [title: "Backend Contract"],
+        "guides/linux-releases.md": [title: "Linux Releases"],
         "guides/widgets.md": [title: "Pure Widgets"],
         "guides/widget-parity.md": [title: "Widget Migration Parity"],
         "guides/showcase.md": [title: "Interactive Showcase"],
