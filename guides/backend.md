@@ -63,6 +63,12 @@ The snapshot contains `:frames` in draw order, the final `:size`, the explicit
 `:shutdown_reason`. This test path needs no native terminal state. Use normal
 ExUnit message assertions. No v1 component harness or test renderer is used.
 
+Use a SexySpex acceptance specification for a small number of user-visible
+workflows that benefit from Given-When-Then documentation across input, state,
+and rendered output. Put them in `test/spex/*_spex.exs` and run `mix spex`.
+Use normal ExUnit tests for focused units, edge cases, internal contracts, and
+most regressions; they are faster to write and keep the main suite cohesive.
+
 The runtime puts each backend behind one serialized owner. State returned by
 input, size, draw, flush, and resize callbacks becomes the state for the next
 callback and for final cleanup.
