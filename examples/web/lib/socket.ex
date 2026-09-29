@@ -5,8 +5,10 @@ defmodule TermUIWebExample.Socket do
   alias TermUI.WebBackend
 
   @impl true
-  def init(_opts) do
-    {:ok, session} = WebBackend.start_session(TermUIWebExample.App)
+  def init(opts) do
+    root = Map.get(opts, :root, TermUIWebExample.App)
+    runtime_options = Map.get(opts, :runtime_options, [])
+    {:ok, session} = WebBackend.start_session(root, runtime_options: runtime_options)
     {:ok, %{session: session, window: System.monotonic_time(:millisecond), messages: 0}}
   end
 

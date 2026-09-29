@@ -88,5 +88,5 @@ future application requires frequent complete large frames. This release keeps
 one renderer and reports this limit.
 
 The current automated browser check uses Chromium. Other browser engines and
-physical mobile keyboards remain unverified. Optional embedded terminal sessions
-are a separate part of issue #70; normal browser applications need no emulator.
+physical mobile keyboards remain unverified. See [optional terminal sessions](terminal-session.md)
+to embed a shell in the same frame path. Normal browser applications need no emulator.

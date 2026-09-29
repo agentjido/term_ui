@@ -214,6 +214,7 @@ defmodule TermUI.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "guides/package-quality.md": [title: "Package Quality"],
+        "guides/terminal-session.md": [title: "Optional Terminal Sessions"],
         "guides/community.md": [title: "Community and Examples"],
         "guides/feature-parity.md": [title: "Feature Parity"],
         "guides/architecture.md": [title: "Architecture"],
@@ -312,6 +313,8 @@ defmodule TermUI.MixProject do
           TermUI.Backend.SSH.Channel,
           TermUI.WebBackend,
           TermUI.WebBackend.Protocol,
+          TermUI.TerminalSession,
+          TermUI.TerminalSession.Frame,
           TermUI.Test.DeterministicBackend
         ],
         Compatibility: [

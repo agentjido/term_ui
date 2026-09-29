@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TermUI Shell</title>
+  <link rel="stylesheet" href="/assets/term_ui.css">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0c1015; color: #e5e5e5; }
+    body { margin: 0; }
+    main { max-width: 1080px; margin: 36px auto; padding: 0 24px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    h1 { font-size: 24px; font-weight: 600; margin: 0; }
+    p { color: #a9b4c2; line-height: 1.5; }
+    button { border: 1px solid #57718e; border-radius: 6px; padding: 8px 14px; background: #1a2839; color: #e5e5e5; font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #8cb5eb; outline-offset: 3px; }
+    #status { font-size: 14px; color: #a9b4c2; margin-right: 16px; }
+    #terminal { width: 100%; height: min(65vh, 620px); min-height: 220px; border-radius: 6px; }
+    @media (max-width: 600px) { main { margin: 20px auto; padding: 0 12px; } #status { display: block; margin: 0 0 6px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>TermUI Shell</h1>
+      <div><span id="status" role="status">Connecting</span><button id="reconnect" type="button">Reconnect</button></div>
+    </header>
+    <p>Use your shell. Type text, paste, or resize the window. Press Ctrl+Alt+Q to close the session.</p>
+    <div id="terminal"></div>
+  </main>
+  <script type="module">
+    import {connectTermUI} from "/assets/term_ui.js";
+    const states = {connecting: "Connecting", connected: "Connected", closed: "Closed", error: "Connection error"};
+    const client = connectTermUI(document.querySelector("#terminal"), `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`, {
+      onStatus: (state) => { document.querySelector("#status").textContent = states[state]; },
+    });
+    document.querySelector("#reconnect").addEventListener("click", () => client.reconnect());
+    window.addEventListener("pagehide", () => client.close(), {once: true});
+  </script>
+</body>
+</html>
