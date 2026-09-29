@@ -140,6 +140,8 @@ defmodule TermUI.MixProject do
         "guides/user/08-terminal.md": [title: "Terminal"],
         "guides/user/09-commands.md": [title: "Commands"],
         "guides/user/10-advanced-widgets.md": [title: "Advanced Widgets"],
+        "guides/user/11-linux-releases.md": [title: "Linux Releases"],
+        "guides/user/12-community.md": [title: "Community and Examples"],
         "guides/developer/README.md": [filename: "developer-guides", title: "Developer Guides"],
         "guides/developer/01-architecture-overview.md": [title: "Architecture Overview"],
         "guides/developer/02-runtime-internals.md": [title: "Runtime Internals"],

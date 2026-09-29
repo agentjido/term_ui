@@ -2,6 +2,10 @@
 
 This directory contains example applications demonstrating TermUI widgets and patterns.
 
+See the [community guide](../guides/user/12-community.md) to share or contribute
+an example. The [prompts](prompts) directory contains an optional v1 counter
+request with verification checks.
+
 ## Examples Overview
 
 | Example | Description | Key Features |
