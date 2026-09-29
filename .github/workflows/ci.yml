@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, "release/**"]
+    branches: [main, develop, "maint/1.x", "release/**"]
   pull_request:
-    branches: [main, develop, "release/**"]
+    branches: [main, develop, "maint/1.x", "release/**"]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -54,8 +54,8 @@ jobs:
       - name: Compile with warnings as errors
         run: mix compile --warnings-as-errors
 
-      - name: Run tests
-        run: mix test
+      - name: Run tests with coverage
+        run: mix coveralls
 
   platform:
     name: Platform test (${{ matrix.name }})
@@ -129,20 +129,8 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
 
-      - name: Check formatting
-        run: mix format --check-formatted
-
-      - name: Compile with warnings as errors
-        run: mix compile --warnings-as-errors
-
-      - name: Run Credo
-        run: mix credo --strict
-
-      - name: Run Dialyzer
-        run: mix dialyzer
-
-      - name: Build documentation
-        run: mix docs --warnings-as-errors
+      - name: Run quality checks
+        run: mix quality
 
       - name: Check dependencies
         run: |

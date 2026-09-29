@@ -1061,7 +1061,7 @@ defmodule TermUI.Widgets.SupervisionTreeViewer do
 
   defp expand_indicator(node, expanded, chars) do
     case {node.type, node.children} do
-      {:supervisor, children} when is_list(children) and length(children) > 0 ->
+      {:supervisor, children} when is_list(children) and children != [] ->
         if MapSet.member?(expanded, node.id),
           do: "#{chars.arrow_down} ",
           else: "#{chars.arrow_right} "

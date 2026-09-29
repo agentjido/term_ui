@@ -255,7 +255,7 @@ defmodule TermUI.Integration.CrossPlatformTest do
             File.dir?(path)
           end)
 
-        assert length(existing) > 0, "Some terminfo paths should exist"
+        assert existing != [], "Some terminfo paths should exist"
       end
     end
 

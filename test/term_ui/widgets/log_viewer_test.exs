@@ -256,7 +256,7 @@ defmodule TermUI.Widgets.LogViewerTest do
       assert state.search != nil
       assert state.search_input == nil
       # Should find ERROR line
-      assert length(state.search.matches) > 0
+      assert state.search.matches != []
     end
 
     test "n goes to next match", %{state: state} do
@@ -283,7 +283,7 @@ defmodule TermUI.Widgets.LogViewerTest do
     test "search finds regex patterns", %{state: state} do
       state = LogViewer.search(state, "\\d{3}ms")
       # Should find "500ms"
-      assert length(state.search.matches) > 0
+      assert state.search.matches != []
     end
 
     test "escape clears search", %{state: state} do

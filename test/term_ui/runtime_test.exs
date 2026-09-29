@@ -695,15 +695,17 @@ defmodule TermUI.RuntimeTest do
       mock_state = MockInputHandler.start()
 
       # Spawn the async reader targeting the runtime
+      observer = self()
+
       reader_pid =
         spawn_link(fn ->
           # Use the same loop the runtime uses internally
-          loop(MockInputHandler, mock_state, runtime)
+          loop(MockInputHandler, mock_state, runtime, observer)
         end)
 
       # Push a key event
       MockInputHandler.push_event(mock_state, Event.key(:up))
-      Process.sleep(50)
+      assert_receive {:input_dispatched, ^reader_pid}, 1000
 
       # Verify the event was dispatched - runtime should still be responsive
       state = Runtime.get_state(runtime)
@@ -711,7 +713,7 @@ defmodule TermUI.RuntimeTest do
 
       # Push another event
       MockInputHandler.push_event(mock_state, Event.key(:up))
-      Process.sleep(50)
+      assert_receive {:input_dispatched, ^reader_pid}, 1000
 
       state = Runtime.get_state(runtime)
       assert state.root_state.count == 2
@@ -782,14 +784,20 @@ defmodule TermUI.RuntimeTest do
     end
 
     # Helper: same loop the runtime uses internally
-    defp loop(handler, input_state, target) do
+    defp loop(handler, input_state, target, observer \\ nil) do
       case handler.poll(input_state, 16) do
         {{:ok, event}, new_state} ->
           send(target, {:input, event})
-          loop(handler, new_state, target)
+
+          if observer do
+            Runtime.sync(target)
+            send(observer, {:input_dispatched, self()})
+          end
+
+          loop(handler, new_state, target, observer)
 
         {:timeout, new_state} ->
-          loop(handler, new_state, target)
+          loop(handler, new_state, target, observer)
 
         {:eof, _new_state} ->
           send(target, :input_eof)

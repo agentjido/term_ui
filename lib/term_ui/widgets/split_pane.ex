@@ -536,7 +536,7 @@ defmodule TermUI.Widgets.SplitPane do
     total_assigned = Enum.sum(constrained_sizes)
     remaining = available_space - total_assigned
 
-    if remaining != 0 and length(constrained_sizes) > 0 do
+    if remaining != 0 and constrained_sizes != [] do
       redistribute_space(visible_panes, constrained_sizes, remaining)
     else
       constrained_sizes

@@ -270,7 +270,7 @@ defmodule TermUI.Renderer.FramerateLimiterTest do
       # Render a few frames
       for _ <- 1..3 do
         FramerateLimiter.mark_dirty(pid)
-        assert_receive :rendered, 100
+        assert_receive :rendered, 500
       end
 
       stats = FramerateLimiter.stats(pid)

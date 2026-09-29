@@ -229,7 +229,7 @@ defmodule TermUI.Dev.HotReload do
       end)
       |> Enum.map(fn {path, _} -> path end)
 
-    if length(changed_files) > 0 do
+    if changed_files != [] do
       Logger.debug("Hot reload detected changes in #{length(changed_files)} files")
 
       # Reload changed files

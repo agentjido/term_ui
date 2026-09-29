@@ -269,7 +269,7 @@ defmodule TermUI.Shortcut do
         {{:ok, shortcut}, state}
 
       # Partial sequence match - wait for more keys
-      length(sequence_shortcuts) > 0 ->
+      sequence_shortcuts != [] ->
         if state.sequence_timer, do: Process.cancel_timer(state.sequence_timer)
         timer = Process.send_after(self(), :sequence_timeout, 1000)
         state = %{state | sequence_state: current_seq, sequence_timer: timer}

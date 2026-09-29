@@ -248,7 +248,7 @@ defmodule TermUI.Platform.UnixTest do
       paths = Unix.terminfo_paths()
 
       assert is_list(paths)
-      assert length(paths) > 0
+      assert paths != []
 
       for path <- paths do
         assert is_binary(path)

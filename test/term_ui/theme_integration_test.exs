@@ -143,7 +143,7 @@ defmodule TermUI.ThemeIntegrationTest do
       }
 
       {:error, errors} = Theme.validate(incomplete_theme)
-      assert length(errors) > 0
+      assert errors != []
     end
   end
 

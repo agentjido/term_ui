@@ -67,7 +67,7 @@ defmodule TermUI.Widgets.ClusterDashboardTest do
       {:ok, state} = ClusterDashboard.init(props)
 
       # Should have at least the local node
-      assert length(state.nodes) >= 1
+      assert state.nodes != []
 
       local = Enum.find(state.nodes, &(&1.status == :local))
       assert local != nil
@@ -274,7 +274,7 @@ defmodule TermUI.Widgets.ClusterDashboardTest do
 
       assert result.type == :stack
       assert result.direction == :vertical
-      assert length(result.children) > 0
+      assert result.children != []
     end
 
     test "renders globals view" do
@@ -423,7 +423,7 @@ defmodule TermUI.Widgets.ClusterDashboardTest do
       {:ok, state} = ClusterDashboard.init(props)
 
       # Should have local node
-      assert length(state.nodes) >= 1
+      assert state.nodes != []
 
       # Rendering should work
       area = %{x: 0, y: 0, width: 80, height: 25}

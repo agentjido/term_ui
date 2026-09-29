@@ -212,7 +212,7 @@ defmodule TermUI.Widget.PickListTest do
       result = PickList.render(state, @area)
 
       assert %RenderNode{type: :cells, cells: cells} = result
-      assert length(cells) > 0
+      assert cells != []
 
       # Check title is rendered
       all_chars = Enum.map_join(cells, "", & &1.cell.char)
@@ -277,7 +277,7 @@ defmodule TermUI.Widget.PickListTest do
         cells
         |> Enum.filter(fn c -> c.cell.char == "C" and c.cell.bg == :white end)
 
-      assert length(cherry_cells) > 0
+      assert cherry_cells != []
     end
 
     test "centers modal in area" do

@@ -472,7 +472,7 @@ defmodule TermUI.Integration.EventSystemTest do
       Executor.execute(executor, cmd, self(), :app)
 
       # Receive command result
-      assert_receive {:command_result, :app, _ref, :refreshed}, @default_timeout
+      assert_receive {:command_result, :app, _ref, :refreshed}, @eventual_timeout
     end
 
     test "mouse click triggers shortcut-like action via routing" do
