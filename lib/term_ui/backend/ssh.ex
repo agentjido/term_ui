@@ -278,7 +278,7 @@ defmodule TermUI.Backend.SSH do
   @impl true
   @spec clear(t()) :: {:ok, t()}
   def clear(%__MODULE__{device: device} = state) do
-    device_write(device, @clear_screen <> @cursor_home)
+    device_write(device, [ANSI.reset(), @clear_screen, @cursor_home])
     {:ok, %{state | cursor_position: {1, 1}, current_style: nil}}
   end
 

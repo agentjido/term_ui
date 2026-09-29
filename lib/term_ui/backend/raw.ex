@@ -689,7 +689,7 @@ defmodule TermUI.Backend.Raw do
   @spec clear(t()) :: {:ok, t()}
   def clear(state) do
     # Write clear screen sequence followed by cursor home
-    write_to_terminal([ANSI.clear_screen(), ANSI.cursor_position(1, 1)])
+    write_to_terminal([ANSI.reset(), ANSI.clear_screen(), ANSI.cursor_position(1, 1)])
 
     # Reset style state (unknown after clear) and set cursor to home
     updated_state = %{state | current_style: nil, cursor_position: {1, 1}}
