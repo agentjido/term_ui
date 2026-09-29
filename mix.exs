@@ -184,6 +184,7 @@ defmodule TermUI.MixProject do
       files: ~w(
         c_src
         lib
+        priv/web
         mix/tasks
         guides
         examples/showcase/README.md
@@ -218,6 +219,7 @@ defmodule TermUI.MixProject do
         "guides/architecture.md": [title: "Architecture"],
         "guides/ui-context.md": [title: "UI Context Decision"],
         "guides/backend.md": [title: "Backend Contract"],
+        "guides/web.md": [title: "Browser Backend"],
         "guides/linux-releases.md": [title: "Linux Releases"],
         "guides/widgets.md": [title: "Pure Widgets"],
         "guides/widget-parity.md": [title: "Widget Migration Parity"],
