@@ -1,7 +1,7 @@
 defmodule TermUI.Runtime.NodeRendererTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.Component.RenderNode
+  alias TermUI.Component.{Helpers, RenderNode}
   alias TermUI.Layout.Constraint
   alias TermUI.Renderer.Buffer
   alias TermUI.Renderer.BufferManager
@@ -47,6 +47,35 @@ defmodule TermUI.Runtime.NodeRendererTest do
       buffer = BufferManager.get_current_buffer(bm)
       assert Buffer.get_cell(buffer, 1, 1).char == "F"
       assert Buffer.get_cell(buffer, 1, 11).char == "R"
+    end
+
+    test "renders the nested constrained stack from issue 11", %{bm: bm} do
+      node =
+        Helpers.stack(:vertical, [
+          Helpers.stack(:horizontal, [
+            Helpers.text("Visible 1"),
+            Helpers.text("Visible 2")
+          ]),
+          Helpers.stack(:horizontal, [
+            {Helpers.text("Not visible"), Constraint.length(15)},
+            {Helpers.text("Also not visible"), Constraint.fill()}
+          ]),
+          Helpers.text("Also visible")
+        ])
+
+      assert {50, 3} = NodeRenderer.render_to_buffer(node, bm, 1, 1)
+      buffer = BufferManager.get_current_buffer(bm)
+
+      rows =
+        Enum.map(1..3, fn row ->
+          buffer |> Buffer.get_row(row) |> Enum.map_join(& &1.char) |> String.trim_trailing()
+        end)
+
+      assert rows == [
+               "Visible 1Visible 2",
+               "Not visible    Also not visible",
+               "Also visible"
+             ]
     end
 
     test "allocates vertical stack children using constraints", %{bm: bm} do
