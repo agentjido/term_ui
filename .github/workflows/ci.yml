@@ -142,7 +142,8 @@ jobs:
           python-version: "3.12"
       - name: Install Windows console test tools
         if: runner.os == 'Windows'
-        run: python -m pip install --only-binary=:all: pywinpty==3.0.5 pyte==0.8.2
+        run: |
+          python -m pip install --only-binary=:all: pywinpty==3.0.5 pyte==0.8.2
       - name: Test real Windows console input, output, and cleanup
         if: runner.os == 'Windows'
         run: python test/support/windows_console_check.py

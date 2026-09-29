@@ -179,4 +179,21 @@ The callback accepts PTY input and window changes. It sends Unicode text,
 bracketed paste, mouse, focus, and resize values through the normal v2 event
 contract. The SSH path does not select raw mode or call the local terminal NIF.
 
+The application view owns the background. Include styled blank cells in its
+complete frame when the background must cover the whole screen:
+
+```elixir
+style = TermUI.Style.new(bg: :blue)
+blank_row = [{String.duplicate(" ", width), style}]
+
+frame =
+  TermUI.Frame.from_rows(List.duplicate(blank_row, height), width, height)
+
+TermUI.Frame.put_row(frame, 1, [{String.pad_trailing("Remote session", width), style}])
+```
+
+Use the same background style when padding a shorter row. Default blank
+cells use the default terminal background. A style-only change is a frame
+change and reaches the remote screen through the normal draw path.
+
 See [Linux releases](linux-releases.md) for older Linux targets and native library checks.
