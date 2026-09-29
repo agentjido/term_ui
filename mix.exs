@@ -66,7 +66,7 @@ defmodule TermUI.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: if(Mix.env() == :test, do: [:logger, :ssh], else: [:logger])
     ]
   end
 
