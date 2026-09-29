@@ -54,10 +54,14 @@ defmodule TermUI.CounterSpex do
         Runtime.shutdown(runtime)
 
         receive do
-          {:DOWN, ^reference, :process, ^runtime, _reason} -> :ok
+          {:DOWN, ^reference, :process, ^runtime, :normal} -> :ok
         after
-          1_000 -> Process.exit(runtime, :kill)
+          1_000 ->
+            Process.exit(runtime, :kill)
+            flunk("the runtime did not stop normally")
         end
+
+        assert_receive {:backend, :shutdown, :normal}, 1_000
       end
     end
   end
