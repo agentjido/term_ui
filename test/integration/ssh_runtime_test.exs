@@ -286,7 +286,11 @@ defmodule TermUI.Integration.SSHRuntimeTest do
 
     assert {:ok, daemon} = :ssh.daemon(:loopback, 0, options)
     assert {:port, port} = :ssh.daemon_info(daemon, :port)
-    on_exit(fn -> :ssh.stop_daemon(daemon) end)
+
+    on_exit(fn ->
+      if Process.alive?(daemon), do: :ssh.stop_daemon(daemon)
+    end)
+
     {daemon, port}
   end
 
