@@ -822,6 +822,23 @@ defmodule TermUI.RuntimeContractTest do
     end
   end
 
+  test "a failed screen invalidation stops and cleans the runtime" do
+    assert {:ok, runtime} =
+             Runtime.start_link(
+               root: Counter,
+               owner: self(),
+               backend: {DeterministicBackend, owner: self(), fail: :resize}
+             )
+
+    assert_receive {:backend, :draw, _frame}, 1_000
+    reference = Process.monitor(runtime)
+    reason = {:backend, DeterministicBackend, :resize, :resize_failed}
+    Runtime.force_render(runtime)
+
+    assert_receive {:DOWN, ^reference, :process, ^runtime, ^reason}, 1_000
+    assert_receive {:backend, :shutdown, ^reason}, 1_000
+  end
+
   test "backend failures and manager exits stop the runtime" do
     {:ok, runtime} = start_counter(render_interval: 1_000)
     assert_receive {:backend, :draw, _frame}, 500

@@ -109,7 +109,7 @@ defmodule TermUI.Runtime do
   @spec shutdown(GenServer.server()) :: :ok
   def shutdown(runtime), do: GenServer.cast(runtime, {:shutdown, :normal})
 
-  @doc "Forces the newest state to render now."
+  @doc "Restores the complete screen from the newest state, even when it is unchanged."
   @spec force_render(GenServer.server()) :: :ok
   def force_render(runtime), do: GenServer.cast(runtime, :force_render)
 
@@ -164,12 +164,7 @@ defmodule TermUI.Runtime do
   end
 
   def handle_cast(:force_render, state) do
-    state = cancel_render(state)
-
-    case render_now(%{state | dirty: true}) do
-      {:ok, state} -> {:noreply, state}
-      {:error, reason, state} -> {:stop, reason, %{state | stop_reason: reason}}
-    end
+    force_render_now(state)
   end
 
   @impl true
@@ -437,6 +432,13 @@ defmodule TermUI.Runtime do
     end
   end
 
+  defp process_event(%Event.Focus{action: :gained} = event, state) do
+    case dispatch_event(event, state) do
+      {:noreply, state} -> force_render_now(state)
+      stop -> stop
+    end
+  end
+
   defp process_event(event, state), do: dispatch_event(event, state)
 
   defp dispatch_event(event, state) do
@@ -527,6 +529,18 @@ defmodule TermUI.Runtime do
   defp cancel_render(%{render_timer: {reference, _token}} = state) do
     _cancelled = Process.cancel_timer(reference)
     %{state | render_timer: nil}
+  end
+
+  defp force_render_now(state) do
+    state = cancel_render(state)
+
+    with :ok <- BackendManager.invalidate(state.backend_manager),
+         {:ok, state} <- render_now(%{state | dirty: true}) do
+      {:noreply, state}
+    else
+      {:error, reason} -> {:stop, reason, %{state | stop_reason: reason}}
+      {:error, reason, state} -> {:stop, reason, %{state | stop_reason: reason}}
+    end
   end
 
   defp render_now(%{dirty: false} = state), do: {:ok, state}

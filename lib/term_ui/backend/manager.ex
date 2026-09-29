@@ -42,6 +42,10 @@ defmodule TermUI.Backend.Manager do
   @spec flush(pid()) :: :ok | {:error, term()}
   def flush(manager), do: GenServer.call(manager, :flush)
 
+  @doc "Invalidates previous output through the backend owner."
+  @spec invalidate(pid()) :: :ok | {:error, term()}
+  def invalidate(manager), do: GenServer.call(manager, :invalidate)
+
   @doc "Runs one serialized clipboard operation."
   @spec clipboard(pid(), Operation.t()) :: :ok | {:error, term()}
   def clipboard(manager, %Operation{} = operation),
@@ -113,6 +117,18 @@ defmodule TermUI.Backend.Manager do
 
   def handle_call(:flush, _from, state) do
     case invoke_state_callback(state, :flush, []) do
+      {:ok, backend_state} -> {:reply, :ok, %{state | backend_state: backend_state}}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:invalidate, _from, state) do
+    {callback, args} =
+      if function_exported?(state.backend, :invalidate, 1),
+        do: {:invalidate, []},
+        else: {:resize, [state.size]}
+
+    case invoke_state_callback(state, callback, args) do
       {:ok, backend_state} -> {:reply, :ok, %{state | backend_state: backend_state}}
       {:error, reason} -> {:reply, {:error, reason}, state}
     end

@@ -45,7 +45,7 @@ defmodule TermUI.Backend.SSH.Renderer do
 
     [
       ANSI.cursor_hide(),
-      if(full?, do: [ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
+      if(full?, do: [ANSI.reset(), ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
       CellRenderer.render(changes, color_mode(capabilities), character_set(capabilities)),
       cursor_sequence(current.cursor)
     ]

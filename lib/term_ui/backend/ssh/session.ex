@@ -52,7 +52,8 @@ defmodule TermUI.Backend.SSH.Session do
             in_flight: nil,
             pending_frame: nil,
             cleanup: nil,
-            last_frame: nil
+            last_frame: nil,
+            redraw?: false
           }
 
           {:ok, start_output(state, :setup, Renderer.setup_sequence(opts, capabilities), nil)}
@@ -115,6 +116,10 @@ defmodule TermUI.Backend.SSH.Session do
   def handle_call({:frame, %Frame{} = frame}, _from, state) do
     state = queue_frame(state, frame)
     {:reply, :ok, state}
+  end
+
+  def handle_call(:invalidate, _from, state) do
+    {:reply, :ok, %{state | redraw?: true}}
   end
 
   def handle_call({:poll_event, _timeout}, _from, %{events: [event | rest]} = state) do
@@ -416,8 +421,9 @@ defmodule TermUI.Backend.SSH.Session do
   end
 
   defp start_frame_output(state, frame) do
-    data = Renderer.frame_sequence(state.last_frame, frame, state.capabilities)
-    start_output(state, :frame, data, frame)
+    previous = if state.redraw?, do: nil, else: state.last_frame
+    data = Renderer.frame_sequence(previous, frame, state.capabilities)
+    start_output(%{state | redraw?: false}, :frame, data, frame)
   end
 
   defp start_output(state, kind, data, frame) do

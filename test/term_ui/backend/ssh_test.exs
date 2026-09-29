@@ -128,6 +128,33 @@ defmodule TermUI.Backend.SSHTest do
     end)
   end
 
+  test "a forced redraw survives a delayed acknowledgement and replaced waiting frame" do
+    session = start_session(label: "initial", output_timeout: 60_000)
+    runtime = SSH.session_info(session).runtime
+    acknowledge_initial_output(session, "initial")
+
+    Runtime.send_message(runtime, {:label, "in-flight"})
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    {in_flight_token, _frame} = receive_output(session)
+
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    Runtime.send_message(runtime, {:label, "latest"})
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    assert SSH.session_info(session).output_queue.pending_frames == 1
+
+    SSH.ack_output(session, in_flight_token, :ok)
+    {redraw_token, redraw} = receive_output(session)
+    assert redraw =~ "\e[0m\e[2J"
+    assert redraw =~ "latest"
+    refute redraw =~ "in-flight"
+    SSH.ack_output(session, redraw_token, :ok)
+
+    eventually(fn -> assert SSH.session_info(session).output_queue.in_flight == 0 end)
+  end
+
   test "a function output target is serialized outside the session process" do
     owner = self()
 

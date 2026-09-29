@@ -105,7 +105,7 @@ defmodule TermUI.Backend.Raw do
 
     output = [
       ANSI.cursor_hide(),
-      if(reset?, do: [ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
+      if(reset?, do: [ANSI.reset(), ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
       Renderer.render(
         changes,
         state.capabilities.colors,
@@ -123,6 +123,10 @@ defmodule TermUI.Backend.Raw do
   @impl true
   @spec flush(t()) :: {:ok, t()}
   def flush(state), do: {:ok, state}
+
+  @impl true
+  @spec invalidate(t()) :: {:ok, t()}
+  def invalidate(state), do: {:ok, %{state | last_frame: nil}}
 
   @impl true
   @spec clipboard(t(), Clipboard.Operation.t()) :: {:ok, t()} | {:error, term()}
@@ -182,7 +186,7 @@ defmodule TermUI.Backend.Raw do
   defp cursor_sequence(nil), do: ANSI.cursor_hide()
   defp cursor_sequence({column, row}), do: [ANSI.cursor_position(row, column), ANSI.cursor_show()]
 
-  defp dimensions_changed?(nil, _frame), do: false
+  defp dimensions_changed?(nil, _frame), do: true
 
   defp dimensions_changed?(previous, current) do
     previous.width != current.width or previous.height != current.height
