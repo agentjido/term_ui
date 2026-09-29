@@ -186,6 +186,9 @@ defmodule TermUI.Runtime do
 
   def handle_info({:backend_event, event}, state), do: process_event(event, state)
 
+  def handle_info(:backend_resumed, %{status: :running} = state), do: force_render_now(state)
+  def handle_info(:backend_resumed, state), do: {:noreply, state}
+
   def handle_info({:backend_size, {rows, columns}}, state) do
     case BackendManager.resize(state.backend_manager, {rows, columns}) do
       :ok ->

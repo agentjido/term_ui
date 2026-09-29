@@ -839,6 +839,29 @@ defmodule TermUI.RuntimeContractTest do
     assert_receive {:backend, :shutdown, ^reason}, 1_000
   end
 
+  test "a failed resume stops and cleans the runtime" do
+    assert {:ok, runtime} =
+             Runtime.start_link(
+               root: Counter,
+               owner: self(),
+               backend: {DeterministicBackend, owner: self(), fail: :resize}
+             )
+
+    assert_receive {:backend, :draw, _frame}, 1_000
+    reference = Process.monitor(runtime)
+    reason = {:backend, DeterministicBackend, :resize, :resize_failed}
+    manager = Runtime.get_state(runtime).backend_manager
+    send(manager, :terminal_resume)
+
+    assert_receive {:DOWN, ^reference, :process, ^runtime, ^reason}, 1_000
+    assert_receive {:backend, :shutdown, ^reason}, 1_000
+  end
+
+  test "a stopping runtime does not render on resume" do
+    state = %{status: :stopping}
+    assert {:noreply, ^state} = Runtime.handle_info(:backend_resumed, state)
+  end
+
   test "backend failures and manager exits stop the runtime" do
     {:ok, runtime} = start_counter(render_interval: 1_000)
     assert_receive {:backend, :draw, _frame}, 500

@@ -129,6 +129,20 @@ defmodule TermUI.Backend.Raw do
   def invalidate(state), do: {:ok, %{state | last_frame: nil}}
 
   @impl true
+  @spec resume(t()) :: {:ok, t()} | {:error, term()}
+  def resume(state) do
+    with :ok <- resume_raw_mode(state),
+         :ok <- TerminalOutput.write([ANSI.reset(), setup_sequence(state, true)]) do
+      {:ok, %{state | last_frame: nil}}
+    else
+      {:error, reason} -> {:error, {:terminal_resume_failed, reason}}
+    end
+  end
+
+  defp resume_raw_mode(%{raw_mode_session: nil}), do: :ok
+  defp resume_raw_mode(state), do: RawMode.resume(state.raw_mode_session)
+
+  @impl true
   @spec clipboard(t(), Clipboard.Operation.t()) :: {:ok, t()} | {:error, term()}
   def clipboard(state, %Clipboard.Operation{} = operation) do
     with {:ok, sequence} <- Clipboard.sequence(operation),
