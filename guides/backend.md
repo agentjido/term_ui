@@ -8,6 +8,7 @@ A backend implements `TermUI.Backend`.
 @callback capabilities(state()) :: map()
 @callback draw(state(), TermUI.Frame.t()) :: {:ok, state()} | {:error, term()}
 @callback flush(state()) :: {:ok, state()} | {:error, term()}
+@callback invalidate(state()) :: {:ok, state()} | {:error, term()}
 @callback clipboard(state(), TermUI.Clipboard.Operation.t()) ::
             {:ok, state()} | {:error, term()}
 @callback poll_event(state(), non_neg_integer()) ::
@@ -72,6 +73,24 @@ most regressions; they are faster to write and keep the main suite cohesive.
 The runtime puts each backend behind one serialized owner. State returned by
 input, size, draw, flush, and resize callbacks becomes the state for the next
 callback and for final cleanup.
+
+## Restore the screen
+
+Call `TermUI.Runtime.force_render(runtime)` when external output damages the
+screen. This call invalidates previous output through the backend owner and
+draws the complete current frame. It repairs the screen even when application
+state is unchanged. A terminal focus-gained event also requests this repair,
+including when the application ignores that event.
+
+The optional `invalidate/1` callback makes the next draw a complete output
+update. Raw, incremental TTY, and SSH implement it. A custom backend without
+this callback receives `resize/2` with its current size. That call must also
+invalidate cached output. Complete updates must clear stale cells and reset
+external ANSI style state. Ordinary changed-frame updates still use diffs.
+
+An SSH session retains the full-redraw request while output is in flight.
+The next waiting frame receives the repair, even when a newer frame replaces
+the waiting frame before the previous output is confirmed.
 
 ## Native build policy
 

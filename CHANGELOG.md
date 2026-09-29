@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Forced renders now restore the complete screen even when the frame is
+  unchanged. Focus gain also restores output in Raw, incremental TTY, and SSH
+  sessions. A delayed SSH output acknowledgement does not lose this repair.
+
 ## [0.2.0] - 2024-12-01
 
 ### Added

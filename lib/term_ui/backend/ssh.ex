@@ -146,6 +146,15 @@ defmodule TermUI.Backend.SSH do
 
   @impl true
   @doc false
+  def invalidate(%__MODULE__{} = state) do
+    case GenServer.call(state.session, :invalidate) do
+      :ok -> {:ok, state}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @impl true
+  @doc false
   def poll_event(%__MODULE__{} = state, timeout) do
     case GenServer.call(state.session, {:poll_event, timeout}, timeout + 1_000) do
       {:ok, event} -> {:ok, event, state}

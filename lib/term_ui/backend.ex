@@ -19,6 +19,14 @@ defmodule TermUI.Backend do
   @callback capabilities(state()) :: map()
   @callback draw(state(), TermUI.Frame.t()) :: {:ok, state()} | {:error, term()}
   @callback flush(state()) :: {:ok, state()} | {:error, term()}
+  @doc """
+  Invalidates previous output so the next draw restores the complete screen.
+
+  Backends that cache output must implement this callback. A backend without
+  this callback must invalidate output when `resize/2` receives its current
+  size. The backend owner serializes invalidation and the next complete frame.
+  """
+  @callback invalidate(state()) :: {:ok, state()} | {:error, term()}
   @callback clipboard(state(), TermUI.Clipboard.Operation.t()) ::
               {:ok, state()} | {:error, term()}
   @callback poll_event(state(), non_neg_integer()) ::
@@ -28,5 +36,5 @@ defmodule TermUI.Backend do
   @callback resize(state(), size()) :: {:ok, state()} | {:error, term()}
   @callback shutdown(state(), term()) :: :ok
 
-  @optional_callbacks clipboard: 2
+  @optional_callbacks clipboard: 2, invalidate: 1
 end

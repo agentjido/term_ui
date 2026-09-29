@@ -60,6 +60,7 @@ defmodule TermUI.Backend.ManagerTest do
 
     def draw(state, _frame), do: state_callback(state, :draw)
     def flush(state), do: state_callback(state, :flush)
+    def invalidate(state), do: state_callback(state, :invalidate)
 
     def resize(state, size) do
       case state_callback(state, :resize) do
@@ -215,6 +216,14 @@ defmodule TermUI.Backend.ManagerTest do
     assert :ok = Manager.close(manager, :normal)
   end
 
+  test "invalidation uses the current size for an older custom backend" do
+    manager = start_manager(size_poll_interval: :disabled)
+    assert :ok = Manager.invalidate(manager)
+    assert_receive {:backend, :resize, {6, 20}}
+    assert %{size: {6, 20}} = Manager.info(manager)
+    assert :ok = Manager.close(manager, :normal)
+  end
+
   test "cleans an opened backend when later setup fails" do
     previous = Process.flag(:trap_exit, true)
 
@@ -328,7 +337,8 @@ defmodule TermUI.Backend.ManagerTest do
   test "state callbacks normalize invalid, error, raised, and thrown results" do
     frame = Frame.from_rows(["ok"], 12, 4)
 
-    for stage <- [:draw, :flush, :resize], kind <- [:invalid, :error, :raise, :throw] do
+    for stage <- [:draw, :flush, :resize, :invalidate],
+        kind <- [:invalid, :error, :raise, :throw] do
       manager = start_exercising_manager({kind, stage}, size_poll_interval: :disabled)
 
       result =
@@ -336,6 +346,7 @@ defmodule TermUI.Backend.ManagerTest do
           :draw -> Manager.draw(manager, frame)
           :flush -> Manager.flush(manager)
           :resize -> Manager.resize(manager, {5, 14})
+          :invalidate -> Manager.invalidate(manager)
         end
 
       assert {:error, {:backend, ExercisingBackend, ^stage, _reason}} = result

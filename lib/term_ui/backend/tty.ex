@@ -114,7 +114,7 @@ defmodule TermUI.Backend.TTY do
 
     output = [
       ANSI.cursor_hide(),
-      if(full?, do: [ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
+      if(full?, do: [ANSI.reset(), ANSI.clear_screen(), ANSI.cursor_position(1, 1)], else: []),
       Renderer.render(changes, state.color_mode, state.character_set),
       cursor_sequence(frame.cursor)
     ]
@@ -128,6 +128,10 @@ defmodule TermUI.Backend.TTY do
   @impl true
   @spec flush(t()) :: {:ok, t()}
   def flush(state), do: {:ok, state}
+
+  @impl true
+  @spec invalidate(t()) :: {:ok, t()}
+  def invalidate(state), do: {:ok, %{state | rendered_frame: nil}}
 
   @impl true
   @spec clipboard(t(), Clipboard.Operation.t()) :: {:ok, t()} | {:error, term()}
