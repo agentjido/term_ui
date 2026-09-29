@@ -119,7 +119,8 @@ defmodule TermUI.Test.WindowsConsoleProbe do
     %{
       dimensions: Tuple.to_list(state.dimensions),
       events: state.events,
-      backend: inspect(backend)
+      backend: inspect(backend),
+      io_options: inspect(:io.getopts())
     }
   end
 end

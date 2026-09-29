@@ -121,7 +121,7 @@ class Console:
             self.stream.feed(data)
             if "\x1b[6n" in data:
                 self.process.write(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R")
-        raise AssertionError(f"Timed out on {message}: {''.join(self.output)[-3000:]}")
+        raise AssertionError(f"Timed out on {message}; state={self.state()!r}; output={''.join(self.output)[-3000:]}")
 
     def state(self):
         return read_json(self.progress) or {}
