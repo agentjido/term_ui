@@ -458,7 +458,7 @@ defmodule TermUI.Backend.TTY do
   @spec clear(t()) :: {:ok, t()}
   def clear(state) do
     # Clear entire screen and move cursor to home position
-    safe_write(@clear_screen <> @cursor_home)
+    safe_write(@reset_attrs <> @clear_screen <> @cursor_home)
 
     # Update state: clear last_frame for incremental mode, reset cursor position
     {:ok, %{state | last_frame: nil, cursor_position: {1, 1}}}

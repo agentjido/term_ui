@@ -91,11 +91,41 @@ defmodule TermUI.Integration.SSHRuntimeIntegrationTest do
 
     Runtime.send_message(runtime, :root, {:label, "AB"})
     :ok = Runtime.sync(runtime)
-    force_render_sync(runtime)
+    render_sync(runtime)
 
     output = output_since(device, snapshot)
     assert output =~ "\e[1;3H        "
     refute output =~ "\e[2J"
+  end
+
+  @tag :redraw_regression
+  test "forced rendering restores unchanged content after terminal output is damaged" do
+    {:ok, device} = StringIO.open("")
+    runtime = start_ssh_runtime(device, "same-screen")
+    force_render_sync(runtime)
+    snapshot = device_output(device)
+
+    force_render_sync(runtime)
+
+    output = output_since(device, snapshot)
+    assert output =~ "\e[0m\e[2J"
+    assert output =~ "same-screen"
+    assert Runtime.get_state(runtime).root_state.label == "same-screen"
+  end
+
+  @tag :redraw_regression
+  test "focus gain restores the screen when the application ignores the event" do
+    {:ok, device} = StringIO.open("")
+    runtime = start_ssh_runtime(device, "focus-screen")
+    force_render_sync(runtime)
+    snapshot = device_output(device)
+
+    Runtime.send_event(runtime, Event.focus(:gained))
+    :ok = Runtime.sync(runtime)
+
+    output = output_since(device, snapshot)
+    assert output =~ "\e[2J"
+    assert output =~ "focus-screen"
   end
 
   test "renders the bottom-right cell while autowrap is disabled" do
@@ -186,6 +216,12 @@ defmodule TermUI.Integration.SSHRuntimeIntegrationTest do
 
   defp force_render_sync(runtime) do
     Runtime.force_render(runtime)
+    _state = :sys.get_state(runtime)
+    :ok
+  end
+
+  defp render_sync(runtime) do
+    send(runtime, :render)
     _state = :sys.get_state(runtime)
     :ok
   end

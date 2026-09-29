@@ -275,7 +275,7 @@ defmodule TermUI.Runtime do
   def capabilities, do: PersistentTerms.capabilities()
 
   @doc """
-  Marks the runtime dirty and performs an immediate render.
+  Restores the complete screen from the current state, even when it is unchanged.
   """
   @spec force_render(GenServer.server()) :: :ok
   def force_render(runtime) do
@@ -707,7 +707,7 @@ defmodule TermUI.Runtime do
 
   @impl true
   def handle_cast(:force_render, state) do
-    state = do_render(state)
+    state = state |> process_messages() |> do_full_render()
     {:noreply, state}
   end
 
@@ -1090,6 +1090,10 @@ defmodule TermUI.Runtime do
     broadcast_event(event, state)
   end
 
+  defp dispatch_event(%Event.Focus{action: :gained} = event, state) do
+    event |> broadcast_event(state) |> process_messages() |> do_full_render()
+  end
+
   defp dispatch_event(%Event.Focus{} = event, state) do
     # Focus broadcasts to all components
     broadcast_event(event, state)
@@ -1374,6 +1378,19 @@ defmodule TermUI.Runtime do
     else
       %{state | dirty: false}
     end
+  end
+
+  defp do_full_render(%{shutting_down: true} = state), do: state
+  defp do_full_render(%{backend: nil} = state), do: %{state | dirty: false}
+
+  defp do_full_render(state) do
+    {:ok, backend_state} = state.backend.clear(state.backend_state)
+
+    if state.buffer_manager do
+      state.buffer_manager |> BufferManager.get_previous_buffer() |> Buffer.clear()
+    end
+
+    do_render(%{state | backend_state: backend_state, dirty: true})
   end
 
   # Renders using BufferManager with double buffering and diffing (Raw backend)

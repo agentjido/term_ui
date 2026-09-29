@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Forced renders now clear previous output and restore the complete screen
+  when application state is unchanged. Focus gain also requests this repair.
+  Ordinary updates retain differential rendering.
+
 ## [1.0.0] - 2026-08-28
 
 TermUI 1.0 establishes the pre-rewrite architecture as the stable release line,

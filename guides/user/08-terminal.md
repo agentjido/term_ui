@@ -79,6 +79,17 @@ def event_to_msg(%TermUI.Event.Paste{content: text}, _state),
 
 Without bracketed-paste reporting, pasted bytes arrive as ordinary key input.
 
+## Restore the screen
+
+Call `TermUI.Runtime.force_render(runtime)` after external output damages the
+screen. The runtime clears previous output, resets terminal styles, and renders
+the complete current view. This works even when application state is unchanged.
+Do not send clear-screen sequences from a widget; the runtime owns the backend.
+
+A focus-gained event also restores the screen when the application ignores the
+event. The host must enable focus reporting to receive those terminal events.
+Ordinary state updates still use differential output.
+
 ## Size and resize
 
 `TermUI.Terminal.get_terminal_size/0` returns `{:ok, {rows, cols}}` for a local
