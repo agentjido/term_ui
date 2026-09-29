@@ -203,6 +203,7 @@ pure BEAM TTY backend when a source build is not available.
 
 ## Documents
 
+- [Share examples and ask for help](guides/community.md)
 - [Architecture](guides/architecture.md)
 - [UI context decision](guides/ui-context.md)
 - [Backend contract](guides/backend.md)

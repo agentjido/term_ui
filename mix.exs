@@ -213,6 +213,7 @@ defmodule TermUI.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "guides/package-quality.md": [title: "Package Quality"],
+        "guides/community.md": [title: "Community and Examples"],
         "guides/feature-parity.md": [title: "Feature Parity"],
         "guides/architecture.md": [title: "Architecture"],
         "guides/ui-context.md": [title: "UI Context Decision"],
