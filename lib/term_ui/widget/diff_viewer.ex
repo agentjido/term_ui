@@ -452,7 +452,7 @@ defmodule TermUI.Widget.DiffViewer do
   defp number(value, width), do: value |> Integer.to_string() |> String.pad_leading(width)
 
   defp split_lines(text, maximum),
-    do: text |> String.split("\n", trim: false) |> Enum.take(maximum)
+    do: text |> String.split(["\r\n", "\n"], trim: false) |> Enum.take(maximum)
 
   defp increment(nil), do: nil
   defp increment(number), do: number + 1
