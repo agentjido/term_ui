@@ -1,17 +1,17 @@
 PRIV_DIR = $(MIX_APP_PATH)/priv
 NIF = $(PRIV_DIR)/term_ui_tty_nif.dll
 OBJ = $(PRIV_DIR)/term_ui_tty_nif.obj
-LIB = $(PRIV_DIR)/term_ui_tty_nif.lib
+IMPORT_LIB = $(PRIV_DIR)/term_ui_tty_nif.lib
 SRC = c_src/term_ui_tty_nif.c
 
 all: $(NIF)
 
 $(NIF): $(SRC)
 	@if not exist "$(PRIV_DIR)" mkdir "$(PRIV_DIR)"
-	cl /nologo /O2 /W4 /LD /I"$(ERTS_INCLUDE_DIR)" /Fo:"$(OBJ)" /Fe:"$(NIF)" "$(SRC)" /link /IMPLIB:"$(LIB)"
+	cl /nologo /O2 /W4 /LD /I"$(ERTS_INCLUDE_DIR)" /Fo:"$(OBJ)" /Fe:"$(NIF)" "$(SRC)" /link /IMPLIB:"$(IMPORT_LIB)"
 
 clean:
 	@if exist "$(NIF)" del /Q "$(NIF)"
 	@if exist "$(OBJ)" del /Q "$(OBJ)"
-	@if exist "$(LIB)" del /Q "$(LIB)"
+	@if exist "$(IMPORT_LIB)" del /Q "$(IMPORT_LIB)"
 	@if exist "$(PRIV_DIR)/term_ui_tty_nif.exp" del /Q "$(PRIV_DIR)/term_ui_tty_nif.exp"

@@ -143,7 +143,7 @@ defmodule TermUI.MixProject do
       {:excoveralls, "~> 0.18", only: :test},
 
       # LLM usage rules
-      {:usage_rules, "~> 0.1", only: :dev, runtime: false},
+      {:usage_rules, "~> 1.2", only: :dev, runtime: false},
 
       # Release tooling
       {:git_ops, "~> 2.9", only: :dev, runtime: false}
