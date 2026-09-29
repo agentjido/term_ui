@@ -29,6 +29,35 @@ defmodule TermUI.Widget.DiffViewerTest do
     assert Frame.row_text(frame, 2) =~ "new"
   end
 
+  test "comparison treats CRLF and LF as the same line ending" do
+    rows = DiffViewer.compare("same\r\nold\r\nend", "same\nold\nend")
+
+    assert Enum.map(rows, &{&1.kind, &1.old_text, &1.new_text}) == [
+             {:context, "same", "same"},
+             {:context, "old", "old"},
+             {:context, "end", "end"}
+           ]
+  end
+
+  test "unified parsing accepts CRLF and retains carriage returns within content" do
+    diff =
+      Enum.join(
+        ["--- a/file", "+++ b/file", "@@ -1,2 +1,2 @@", "-old", "+new", " same\rmiddle"],
+        "\r\n"
+      )
+
+    state = DiffViewer.init(unified_diff: diff, context: 3)
+
+    assert Enum.map(state.rows, &{&1.kind, &1.text, &1.old_text, &1.new_text}) == [
+             {:header, "--- a/file", nil, nil},
+             {:header, "+++ b/file", nil, nil},
+             {:hunk, "@@ -1,2 +1,2 @@", nil, nil},
+             {:removed, nil, "old", nil},
+             {:added, nil, nil, "new"},
+             {:context, nil, "same\rmiddle", "same\rmiddle"}
+           ]
+  end
+
   test "renders an existing unified diff and collapses long context" do
     diff = """
     --- a/file
