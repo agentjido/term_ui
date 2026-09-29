@@ -590,9 +590,23 @@ defmodule TermUI.Backend.TTY do
     Enum.each(grouped_rows, fn {row, row_cells} ->
       # Skip rows outside terminal bounds
       if row >= 1 and row <= max_rows do
-        [{start_col, _} | _] = row_cells
-        render_row_at_column(row, start_col, row_cells, state)
+        render_incremental_row(row, row_cells, state)
       end
+    end)
+  end
+
+  # A gap contains unchanged cells. Move to the next changed run instead of
+  # writing spaces over those cells with the preceding run's style.
+  @spec render_incremental_row(pos_integer(), [{pos_integer(), TermUI.Backend.cell()}], t()) ::
+          :ok
+  defp render_incremental_row(row, row_cells, state) do
+    row_cells
+    |> Enum.with_index()
+    |> Enum.chunk_by(fn {{column, _cell}, index} -> column - index end)
+    |> Enum.each(fn entries ->
+      cells = Enum.map(entries, &elem(&1, 0))
+      [{start_column, _cell} | _] = cells
+      render_row_at_column(row, start_column, cells, state)
     end)
   end
 

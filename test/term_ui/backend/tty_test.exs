@@ -2367,14 +2367,10 @@ defmodule TermUI.Backend.TTYTest do
       # Should clear removed cell {1, 3} (separate cursor positioning for clear)
       assert output =~ "\e[1;3H"
 
-      # Should render new cell {1, 4}
-      # With optimization, cells on same row are grouped, so D is rendered
-      # after X with a space gap (X at col 2, space fills col 3, D at col 4)
+      # The new cell has its own run. Removal at column 3 is explicit.
+      assert output =~ "\e[1;4H"
       assert output =~ "D"
-
-      # The output should show the grouped rendering: X + space + D
-      # (X at col 2, gap fills col 3 to reach col 4, then D)
-      assert output =~ "X D"
+      refute output =~ "X D"
     end
 
     test "style change triggers re-render" do
@@ -2563,7 +2559,7 @@ defmodule TermUI.Backend.TTYTest do
       assert row1_positions == 2
     end
 
-    test "non-adjacent cells on same row fill gaps with spaces" do
+    test "non-adjacent changed cells use separate cursor positions" do
       {:ok, state} = init_tty(line_mode: :incremental)
 
       # First frame - empty
@@ -2588,17 +2584,11 @@ defmodule TermUI.Backend.TTYTest do
           TTY.draw_cells(state1, cells2)
         end)
 
-      # Should have A followed by spaces, then D
-      # The pattern should be: cursor positioning + A + spaces + style + D
+      assert output =~ "\e[1;1H"
+      assert output =~ "\e[1;4H"
       assert output =~ "A"
       assert output =~ "D"
-
-      # Gap should be filled with spaces (columns 2, 3 = 2 spaces between A and D)
-      # But actually we're going from col 1 (A takes col 1) to col 4
-      # So gap is col 2, 3 = 2 spaces
-      # Actually after rendering A at col 1, cursor advances to col 2
-      # Then we need to fill col 2, 3 to reach col 4 = 2 spaces
-      assert output =~ "A  "
+      refute output =~ "A  "
     end
 
     test "cells on different rows get separate cursor positioning" do
