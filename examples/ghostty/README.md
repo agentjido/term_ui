@@ -19,6 +19,17 @@ its own shell. The example uses Ghostty 0.5.0 as an optional consumer dependency
 The terminal region is at most 80 columns and 30 rows, to match that version's
 mouse encoder. The outer application frame still follows browser dimensions.
 
+Ghostty 0.5.0's published Linux ARM64 asset contains x86_64 libraries. On Linux
+ARM64, install Zig 0.15.2, then build the pinned native sources before running:
+
+```sh
+sh build_native.sh
+GHOSTTY_BUILD=1 TERM=xterm-256color mix run --no-halt
+```
+
+Use `GHOSTTY_BUILD=1` for its tests too. macOS ARM64 and Linux x86_64 use the
+published native assets. Zigler is an example dependency for the source build.
+
 The host binds to loopback and checks the exact origin. Shell commands and
 arguments come from the host. Browser input cannot select a module or command.
 Keep this example on loopback. Add authentication, shell access policy, host

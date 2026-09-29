@@ -194,6 +194,7 @@ defmodule TermUI.TerminalSession.ServerTest do
     assert Agent.get(second_pty, & &1.writes) == ["B"]
     send(first, :terminal_stop)
     assert_receive {:term_ui_terminal_closed, ^first, :normal}
+    assert :ok = TerminalSession.stop(first)
     assert Process.alive?(second)
   end
 

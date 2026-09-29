@@ -9,7 +9,8 @@ defmodule TermUIGhosttyExample.MixProject do
       deps: [
         {:term_ui, path: "../.."},
         {:term_ui_web_example, path: "../web", runtime: false},
-        {:ghostty, "== 0.5.0", runtime: false}
+        {:ghostty, "== 0.5.0", runtime: false},
+        {:zigler, "~> 0.15.2", runtime: false}
       ]
     ]
   end

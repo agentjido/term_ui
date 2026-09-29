@@ -160,6 +160,16 @@ jobs:
         with:
           otp-version: "28"
           elixir-version: "1.19"
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        if: matrix.name == 'Linux ARM64'
+        with:
+          version: "0.15.2"
+      - name: Build Ghostty on native ARM64 from pinned sources
+        if: matrix.name == 'Linux ARM64'
+        working-directory: examples/ghostty
+        run: |
+          sh build_native.sh
+          echo 'GHOSTTY_BUILD=1' >> "$GITHUB_ENV"
       - name: Compile, audit, and test real native sessions
         working-directory: examples/ghostty
         run: |

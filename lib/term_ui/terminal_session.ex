@@ -44,7 +44,12 @@ defmodule TermUI.TerminalSession do
   @spec acknowledge(pid(), pos_integer()) :: :ok | {:error, term()}
   def acknowledge(session, sequence), do: GenServer.call(session, {:ack, sequence})
 
-  @doc "Closes the PTY and emulator."
+  @doc "Closes the PTY and emulator. A session that has stopped returns `:ok`."
   @spec stop(pid()) :: :ok
-  def stop(session), do: GenServer.stop(session, :normal)
+  def stop(session) do
+    GenServer.stop(session, :normal)
+  catch
+    :exit, {:noproc, _call} -> :ok
+    :exit, {:normal, _call} -> :ok
+  end
 end
