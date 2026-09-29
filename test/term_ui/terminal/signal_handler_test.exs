@@ -91,6 +91,63 @@ defmodule TermUI.Terminal.SignalHandlerTest do
     end
   end
 
+  test "a local backend removes its signal handler before waiting for cleanup output" do
+    if match?({:unix, _}, :os.type()) do
+      {:ok, output} = StringIO.open("")
+      device = spawn(fn -> forward_output(output) end)
+      previous = Process.group_leader()
+      Process.group_leader(self(), device)
+
+      try do
+        {:ok, manager} =
+          Manager.start_link(self(), :tty, size: {3, 8}, size_poll_interval: :disabled)
+
+        handler = {SignalHandler, manager}
+        assert handler in :gen_event.which_handlers(:erl_signal_server)
+        send(device, {:hold_next_output, self()})
+        assert_receive :output_hold_ready, 1_000
+
+        close = Task.async(fn -> Manager.close(manager, :normal) end)
+        assert_receive :output_waiting, 1_000
+        refute handler in :gen_event.which_handlers(:erl_signal_server)
+        send(device, :release_output)
+        assert :ok = Task.await(close, 1_000)
+      after
+        send(device, :release_output)
+        Process.group_leader(self(), previous)
+        send(device, :stop)
+        StringIO.close(output)
+      end
+    end
+  end
+
+  defp forward_output(output, hold \\ nil) do
+    receive do
+      {:hold_next_output, owner} ->
+        send(owner, :output_hold_ready)
+        forward_output(output, owner)
+
+      {:io_request, _from, _tag, _request} = request when is_pid(hold) ->
+        send(hold, :output_waiting)
+
+        receive do
+          :release_output -> send(output, request)
+        end
+
+        forward_output(output)
+
+      {:io_request, _from, _tag, _request} = request ->
+        send(output, request)
+        forward_output(output, hold)
+
+      :release_output ->
+        forward_output(output, hold)
+
+      :stop ->
+        :ok
+    end
+  end
+
   defp hold_input(output, owner, pending \\ nil) do
     receive do
       {:io_request, reader, tag, {:get_chars, _encoding, _prompt, _count}} ->
