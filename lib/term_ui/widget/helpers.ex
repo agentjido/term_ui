@@ -37,6 +37,17 @@ defmodule TermUI.Widget.Helpers do
   @spec clamp(integer(), integer(), integer()) :: integer()
   def clamp(value, minimum, maximum), do: value |> max(minimum) |> min(maximum)
 
+  @doc "Finds the preceding word after skipping spaces on the current line."
+  @spec previous_word_start(String.t(), non_neg_integer()) :: non_neg_integer()
+  def previous_word_start(value, cursor) do
+    {before_cursor, _after_cursor} = String.split_at(value, cursor)
+
+    before_cursor
+    |> String.replace(~r/[^\S\n]+\z/u, "")
+    |> String.replace(~r/\S+\z/u, "")
+    |> String.length()
+  end
+
   @doc "Returns the terminal display width of text."
   @spec text_width(iodata()) :: non_neg_integer()
   def text_width(text), do: max(DisplayWidth.width(IO.iodata_to_binary(text)), 0)
