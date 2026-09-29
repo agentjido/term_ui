@@ -807,14 +807,13 @@ defmodule TermUI.RuntimeContractTest do
         put_in(state, [:backend_state, :fail], :draw)
       end)
 
+      reference = Process.monitor(runtime)
       Runtime.send_message(runtime, {:set, 2})
 
       case trigger do
         :force -> Runtime.force_render(runtime)
         :shutdown -> Runtime.shutdown(runtime)
       end
-
-      reference = Process.monitor(runtime)
 
       assert_receive {:DOWN, ^reference, :process, ^runtime,
                       {:backend, DeterministicBackend, :draw, :draw_failed}},
