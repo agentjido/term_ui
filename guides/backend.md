@@ -178,3 +178,5 @@ OTP SSH daemons can use the supplied channel callback:
 The callback accepts PTY input and window changes. It sends Unicode text,
 bracketed paste, mouse, focus, and resize values through the normal v2 event
 contract. The SSH path does not select raw mode or call the local terminal NIF.
+
+See [Linux releases](linux-releases.md) for older Linux targets and native library checks.
