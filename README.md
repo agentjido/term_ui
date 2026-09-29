@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/term_ui.svg)](https://hex.pm/packages/term_ui)
 [![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/term_ui)
-[![License](https://img.shields.io/hexpm/l/term_ui.svg)](https://github.com/pcharbon70/term_ui/blob/main/LICENSE)
+[![License](https://img.shields.io/hexpm/l/term_ui.svg)](https://github.com/agentjido/term_ui/blob/maint/1.x/LICENSE)
 
 A direct-mode Terminal UI framework for Elixir/BEAM, inspired by [BubbleTea](https://github.com/charmbracelet/bubbletea) (Go) and [Ratatui](https://github.com/ratatui-org/ratatui) (Rust).
 
@@ -178,34 +178,37 @@ TermUI.Runtime.run(root: Counter)
 
 ## Documentation
 
+[Share examples and ask for help](guides/user/12-community.md).
+
 ### User Guides
 
 | Guide | Description |
 |-------|-------------|
-| [Overview](https://github.com/pcharbon70/term_ui/blob/main/guides/user/01-overview.md) | Introduction to TermUI concepts |
-| [Getting Started](https://github.com/pcharbon70/term_ui/blob/main/guides/user/02-getting-started.md) | First steps and setup |
-| [Elm Architecture](https://github.com/pcharbon70/term_ui/blob/main/guides/user/03-elm-architecture.md) | Understanding init/update/view |
-| [Events](https://github.com/pcharbon70/term_ui/blob/main/guides/user/04-events.md) | Handling keyboard and mouse input |
-| [Styling](https://github.com/pcharbon70/term_ui/blob/main/guides/user/05-styling.md) | Colors, attributes, and themes |
-| [Layout](https://github.com/pcharbon70/term_ui/blob/main/guides/user/06-layout.md) | Arranging components on screen |
-| [Widgets](https://github.com/pcharbon70/term_ui/blob/main/guides/user/07-widgets.md) | Using built-in widgets |
-| [Terminal](https://github.com/pcharbon70/term_ui/blob/main/guides/user/08-terminal.md) | Terminal capabilities and modes |
-| [Commands](https://github.com/pcharbon70/term_ui/blob/main/guides/user/09-commands.md) | Side effects and async operations |
-| [Advanced Widgets](https://github.com/pcharbon70/term_ui/blob/main/guides/user/10-advanced-widgets.md) | Navigation, visualization, streaming, and BEAM introspection widgets |
+| [Overview](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/01-overview.md) | Introduction to TermUI concepts |
+| [Getting Started](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/02-getting-started.md) | First steps and setup |
+| [Elm Architecture](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/03-elm-architecture.md) | Understanding init/update/view |
+| [Events](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/04-events.md) | Handling keyboard and mouse input |
+| [Styling](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/05-styling.md) | Colors, attributes, and themes |
+| [Layout](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/06-layout.md) | Arranging components on screen |
+| [Widgets](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/07-widgets.md) | Using built-in widgets |
+| [Terminal](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/08-terminal.md) | Terminal capabilities and modes |
+| [Commands](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/09-commands.md) | Side effects and async operations |
+| [Linux Releases](guides/user/11-linux-releases.md) | Build and verify a release for an older Linux target |
+| [Advanced Widgets](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/user/10-advanced-widgets.md) | Navigation, visualization, streaming, and BEAM introspection widgets |
 
 ### Developer Guides
 
 | Guide | Description |
 |-------|-------------|
-| [Architecture Overview](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/01-architecture-overview.md) | System layers and design |
-| [Runtime Internals](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/02-runtime-internals.md) | GenServer event loop and state |
-| [Rendering Pipeline](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/03-rendering-pipeline.md) | View to terminal output stages |
-| [Event System](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/04-event-system.md) | Input parsing and dispatch |
-| [Buffer Management](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/05-buffer-management.md) | ETS double buffering |
-| [Terminal Layer](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/06-terminal-layer.md) | Raw mode and ANSI sequences |
-| [Elm Implementation](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/07-elm-implementation.md) | Elm Architecture for OTP |
-| [Creating Widgets](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/08-creating-widgets.md) | How to build and contribute widgets |
-| [Testing Framework](https://github.com/pcharbon70/term_ui/blob/main/guides/developer/09-testing-framework.md) | Component and widget testing |
+| [Architecture Overview](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/01-architecture-overview.md) | System layers and design |
+| [Runtime Internals](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/02-runtime-internals.md) | GenServer event loop and state |
+| [Rendering Pipeline](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/03-rendering-pipeline.md) | View to terminal output stages |
+| [Event System](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/04-event-system.md) | Input parsing and dispatch |
+| [Buffer Management](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/05-buffer-management.md) | ETS double buffering |
+| [Terminal Layer](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/06-terminal-layer.md) | Raw mode and ANSI sequences |
+| [Elm Implementation](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/07-elm-implementation.md) | Elm Architecture for OTP |
+| [Creating Widgets](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/08-creating-widgets.md) | How to build and contribute widgets |
+| [Testing Framework](https://github.com/agentjido/term_ui/blob/maint/1.x/guides/developer/09-testing-framework.md) | Component and widget testing |
 
 ## Examples
 
@@ -213,34 +216,34 @@ The `examples/` directory contains standalone applications demonstrating each wi
 
 | Example | Description |
 |---------|-------------|
-| [alert_dialog](https://github.com/pcharbon70/term_ui/tree/main/examples/alert_dialog) | Confirmation dialogs with standard buttons |
-| [bar_chart](https://github.com/pcharbon70/term_ui/tree/main/examples/bar_chart) | Horizontal and vertical bar charts |
-| [canvas](https://github.com/pcharbon70/term_ui/tree/main/examples/canvas) | Free-form drawing with box/braille characters |
-| [cluster_dashboard](https://github.com/pcharbon70/term_ui/tree/main/examples/cluster_dashboard) | Distributed Erlang cluster monitoring |
-| [command_palette](https://github.com/pcharbon70/term_ui/tree/main/examples/command_palette) | VS Code-style command discovery |
-| [context_menu](https://github.com/pcharbon70/term_ui/tree/main/examples/context_menu) | Right-click context menus |
-| [dashboard](https://github.com/pcharbon70/term_ui/tree/main/examples/dashboard) | System monitoring dashboard with multiple widgets |
-| [dialog](https://github.com/pcharbon70/term_ui/tree/main/examples/dialog) | Modal dialogs with buttons |
-| [form_builder](https://github.com/pcharbon70/term_ui/tree/main/examples/form_builder) | Structured forms with validation |
-| [gauge](https://github.com/pcharbon70/term_ui/tree/main/examples/gauge) | Progress bars and percentage indicators |
-| [iex_counter](https://github.com/pcharbon70/term_ui/tree/main/examples/iex_counter) | Minimal counter designed for IEx/TTY mode |
-| [line_chart](https://github.com/pcharbon70/term_ui/tree/main/examples/line_chart) | Braille-based line charts |
-| [log_viewer](https://github.com/pcharbon70/term_ui/tree/main/examples/log_viewer) | Real-time log display with filtering |
-| [markdown_viewer](https://github.com/pcharbon70/term_ui/tree/main/examples/markdown_viewer) | Scrollable Markdown rendering |
-| [menu](https://github.com/pcharbon70/term_ui/tree/main/examples/menu) | Nested menus with keyboard navigation |
-| [multi_renderer](https://github.com/pcharbon70/term_ui/tree/main/examples/multi_renderer) | Backend selection and capability degradation |
-| [pick_list](https://github.com/pcharbon70/term_ui/tree/main/examples/pick_list) | Modal selection with type-ahead |
-| [process_monitor](https://github.com/pcharbon70/term_ui/tree/main/examples/process_monitor) | Live BEAM process inspection |
-| [sparkline](https://github.com/pcharbon70/term_ui/tree/main/examples/sparkline) | Inline data visualization |
-| [split_pane](https://github.com/pcharbon70/term_ui/tree/main/examples/split_pane) | Resizable multi-pane layouts |
-| [stream_widget](https://github.com/pcharbon70/term_ui/tree/main/examples/stream_widget) | GenStage consumer integration with a bounded display buffer |
-| [supervision_tree_viewer](https://github.com/pcharbon70/term_ui/tree/main/examples/supervision_tree_viewer) | OTP supervision hierarchy |
-| [table](https://github.com/pcharbon70/term_ui/tree/main/examples/table) | Scrollable data tables with selection |
-| [tabs](https://github.com/pcharbon70/term_ui/tree/main/examples/tabs) | Tab-based navigation |
-| [text_input](https://github.com/pcharbon70/term_ui/tree/main/examples/text_input) | Single and multi-line text input |
-| [toast](https://github.com/pcharbon70/term_ui/tree/main/examples/toast) | Tick-driven notification dismissal |
-| [tree_view](https://github.com/pcharbon70/term_ui/tree/main/examples/tree_view) | Hierarchical data with expand/collapse |
-| [viewport](https://github.com/pcharbon70/term_ui/tree/main/examples/viewport) | Scrollable content areas |
+| [alert_dialog](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/alert_dialog) | Confirmation dialogs with standard buttons |
+| [bar_chart](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/bar_chart) | Horizontal and vertical bar charts |
+| [canvas](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/canvas) | Free-form drawing with box/braille characters |
+| [cluster_dashboard](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/cluster_dashboard) | Distributed Erlang cluster monitoring |
+| [command_palette](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/command_palette) | VS Code-style command discovery |
+| [context_menu](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/context_menu) | Right-click context menus |
+| [dashboard](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/dashboard) | System monitoring dashboard with multiple widgets |
+| [dialog](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/dialog) | Modal dialogs with buttons |
+| [form_builder](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/form_builder) | Structured forms with validation |
+| [gauge](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/gauge) | Progress bars and percentage indicators |
+| [iex_counter](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/iex_counter) | Minimal counter designed for IEx/TTY mode |
+| [line_chart](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/line_chart) | Braille-based line charts |
+| [log_viewer](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/log_viewer) | Real-time log display with filtering |
+| [markdown_viewer](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/markdown_viewer) | Scrollable Markdown rendering |
+| [menu](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/menu) | Nested menus with keyboard navigation |
+| [multi_renderer](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/multi_renderer) | Backend selection and capability degradation |
+| [pick_list](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/pick_list) | Modal selection with type-ahead |
+| [process_monitor](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/process_monitor) | Live BEAM process inspection |
+| [sparkline](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/sparkline) | Inline data visualization |
+| [split_pane](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/split_pane) | Resizable multi-pane layouts |
+| [stream_widget](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/stream_widget) | GenStage consumer integration with a bounded display buffer |
+| [supervision_tree_viewer](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/supervision_tree_viewer) | OTP supervision hierarchy |
+| [table](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/table) | Scrollable data tables with selection |
+| [tabs](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/tabs) | Tab-based navigation |
+| [text_input](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/text_input) | Single and multi-line text input |
+| [toast](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/toast) | Tick-driven notification dismissal |
+| [tree_view](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/tree_view) | Hierarchical data with expand/collapse |
+| [viewport](https://github.com/agentjido/term_ui/tree/maint/1.x/examples/viewport) | Scrollable content areas |
 
 ```bash
 # Run any example
@@ -259,4 +262,4 @@ mix termui.run
 
 ## License
 
-MIT License - see [LICENSE](https://github.com/pcharbon70/term_ui/blob/main/LICENSE) for details.
+MIT License - see [LICENSE](https://github.com/agentjido/term_ui/blob/maint/1.x/LICENSE) for details.
