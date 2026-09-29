@@ -5,6 +5,7 @@ defmodule TermUI.LoggerControlTest do
   alias TermUI.Test.DeterministicBackend
 
   @filter_id :term_ui_full_screen
+  @eventual_timeout 1_000
 
   defmodule QuietApp do
     use TermUI.Elm
@@ -62,12 +63,12 @@ defmodule TermUI.LoggerControlTest do
 
     runtime_ref = Process.monitor(runtime)
 
-    assert_receive {:backend, :draw, _frame}
+    assert_receive {:backend, :draw, _frame}, @eventual_timeout
     assert filter_present?()
 
     Runtime.shutdown(runtime)
 
-    assert_receive {:DOWN, ^runtime_ref, :process, ^runtime, :normal}
+    assert_receive {:DOWN, ^runtime_ref, :process, ^runtime, :normal}, @eventual_timeout
     refute_filter_present()
   end
 

@@ -87,6 +87,49 @@ Minimum bounds apply when the parent has sufficient space. If all minimums
 are larger than the parent, the allocator reduces them proportionally. Thus,
 all rectangles stay inside the parent.
 
+### Nested constrained rows
+
+The v1 example in [issue #11](https://github.com/agentjido/term_ui/issues/11)
+uses a horizontal constrained stack inside a vertical stack. In v2, allocate
+the three rows first. Then allocate each row's children and place their frames
+in one complete application frame.
+
+Use the current dimensions from application state. Recalculate these
+rectangles after a resize. `Layout.place/3` clips the children when the terminal
+is small, including rectangles with zero width or height.
+
+```elixir
+alias TermUI.{DisplayWidth, Frame, Layout}
+
+def view(%{dimensions: {width, height}}) do
+  [top, middle, bottom] =
+    Layout.column(Layout.new({width, height}), [1, 1, 1])
+
+  [top_left, top_right] =
+    Layout.row(top, [Layout.content(DisplayWidth.width("Visible 1")), Layout.fill()])
+
+  [middle_left, middle_right] =
+    Layout.row(middle, [Layout.fixed(15), Layout.fill()])
+
+  children = [
+    {top_left, "Visible 1"},
+    {top_right, "Visible 2"},
+    {middle_left, "Not visible"},
+    {middle_right, "Also not visible"},
+    {bottom, "Also visible"}
+  ]
+
+  Enum.reduce(children, Frame.new(width, height), fn {rect, text}, frame ->
+    child = Frame.from_rows([text], DisplayWidth.width(text), 1)
+    Layout.place(frame, child, rect)
+  end)
+end
+```
+
+At 50 columns and 3 rows, this view returns all three rows. The middle row
+reserves 15 columns for `"Not visible"` and gives the remaining columns to
+`"Also not visible"`.
+
 ## Temporary v1 configuration
 
 The v2 entry points read these v1 application environment keys when the
