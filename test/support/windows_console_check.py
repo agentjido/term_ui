@@ -185,7 +185,7 @@ def check_application(shell, backend, directory):
     try:
         console.check_screen(0)
         expected_backend = "TermUI.Backend.Raw" if backend == "raw" else "TermUI.Backend.TTY"
-        assert console.state()["backend"] == expected_backend, console.state()
+        console.wait(lambda: console.state().get("backend") == expected_backend, "backend startup record")
         suffix = "\r" if backend == "tty" else ""
         console.send("é " + suffix)
         console.wait(
