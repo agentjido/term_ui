@@ -308,6 +308,8 @@ defmodule TermUI.MixProject do
           TermUI.Backend,
           TermUI.Backend.SSH,
           TermUI.Backend.SSH.Channel,
+          TermUI.WebBackend,
+          TermUI.WebBackend.Protocol,
           TermUI.Test.DeterministicBackend
         ],
         Compatibility: [

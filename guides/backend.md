@@ -2,6 +2,56 @@
 
 A backend implements `TermUI.Backend`.
 
+## Browser sessions
+
+`TermUI.WebBackend` starts a normal Elm application for one browser connection.
+It accepts normalized input and sends complete frames or complete changed rows.
+It does not require a web framework or a local terminal.
+
+```elixir
+{:ok, session} =
+  TermUI.WebBackend.start_session(MyApp,
+    owner: self(),
+    output: self(),
+    size: {24, 80},
+    runtime_options: [my_application_option: "value"]
+  )
+
+# Send this map as JSON through the connection.
+receive do
+  {:term_ui_web_output, ^session, payload} -> Jason.encode!(payload)
+end
+
+# Pass decoded client maps to the session. Confirm a frame only after applying it.
+:ok = TermUI.WebBackend.input(session, %{"v" => 1, "type" => "ack", "seq" => 1})
+:ok = TermUI.WebBackend.input(session, %{"v" => 1, "type" => "text", "text" => "é"})
+```
+
+The host provides JSON encoding and the connection. It must check authentication,
+origin, message size, and input rate. Select the application module on the server.
+Never accept a module name from the browser. `Jason` is an example host dependency;
+the TermUI backend does not require it.
+
+The default limits are 300 columns, 120 rows, 4,096 bytes per text event, and
+65,536 bytes per paste. Set `limits: %{width: 200, height: 100}` to change selected
+limits. Terminal dimensions cannot exceed the public Frame bounds. The input
+queue accepts at most 1,024 events. A full queue returns `{:error, :input_queue_full}`.
+Invalid input returns an error without changing application state or dimensions.
+
+There is one frame in flight and one waiting frame. New output replaces the
+waiting frame. The session uses only the last confirmed frame as the delta base.
+A missing base requires a client `resync` message and a new complete frame.
+See `TermUI.WebBackend.Protocol` for cells, colors, coordinates, and input maps.
+
+The default output acknowledgement timeout is five seconds. An expired timeout
+stops the runtime and sends a `closed` message with an error reason. Set
+`output_timeout: milliseconds` for the connection. `stop_session/1` sends the
+final application frame and waits for its acknowledgement. `disconnect/2`
+releases the runtime without waiting for output. Connection-owner exit also
+releases the runtime. A reconnect starts a new session with a complete frame.
+
+## Callback contract
+
 ```elixir
 @callback init(keyword()) :: {:ok, state()} | {:error, term()}
 @callback size(state()) :: {:ok, {rows, columns}} | {:error, term()}
