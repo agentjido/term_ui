@@ -49,4 +49,14 @@ defmodule TermUI.Terminal.SignalHandlerTest do
     assert {:ok, ^terminal} = SignalHandler.handle_event(:sigusr2, terminal)
     refute_receive _message
   end
+
+  test "forwards resume to the terminal owner or the TTY runtime" do
+    terminal = self()
+    assert {:ok, ^terminal} = SignalHandler.handle_event(:sigcont, terminal)
+    assert_receive :sigcont
+
+    state = {terminal, :restore_terminal, nil}
+    assert {:ok, ^state} = SignalHandler.handle_event(:sigcont, state)
+    assert_receive :terminal_resume
+  end
 end

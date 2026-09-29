@@ -412,6 +412,20 @@ defmodule TermUI.Terminal do
   end
 
   @impl true
+  def handle_info(:sigcont, state) do
+    case resume_raw_mode(state) do
+      :ok ->
+        restore_owned_output(state)
+        Enum.each(state.resize_callbacks, &send(&1, :terminal_resume))
+        {:noreply, state}
+
+      {:error, reason} ->
+        Enum.each(state.resize_callbacks, &send(&1, {:terminal_resume_failed, reason}))
+        {:noreply, state}
+    end
+  end
+
+  @impl true
   def handle_info(_msg, state) do
     {:noreply, state}
   end
@@ -424,6 +438,50 @@ defmodule TermUI.Terminal do
   end
 
   # Private functions
+
+  defp resume_raw_mode(%{raw_mode_active: false}), do: :ok
+
+  defp resume_raw_mode(_state) do
+    # The signal owner waits for OTP to process SIGCONT. Do not start another
+    # shell here: it replaces the group that owns an outstanding IO.getn call.
+    :ok = :gen_event.call(:erl_signal_server, {SignalHandler, self()}, :sync, 1_000)
+    apply_stty_raw_settings()
+  rescue
+    exception -> {:error, {:resume_exception, exception}}
+  catch
+    kind, reason -> {:error, {:resume_failure, kind, reason}}
+  end
+
+  defp restore_owned_output(state) do
+    if owns_terminal_output?(state) do
+      write_to_terminal([
+        ANSI.reset(),
+        if(state.alternate_screen_active, do: ANSI.enter_alternate_screen(), else: []),
+        if(state.cursor_visible, do: [], else: ANSI.cursor_hide()),
+        resume_mouse_sequence(state.mouse_tracking),
+        if(state.bracketed_paste, do: ANSI.enable_bracketed_paste(), else: []),
+        if(state.focus_events, do: ANSI.enable_focus_events(), else: [])
+      ])
+    end
+  end
+
+  defp owns_terminal_output?(state) do
+    Enum.any?([
+      state.raw_mode_active,
+      state.alternate_screen_active,
+      not state.cursor_visible,
+      state.mouse_tracking != :off,
+      state.bracketed_paste,
+      state.focus_events
+    ])
+  end
+
+  defp resume_mouse_sequence(:off), do: []
+  defp resume_mouse_sequence(:click), do: resume_mouse_sequence(:normal)
+  defp resume_mouse_sequence(:drag), do: resume_mouse_sequence(:button)
+
+  defp resume_mouse_sequence(mode),
+    do: [ANSI.enable_mouse_tracking(mode), ANSI.enable_sgr_mouse()]
 
   defp register_signal_handler do
     case :os.type() do
