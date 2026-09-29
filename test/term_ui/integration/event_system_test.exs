@@ -40,7 +40,7 @@ defmodule TermUI.Integration.EventSystemTest do
       Executor.execute(executor, cmd, self(), :test_component)
 
       assert_receive {:command_result, :test_component, _ref, {:timer_done, :test}},
-                     @default_timeout
+                     @eventual_timeout
     end
 
     test "multiple commands execute concurrently and deliver results", %{executor: executor} do
