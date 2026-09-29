@@ -1,0 +1,28 @@
+.term-ui {
+  --term-ui-fg: #e5e5e5;
+  --term-ui-bg: #10151b;
+  position: relative;
+  overflow: hidden;
+  color: var(--term-ui-fg);
+  background: var(--term-ui-bg);
+  font: 16px / 22px ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-variant-ligatures: none;
+  isolation: isolate;
+}
+.term-ui-grid { position: relative; }
+.term-ui-row { position: relative; height: var(--term-ui-cell-height); white-space: pre; }
+.term-ui-cell { display: inline-block; vertical-align: top; height: var(--term-ui-cell-height); overflow: hidden; }
+.term-ui-cell[hidden] { display: none; }
+.term-ui-bold { font-weight: 700; }
+.term-ui-italic { font-style: italic; }
+.term-ui-underline { text-decoration: underline; }
+.term-ui-strikethrough { text-decoration: line-through; }
+.term-ui-underline.term-ui-strikethrough { text-decoration: underline line-through; }
+.term-ui-hidden { color: transparent !important; }
+.term-ui-blink { animation: term-ui-blink 1s step-end infinite; }
+.term-ui-cursor { position: absolute; width: var(--term-ui-cell-width); height: var(--term-ui-cell-height); background: #fff5; pointer-events: none; }
+.term-ui-input { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; }
+.term-ui-measure { position: absolute; visibility: hidden; white-space: pre; pointer-events: none; }
+.term-ui:focus-within { outline: 2px solid #678bbb; outline-offset: 3px; }
+@keyframes term-ui-blink { 50% { color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .term-ui-blink { animation: none; } }

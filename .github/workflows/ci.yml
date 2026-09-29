@@ -102,6 +102,39 @@ jobs:
           git diff --exit-code -- mix.lock
           mix test --warnings-as-errors
 
+  web-browser:
+    name: Web browser (Chromium)
+    runs-on: ubuntu-latest
+    env:
+      TERM_UI_TTY_NIF: disabled
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: examples/web/package-lock.json
+      - name: Compile, audit, and test the web host
+        working-directory: examples/web
+        run: |
+          mix deps.get
+          mix deps.unlock --check-unused
+          git diff --exit-code -- mix.lock
+          mix hex.audit
+          mix test --warnings-as-errors
+      - name: Test the browser without a local TTY NIF
+        working-directory: examples/web
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=low
+          npx playwright install --with-deps chromium
+          npm test
+          npm run benchmark
+
   platform:
     name: Platform (${{ matrix.name }}, NIF ${{ matrix.mode }})
     runs-on: ${{ matrix.os }}
@@ -140,7 +173,7 @@ jobs:
   required-checks:
     name: Required checks
     if: always()
-    needs: [ci, tty-nif-policy, platform, examples, acceptance]
+    needs: [ci, tty-nif-policy, platform, examples, acceptance, web-browser]
     runs-on: ubuntu-latest
     steps:
       - name: Require all CI jobs to pass
@@ -150,8 +183,9 @@ jobs:
           PLATFORM_RESULT: ${{ needs.platform.result }}
           EXAMPLES_RESULT: ${{ needs.examples.result }}
           ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
+          WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
         run: |
-          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT"; do
+          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT" "$WEB_BROWSER_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A required CI job did not pass: $result"
               exit 1
