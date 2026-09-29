@@ -35,7 +35,7 @@ def console_modes():
 
 def read_json(path):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return None
 
@@ -57,7 +57,7 @@ def run_child(shell, probe):
     result = subprocess.run(args, timeout=90, check=False)
     after = console_modes()
     record = {"exit_code": result.returncode, "before": before, "after": after}
-    Path(os.environ["TERM_UI_CONSOLE_PROGRESS"] + ".console").write_text(json.dumps(record))
+    Path(os.environ["TERM_UI_CONSOLE_PROGRESS"] + ".console").write_text(json.dumps(record), encoding="utf-8")
     assert result.returncode == 0, record
     assert after == before, f"Console modes were not restored: {record}"
 
@@ -121,7 +121,8 @@ class Console:
             self.stream.feed(data)
             if "\x1b[6n" in data:
                 self.process.write(f"\x1b[{self.screen.cursor.y + 1};{self.screen.cursor.x + 1}R")
-        raise AssertionError(f"Timed out on {message}; state={self.state()!r}; output={''.join(self.output)[-3000:]}")
+        state = json.dumps(self.state(), ensure_ascii=True)
+        raise AssertionError(f"Timed out on {message}; state={state}; output={''.join(self.output)[-3000:]}")
 
     def state(self):
         return read_json(self.progress) or {}
