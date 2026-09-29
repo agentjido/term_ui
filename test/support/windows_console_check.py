@@ -40,26 +40,47 @@ def read_json(path):
         return None
 
 
+def restore_console_modes(modes):
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetStdHandle.argtypes = [wintypes.DWORD]
+    kernel.GetStdHandle.restype = wintypes.HANDLE
+    kernel.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.SetConsoleMode.restype = wintypes.BOOL
+    for identifier, mode in zip((-10, -11), modes):
+        if not kernel.SetConsoleMode(kernel.GetStdHandle(identifier), mode):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
 def run_child(shell, probe):
     before = console_modes()
     mix = shutil.which("mix")
     assert mix, "mix executable was not found"
-    args = [mix, "run", "--no-compile", f"test/support/{probe}.exs"]
-    if shell == "cmd":
-        args = [os.environ["COMSPEC"], "/d", "/s", "/c", subprocess.list2cmdline(args)]
-    else:
+    def command(arguments):
+        args = [mix, "run", "--no-compile", *arguments]
+        if shell == "cmd":
+            return [os.environ["COMSPEC"], "/d", "/s", "/c", subprocess.list2cmdline(args)]
         bash = Path(os.environ["ProgramFiles"]) / "Git/bin/bash.exe"
         unix_mix = Path(mix).with_suffix("")
         assert bash.is_file() and unix_mix.is_file(), "Git Bash or the Mix shell script is absent"
         args[0] = unix_mix.as_posix()
-        args = [str(bash), "--noprofile", "--norc", "-c", "exec " + shlex.join(args)]
+        return [str(bash), "--noprofile", "--norc", "-c", "exec " + shlex.join(args)]
 
-    result = subprocess.run(args, timeout=90, check=False)
+    # Compare with the same VM and shell without a TermUI runtime. OTP can
+    # change a console flag during VM startup even when no application opens it.
+    baseline = subprocess.run(command(["-e", ":ok"]), timeout=90, check=False)
+    baseline_after = console_modes()
+    assert baseline.returncode == 0, baseline.returncode
+    restore_console_modes(before)
+    assert console_modes() == before
+
+    result = subprocess.run(command([f"test/support/{probe}.exs"]), timeout=90, check=False)
     after = console_modes()
-    record = {"exit_code": result.returncode, "before": before, "after": after}
+    record = {"exit_code": result.returncode, "before": before, "vm_baseline": baseline_after, "after": after}
     Path(os.environ["TERM_UI_CONSOLE_PROGRESS"] + ".console").write_text(json.dumps(record), encoding="utf-8")
     assert result.returncode == 0, record
-    assert after == before, f"Console modes were not restored: {record}"
+    assert after == baseline_after, f"Console modes differ from the plain VM: {record}"
 
 
 class Console:
@@ -151,7 +172,7 @@ class Console:
         modes = read_json(console_path)
         assert result["reason"] == ":normal", result
         assert result["manager_stopped"] and result["reader_stopped"], result
-        assert modes["exit_code"] == 0 and modes["before"] == modes["after"], modes
+        assert modes["exit_code"] == 0 and modes["vm_baseline"] == modes["after"], modes
 
     def close(self):
         log = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / self.progress.with_suffix(".log").name
@@ -207,7 +228,7 @@ def check_native_controls(directory):
         path = Path(str(console.progress) + ".console")
         console.wait(lambda: read_json(path), "native console cleanup")
         modes = read_json(path)
-        assert modes["exit_code"] == 0 and modes["before"] == modes["after"], modes
+        assert modes["exit_code"] == 0 and modes["vm_baseline"] == modes["after"], modes
         print("PASS source NIF: Ctrl+O/C/S/Q and saved console modes")
     finally:
         console.close()
