@@ -31,7 +31,7 @@ defmodule TermUI.Runtime do
   use GenServer
   require Logger
 
-  alias TermUI.Backend.Selector
+  alias TermUI.Backend.{Selector, TTY}
   alias TermUI.Command
   alias TermUI.Command.Executor
   alias TermUI.Config
@@ -715,6 +715,25 @@ defmodule TermUI.Runtime do
   def handle_info(:render, state) do
     state = process_render_tick(state)
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(:terminal_resume, %{shutting_down: true} = state), do: {:noreply, state}
+
+  def handle_info(:terminal_resume, %{backend_mode: mode} = state) when mode in [:raw, :tty] do
+    state =
+      if mode == :tty do
+        {:ok, backend_state} = TTY.resume(state.backend_state)
+        %{state | backend_state: backend_state}
+      else
+        state
+      end
+
+    {:noreply, state |> process_messages() |> do_full_render()}
+  end
+
+  def handle_info({:terminal_resume_failed, reason}, state) do
+    {:stop, {:terminal_resume_failed, reason}, state}
   end
 
   @impl true

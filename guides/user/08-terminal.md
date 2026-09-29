@@ -90,6 +90,14 @@ A focus-gained event also restores the screen when the application ignores the
 event. The host must enable focus reporting to receive those terminal events.
 Ordinary state updates still use differential output.
 
+On Unix with `SIGCONT` support, the runtime also restores the screen after the
+process resumes from the background. Raw restores its input flags and active
+terminal features. TTY restores its output features and keeps the active input
+mode. The saved settings for final shutdown are not replaced on resume.
+
+OTP 26 does not expose `SIGCONT` to application handlers. On that version, use
+`force_render/1` or enable focus reporting to request screen recovery.
+
 ## Size and resize
 
 `TermUI.Terminal.get_terminal_size/0` returns `{:ok, {rows, cols}}` for a local

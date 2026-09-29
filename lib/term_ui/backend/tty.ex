@@ -464,6 +464,13 @@ defmodule TermUI.Backend.TTY do
     {:ok, %{state | last_frame: nil, cursor_position: {1, 1}}}
   end
 
+  @doc "Restores owned TTY output modes before a full redraw after resume."
+  @spec resume(t()) :: {:ok, t()}
+  def resume(state) do
+    IO.write(TermUI.ANSI.reset())
+    {:ok, setup_terminal(%{state | last_frame: nil})}
+  end
+
   @impl true
   @doc """
   Draws cells to the terminal at specified positions.

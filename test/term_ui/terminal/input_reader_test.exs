@@ -1,11 +1,43 @@
 defmodule TermUI.Terminal.InputReaderTest do
   use ExUnit.Case, async: false
 
+  alias TermUI.Event
   alias TermUI.Terminal.InputReader
 
-  # All InputReader tests require a real terminal/TTY since the underlying
-  # Port driver uses `cat` to read from stdin which isn't available in
-  # non-interactive test environments.
+  # Portable IO tests check delivery without changing OS terminal modes.
+  # The older interactive lifecycle tests retain their terminal requirement.
+
+  test "delivers control keys and continued text through the IO reader" do
+    with_input_reader(<<3, 19, 17, ?q, "界"::binary>>, fn ->
+      for key <- ["c", "s", "q"] do
+        assert_receive {:input, %Event.Key{key: ^key, modifiers: [:ctrl]}}, 1_000
+      end
+
+      assert_receive {:input, %Event.Key{key: "q", modifiers: []}}, 1_000
+      assert_receive {:input, %Event.Key{key: "界", modifiers: []}}, 1_000
+    end)
+  end
+
+  test "completes a navigation sequence across single-character reads" do
+    with_input_reader("\e[Aq", fn ->
+      assert_receive {:input, %Event.Key{key: :up}}, 1_000
+      assert_receive {:input, %Event.Key{key: "q"}}, 1_000
+    end)
+  end
+
+  defp with_input_reader(input, assertions) do
+    {:ok, device} = StringIO.open(input)
+    previous = Process.group_leader()
+    Process.group_leader(self(), device)
+
+    try do
+      {:ok, _reader} = InputReader.start_link(target: self())
+      assertions.()
+    after
+      Process.group_leader(self(), previous)
+      StringIO.close(device)
+    end
+  end
 
   describe "start_link/1 and stop/1" do
     @tag :requires_terminal

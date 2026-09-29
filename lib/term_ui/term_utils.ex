@@ -249,14 +249,12 @@ defmodule TermUI.TermUtils do
   @spec run_stty([binary()]) :: {binary(), integer()}
   defp run_stty(args) do
     # Programs launched through an Erlang port do not necessarily inherit the
-    # BEAM process's controlling terminal as their standard input. On Linux,
-    # open the VM's stdin descriptor explicitly before trying /dev/tty and the
-    # command's own stdin. This keeps `stty` attached to the terminal that
-    # TermUI actually reads from.
-    beam_stdin = "/proc/#{System.pid()}/fd/0"
+    # BEAM process's controlling terminal as their standard input. Open the
+    # VM's terminal explicitly before trying /dev/tty and the command's stdin.
+    beam_stdin = beam_terminal_path()
 
     attempts =
-      if File.exists?(beam_stdin) do
+      if is_binary(beam_stdin) do
         [
           ["-F", beam_stdin | args],
           ["-f", beam_stdin | args],
@@ -276,6 +274,39 @@ defmodule TermUI.TermUtils do
       result = System.cmd("stty", argv, stderr_to_stdout: true, parallelism: true)
       if match?({_, 0}, result), do: {:halt, result}, else: {:cont, result}
     end)
+  end
+
+  defp beam_terminal_path do
+    proc_stdin = "/proc/#{System.pid()}/fd/0"
+
+    cond do
+      File.exists?(proc_stdin) ->
+        proc_stdin
+
+      :os.type() in [{:unix, :darwin}, {:unix, :freebsd}, {:unix, :openbsd}, {:unix, :netbsd}] ->
+        bsd_terminal_path()
+
+      true ->
+        nil
+    end
+  end
+
+  defp bsd_terminal_path do
+    # Query only this VM. The child does not need its own controlling terminal.
+    with {output, 0} <-
+           System.cmd("/bin/ps", ["-p", System.pid(), "-o", "tty="],
+             stderr_to_stdout: true,
+             parallelism: true
+           ),
+         name = String.trim(output),
+         true <- Regex.match?(~r/\A(?:tty[a-zA-Z0-9]+|pts\/[0-9]+)\z/, name),
+         path = Path.join("/dev", name),
+         {:ok, %{mode: mode}} <- File.stat(path),
+         true <- Bitwise.band(mode, 0xF000) == 0x2000 do
+      path
+    else
+      _ -> nil
+    end
   end
 
   @spec not_tty_error?(binary()) :: boolean()
