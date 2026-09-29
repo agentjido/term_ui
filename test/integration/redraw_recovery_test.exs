@@ -1,7 +1,7 @@
 defmodule TermUI.Integration.RedrawRecoveryTest do
   use ExUnit.Case, async: false
 
-  alias TermUI.Backend.{Raw, TTY}
+  alias TermUI.Backend.{Manager, Raw, TTY}
   alias TermUI.{Event, Frame, Runtime, Style}
 
   defmodule Screen do
@@ -27,6 +27,7 @@ defmodule TermUI.Integration.RedrawRecoveryTest do
     def draw(state, frame), do: invoke(state, :draw, [frame])
     def flush(state), do: invoke(state, :flush, [])
     def invalidate(state), do: invoke(state, :invalidate, [])
+    def resume(state), do: invoke(state, :resume, [])
     def resize(state, size), do: invoke(state, :resize, [size])
     def shutdown(state, reason), do: state.backend.shutdown(state.state, reason)
 
@@ -106,6 +107,56 @@ defmodule TermUI.Integration.RedrawRecoveryTest do
     end
   end
 
+  test "resume restores terminal features and complete unchanged output" do
+    for backend <- [Raw, TTY] do
+      {runtime, device} =
+        start_screen(backend, alternate_screen: true, bracketed_paste: true, focus_events: true)
+
+      snapshot = output(device)
+      manager = Runtime.get_state(runtime).backend_manager
+
+      send(manager, :terminal_resume)
+      assert %{size: {3, 8}} = Manager.info(manager)
+      assert :ok = Runtime.sync(runtime)
+
+      repaired = String.replace_prefix(output(device), snapshot, "")
+      assert repaired =~ "\e[0m\e[?1049h"
+      assert repaired =~ "\e[?2004h"
+      assert repaired =~ "\e[?1004h"
+      assert repaired =~ "LEFT"
+      assert repaired =~ "RIGHT"
+      assert repaired =~ "END"
+      assert Runtime.get_state(runtime).app_state.rows == ["LEFT", "RIGHT", "END"]
+      stop_screen(runtime, device)
+    end
+  end
+
+  test "raw resume preserves queued input and the existing OTP signals session" do
+    {:ok, device} = StringIO.open("complete\e[201~")
+    previous = Process.group_leader()
+    Process.group_leader(self(), device)
+
+    try do
+      {:ok, state} = Raw.init(backend_options() ++ [raw_mode_session: :otp_signals])
+      event = Event.text("pending")
+      state = %{state | event_queue: [event], input_buffer: "\e[200~unfinished"}
+
+      assert {:ok, resumed} = Raw.resume(state)
+      assert resumed.raw_mode_session == :otp_signals
+      assert {:ok, ^event, next} = Raw.poll_event(resumed, 0)
+      assert next.input_buffer == "\e[200~unfinished"
+
+      assert {:ok, %Event.Paste{content: "unfinishedcomplete"}, next} =
+               Raw.poll_event(next, 1_000)
+
+      assert next.input_buffer == ""
+      Raw.shutdown(next, :normal)
+    after
+      Process.group_leader(self(), previous)
+      StringIO.close(device)
+    end
+  end
+
   test "invalidation restores a styled frame after external ANSI state changes" do
     for backend <- [Raw, TTY] do
       {:ok, device} = StringIO.open("")
@@ -131,7 +182,25 @@ defmodule TermUI.Integration.RedrawRecoveryTest do
     end
   end
 
-  defp start_screen(backend) do
+  test "resume reports a lost output device without changing cached state" do
+    for backend <- [Raw, TTY] do
+      {:ok, device} = StringIO.open("")
+      previous = Process.group_leader()
+      Process.group_leader(self(), device)
+
+      try do
+        {:ok, state} = backend.init(backend_options())
+        {:ok, state} = backend.draw(state, Frame.from_rows(["UNCHANGED"], 8, 3))
+        StringIO.close(device)
+        assert {:error, _reason} = backend.resume(state)
+        assert {:ok, {3, 8}} = backend.size(state)
+      after
+        Process.group_leader(self(), previous)
+      end
+    end
+  end
+
+  defp start_screen(backend, opts \\ []) do
     {:ok, device} = StringIO.open("")
     previous = Process.group_leader()
     Process.group_leader(self(), device)
@@ -140,7 +209,8 @@ defmodule TermUI.Integration.RedrawRecoveryTest do
       {:ok, runtime} =
         Runtime.start_link(
           root: Screen,
-          backend: {OutputBackend, [implementation: backend] ++ backend_options()},
+          backend:
+            {OutputBackend, [implementation: backend] ++ Keyword.merge(backend_options(), opts)},
           suppress_logger: false,
           render_interval: 60_000
         )

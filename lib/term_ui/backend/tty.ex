@@ -134,6 +134,15 @@ defmodule TermUI.Backend.TTY do
   def invalidate(state), do: {:ok, %{state | rendered_frame: nil}}
 
   @impl true
+  @spec resume(t()) :: {:ok, t()} | {:error, term()}
+  def resume(state) do
+    case TerminalOutput.write([ANSI.reset(), setup_sequence(state)]) do
+      :ok -> {:ok, %{state | rendered_frame: nil}}
+      {:error, reason} -> {:error, {:terminal_write_failed, reason}}
+    end
+  end
+
+  @impl true
   @spec clipboard(t(), Clipboard.Operation.t()) :: {:ok, t()} | {:error, term()}
   def clipboard(state, %Clipboard.Operation{} = operation) do
     with {:ok, sequence} <- Clipboard.sequence(operation),

@@ -92,6 +92,19 @@ An SSH session retains the full-redraw request while output is in flight.
 The next waiting frame receives the repair, even when a newer frame replaces
 the waiting frame before the previous output is confirmed.
 
+On Unix, local Raw and TTY owners receive `SIGCONT` through a supervised
+signal handler. The owner waits for OTP's earlier signal handling, restores
+owned terminal modes, and requests a complete frame from the runtime. Raw
+disables signal and flow-control flags again without replacing the original
+flags saved for shutdown. TTY keeps its current input mode. Resume does not
+replace the input reader or application state.
+
+The optional `resume/1` callback restores a backend's owned modes. A backend
+without it uses its invalidation contract. Custom and SSH backends do not
+register for local process signals. The host owns recovery of a remote session.
+On a mode-restoration failure, the runtime stops with a structured backend
+reason and runs normal cleanup.
+
 ## Native build policy
 
 Only the local raw backend can need the TTY NIF. OTP 28 and OTP 29 need this

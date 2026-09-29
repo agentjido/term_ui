@@ -7,7 +7,9 @@ defmodule TermUI.Backend.Manager do
   alias TermUI.Backend.{Raw, Selector, TTY}
   alias TermUI.Clipboard.Operation
   alias TermUI.Frame
-  alias TermUI.Terminal.{RawMode, SizeDetector}
+  alias TermUI.Terminal.{RawMode, SignalHandler, SizeDetector}
+
+  require Logger
 
   @input_poll_timeout 10
   @fast_size_poll_interval 200
@@ -73,6 +75,8 @@ defmodule TermUI.Backend.Manager do
          {:ok, backend, backend_state} <- open_backend(spec, opts),
          {:ok, size} <- query_size(backend, backend_state),
          {:ok, capabilities} <- query_capabilities(backend, backend_state) do
+      register_resume_handler(backend)
+
       {:ok,
        %{
          owner: owner,
@@ -123,12 +127,7 @@ defmodule TermUI.Backend.Manager do
   end
 
   def handle_call(:invalidate, _from, state) do
-    {callback, args} =
-      if function_exported?(state.backend, :invalidate, 1),
-        do: {:invalidate, []},
-        else: {:resize, [state.size]}
-
-    case invoke_state_callback(state, callback, args) do
+    case invoke_invalidation(state) do
       {:ok, backend_state} -> {:reply, :ok, %{state | backend_state: backend_state}}
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -162,6 +161,26 @@ defmodule TermUI.Backend.Manager do
 
   @impl true
   @doc false
+  def handle_info(:terminal_resume, %{active?: true} = state) do
+    with :ok <- wait_for_otp_signal(state.backend),
+         {:ok, backend_state} <- invoke_resume(state) do
+      send(state.owner, :backend_resumed)
+      {:noreply, %{state | backend_state: backend_state}}
+    else
+      {:error, reason} ->
+        send(state.owner, {:backend_failed, reason})
+        {:noreply, %{state | active?: false}}
+    end
+  end
+
+  def handle_info(:terminal_resume, state), do: {:noreply, state}
+
+  def handle_info({:gen_event_EXIT, {SignalHandler, _owner}, reason}, state) do
+    failure = backend_error(state.backend, :resume, {:signal_handler_exit, reason})
+    send(state.owner, {:backend_failed, failure})
+    {:noreply, %{state | active?: false}}
+  end
+
   def handle_info(:poll_input, %{active?: true} = state) do
     case invoke_poll(state) do
       {:ok, event, backend_state} ->
@@ -220,6 +239,42 @@ defmodule TermUI.Backend.Manager do
   end
 
   def terminate(_reason, _state), do: :ok
+
+  defp invoke_invalidation(state) do
+    if function_exported?(state.backend, :invalidate, 1),
+      do: invoke_state_callback(state, :invalidate, []),
+      else: invoke_state_callback(state, :resize, [state.size])
+  end
+
+  defp invoke_resume(state) do
+    if function_exported?(state.backend, :resume, 1),
+      do: invoke_state_callback(state, :resume, []),
+      else: invoke_invalidation(state)
+  end
+
+  defp register_resume_handler(backend) when backend in [Raw, TTY] do
+    if match?({:unix, _}, :os.type()) do
+      case :gen_event.add_sup_handler(:erl_signal_server, {SignalHandler, self()}, self()) do
+        :ok -> :ok
+        {:error, reason} -> Logger.warning("Cannot register terminal resume: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp register_resume_handler(_backend), do: :ok
+
+  defp wait_for_otp_signal(backend) when backend in [Raw, TTY] do
+    case :gen_event.call(:erl_signal_server, {SignalHandler, self()}, :sync, 1_000) do
+      :ok -> :ok
+      {:error, reason} -> {:error, backend_error(backend, :resume, {:signal_sync, reason})}
+    end
+  rescue
+    exception -> {:error, backend_error(backend, :resume, {:exception, exception})}
+  catch
+    kind, reason -> {:error, backend_error(backend, :resume, {kind, reason})}
+  end
+
+  defp wait_for_otp_signal(_backend), do: :ok
 
   defp open_backend(:auto, opts) do
     case Selector.select() do

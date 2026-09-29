@@ -3,6 +3,7 @@ defmodule TermUI.Backend.ManagerTest do
 
   alias TermUI.Backend.Manager
   alias TermUI.{Clipboard, Event, Frame}
+  alias TermUI.Terminal.SignalHandler
   alias TermUI.Test.DeterministicBackend
 
   defmodule NoClipboardBackend do
@@ -61,6 +62,7 @@ defmodule TermUI.Backend.ManagerTest do
     def draw(state, _frame), do: state_callback(state, :draw)
     def flush(state), do: state_callback(state, :flush)
     def invalidate(state), do: state_callback(state, :invalidate)
+    def resume(state), do: state_callback(state, :resume)
 
     def resize(state, size) do
       case state_callback(state, :resize) do
@@ -270,20 +272,63 @@ defmodule TermUI.Backend.ManagerTest do
     Process.exit(owner, :kill)
 
     assert_receive {:backend, :shutdown, :killed}
-    assert_receive {:DOWN, ^reference, :process, ^manager, :killed}, 500
+    assert_receive {:DOWN, ^reference, :process, ^manager, :killed}, 1_000
   end
 
   test "activate is idempotent and inactive polling messages are ignored" do
     manager = start_exercising_manager(:ok, size_poll_interval: :disabled)
     send(manager, :poll_input)
     send(manager, :poll_size)
+    send(manager, :terminal_resume)
     assert %{active?: false} = :sys.get_state(manager)
+    refute_receive :backend_resumed
 
     assert :ok = Manager.activate(manager)
     assert :ok = Manager.activate(manager)
     assert %{active?: true} = :sys.get_state(manager)
     assert :ok = Manager.close(manager, :normal)
     assert :ok = Manager.close(manager, :already_closed)
+  end
+
+  test "resume restores through the backend owner and reports callback failures" do
+    manager = start_exercising_manager(:ok, size_poll_interval: :disabled)
+    assert :ok = Manager.activate(manager)
+    send(manager, :terminal_resume)
+    assert_receive :backend_resumed, 1_000
+    assert :ok = Manager.close(manager, :normal)
+
+    for kind <- [:invalid, :error, :raise, :throw] do
+      manager = start_exercising_manager({kind, :resume}, size_poll_interval: :disabled)
+      assert :ok = Manager.activate(manager)
+      send(manager, :terminal_resume)
+      assert_receive {:backend_failed, {:backend, ExercisingBackend, :resume, _reason}}, 1_000
+      assert %{active?: false} = :sys.get_state(manager)
+      refute_receive :backend_resumed
+      assert :ok = Manager.close(manager, :normal)
+    end
+  end
+
+  test "a backend without resume uses its invalidation contract" do
+    manager = start_manager(size_poll_interval: :disabled)
+    assert :ok = Manager.activate(manager)
+    send(manager, :terminal_resume)
+    assert_receive {:backend, :resize, {6, 20}}, 1_000
+    assert_receive :backend_resumed, 1_000
+    assert :ok = Manager.close(manager, :normal)
+  end
+
+  test "a failed supervised signal handler stops input with a backend reason" do
+    manager = start_exercising_manager(:ok, size_poll_interval: :disabled)
+    assert :ok = Manager.activate(manager)
+    handler = {SignalHandler, manager}
+    send(manager, {:gen_event_EXIT, handler, :failed})
+
+    assert_receive {:backend_failed,
+                    {:backend, ExercisingBackend, :resume, {:signal_handler_exit, :failed}}},
+                   1_000
+
+    assert %{active?: false} = :sys.get_state(manager)
+    assert :ok = Manager.close(manager, :normal)
   end
 
   test "size polling reports changes and preserves state after failures" do

@@ -133,6 +133,37 @@ defmodule TermUI.Terminal.RawModeTest do
     assert_receive {:restore_control_flags, {3, 4}}
   end
 
+  test "resume disables controls but exit retains the original saved flags" do
+    session = {:native, {3, 4}}
+    Process.put({FakeTtyNif, :disable_result}, {:ok, {8, 9}})
+    opts = [tty_nif: FakeTtyNif, shell_start: successful_shell_start()]
+
+    assert :ok = RawMode.resume(session, opts)
+    assert_receive :disable_control_flags
+    refute_receive {:shell_start, _argument}
+
+    assert :ok = RawMode.exit(session, opts)
+    assert_receive {:shell_start, {:noshell, :cooked}}
+    assert_receive {:restore_control_flags, {3, 4}}
+  end
+
+  test "resume keeps the OTP signals API in its existing mode" do
+    assert :ok = RawMode.resume(:otp_signals, tty_nif: FakeTtyNif)
+    refute_receive :disable_control_flags
+  end
+
+  test "resume reports a native flag failure" do
+    Process.put({FakeTtyNif, :disable_result}, {:error, :not_tty})
+
+    assert {:error, {:control_flags, :not_tty}} =
+             RawMode.resume({:native, {1, 2}}, tty_nif: FakeTtyNif)
+  end
+
+  test "resume reports an unavailable native module without replacing the session" do
+    assert {:error, {:control_flags, {:native_exception, %UndefinedFunctionError{}}}} =
+             RawMode.resume({:native, {3, 4}}, tty_nif: NotAvailableTtyNif)
+  end
+
   defp successful_shell_start do
     fn argument ->
       send(self(), {:shell_start, argument})

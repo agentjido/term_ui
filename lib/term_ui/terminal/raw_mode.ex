@@ -36,6 +36,23 @@ defmodule TermUI.Terminal.RawMode do
     combine_exit_results(cooked_result, flags_result)
   end
 
+  @doc false
+  @spec resume(session(), [option()]) :: :ok | {:error, term()}
+  def resume(session, opts \\ [])
+
+  def resume(:otp_signals, _opts), do: :ok
+
+  def resume({:native, _original_flags}, opts) do
+    tty_nif = Keyword.get(opts, :tty_nif, TtyNif)
+
+    # OTP has restored character input before this call. Disable its signal
+    # and flow-control flags again, keeping the original flags for shutdown.
+    case call_native(tty_nif, :disable_control_flags, []) do
+      {:ok, _current_flags} -> :ok
+      {:error, reason} -> {:error, {:control_flags, reason}}
+    end
+  end
+
   defp signals_api_available? do
     with {:ok, specifications} <- Code.Typespec.fetch_specs(:shell),
          {{:start_interactive, 1}, definitions} <-

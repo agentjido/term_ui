@@ -27,6 +27,8 @@ defmodule TermUI.Backend do
   size. The backend owner serializes invalidation and the next complete frame.
   """
   @callback invalidate(state()) :: {:ok, state()} | {:error, term()}
+  @doc "Restores owned terminal modes after resume, keeping the original settings for shutdown."
+  @callback resume(state()) :: {:ok, state()} | {:error, term()}
   @callback clipboard(state(), TermUI.Clipboard.Operation.t()) ::
               {:ok, state()} | {:error, term()}
   @callback poll_event(state(), non_neg_integer()) ::
@@ -36,5 +38,5 @@ defmodule TermUI.Backend do
   @callback resize(state(), size()) :: {:ok, state()} | {:error, term()}
   @callback shutdown(state(), term()) :: :ok
 
-  @optional_callbacks clipboard: 2, invalidate: 1
+  @optional_callbacks clipboard: 2, invalidate: 1, resume: 1
 end
