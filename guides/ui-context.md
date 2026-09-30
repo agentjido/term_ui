@@ -1,7 +1,7 @@
 # UI context decision
 
-TermUI does not provide a generic `TermUI.Context` value in the 1.0 release
-candidate. The v2 examples do not show repeated root wiring across theme,
+TermUI does not provide a generic `TermUI.Context` value in TermUI 2.0.
+The v2 examples do not show repeated root wiring across theme,
 focus, shortcuts, and mouse state.
 
 ## Evidence from the v2 examples

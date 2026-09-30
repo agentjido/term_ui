@@ -136,6 +136,13 @@ tag, and push. Use only dry-run preparation until the release-branch changes
 are concrete and reviewed. Tag and publish the exact approved `main` commit.
 CI runs on `main` and `release/**` so the final commit can be checked too.
 
+Inspect the generated changelog before the release commit. The candidate dry
+run uses `v2.0.0-rc.1` as its comparison base, but that candidate tag does not
+exist. Use the verified published `v1.0.0` tag or an exact source commit for
+the comparison link. Lead the release notes with the breaking runtime and
+Frame changes and the migration guide. Some original commit titles still
+say 1.0; the release notes must state that the new architecture ships as 2.0.
+
 Run required checks on the final release commit. Confirm the package version
 and contents, tag that exact commit, and publish it without skipping tests.
 Do not rebuild or publish a different source commit under the same version.
