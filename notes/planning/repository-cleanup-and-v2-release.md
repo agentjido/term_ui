@@ -9,22 +9,35 @@ into `main`, with a clean supported v1 branch. Hex publication is now the
 maintainer's separate work. This order replaces the older route through
 `develop`, the extra release PR, and publication as part of this cleanup.
 
-Prepare final 2.0.0 source on `release/2.0.0`, based on the tested v2 tree.
-Join the current v1 `main` history while keeping the complete v2 tree. Advance
-`next/v2` to that exact tested descendant, target PR #67 at `main`, and keep
-the required approving review. Do not force-push or bypass a branch rule.
-After merge, use `main` as the default v2 branch. Keep `maint/1.x` unchanged
-at `f8a363301830ab0bf5ed21088bd0b85680597874`, with its own CI. Clean only
-exact merged-PR heads after a fresh inventory and a verified Git backup.
-Keep active worktrees, unmatched source, release history, and published tags.
-Do not publish a package, push a release tag, or run a publication workflow.
-Current cleanup result: 30 exact merged-PR branch heads were removed after
-a verified backup. The v1 worktree is clean on `maint/1.x`. Final 2.0.0
-metadata, docs, branch rules, and dependency update targets are prepared.
-Local quality and coverage pass. The stable package passes 135 selected
-Jido Console tests and real macOS Raw and TTY Console PTY checks.
-PR #67 still needs its required approving GitHub review from another
-maintainer. The default branch changes only after the merge.
+PR #67 is merged directly into `main` at
+`d5484996e8cc5228ff8e31a0c7695495bcef8076`. Its complete source tree
+matches tested head `18f34867b1ab4403ff8c5ad270d8eef479558593`.
+All 27 required checks pass on that tested head, including PR CI against
+`main`. All 156 files in the tested 2.0.0 archive match the merged source.
+Local quality, coverage, docs, package, showcase, and Console checks pass.
+The stable package passes 135 selected Console tests and real macOS Raw
+and TTY Console PTY checks.
+
+The maintainer then authorized removal of the required approving review.
+`main` requires zero approving reviews. All 27 required CI checks, strict
+status checks, conversation resolution, and other protection settings
+remain. PR #67 used a normal squash merge without an admin override.
+`main` is now the default v2 branch. Keep `maint/1.x` at
+`f8a363301830ab0bf5ed21088bd0b85680597874` for v1 fixes, with its own CI.
+Both version workspaces are clean. Local cleanup notes are saved in the
+backup directory and a retained Git stash.
+
+Thirty exact merged-PR branch heads were removed after a fresh inventory
+and a verified Git backup. The unused release preparation branch was also
+removed after its head was saved in a second verified bundle. Active
+worktrees, unmatched source, release history, and published tags remain.
+Only #5 and #6 remain open for the accepted physical Windows follow-up.
+Their repairs and Windows ConPTY checks are complete on both version lines.
+
+Hex publication and release tags remain the maintainer's separate work.
+No package was published, no release tag was pushed, and no publication
+workflow was run during this cleanup. This decision replaces the earlier
+publication and review gates in the historical plan below.
 
 The older stages below are the execution history and initial plan.
 
