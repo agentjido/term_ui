@@ -7,6 +7,7 @@ not the final 2.0 release. Read the guides by task rather than by module name.
 | --- | --- |
 | Run a first application | [Getting started](getting-started.md), then [example lessons](examples.md) |
 | Understand ownership and effects | [Architecture](architecture.md), [pure widgets](widgets.md) |
+| Compose input, forms, tables, and streams | [Runnable widget recipes](widget-recipes.md) |
 | Add input, selection, or rich content | [Interaction](interaction.md), [Markdown and diffs](markdown-and-diffs.md) |
 | Select or implement a host | [Backend contract](backend.md), [browser host](web.md), [optional terminal sessions](terminal-session.md) |
 | Test behavior and cleanup | [Testing](testing.md), [physical terminal checks](terminal-checks.md) |

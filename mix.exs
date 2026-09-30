@@ -216,6 +216,7 @@ defmodule TermUI.MixProject do
         "guides/README.md": [title: "Guide Index", filename: "guide-index"],
         "guides/getting-started.md": [title: "Getting Started"],
         "guides/examples.md": [title: "Example Lessons"],
+        "guides/widget-recipes.md": [title: "Widget Recipes"],
         "guides/testing.md": [title: "Testing"],
         "guides/package-quality.md": [title: "Package Quality"],
         "guides/publishing.md": [title: "Publishing"],
@@ -242,6 +243,7 @@ defmodule TermUI.MixProject do
         "Build an application": [
           "guides/architecture.md",
           "guides/widgets.md",
+          "guides/widget-recipes.md",
           "guides/showcase.md",
           "guides/interaction.md",
           "guides/markdown-and-diffs.md",

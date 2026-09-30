@@ -38,4 +38,22 @@ normal cleanup, and resize clipping. From the repository root, `mix spex`
 runs [the readable acceptance workflow](../../test/spex/counter_spex.exs).
 These checks need no physical terminal and do not verify its OS flags.
 
+## Add widgets in small steps
+
+The [widget recipe guide](../../guides/widget-recipes.md) uses four additional
+applications in this consumer. Run one at a time:
+
+```sh
+mix run -e 'TermUI.run(IExCounter.Recipes.InputFocus)'
+mix run -e 'TermUI.run(IExCounter.Recipes.Form)'
+mix run -e 'TermUI.run(IExCounter.Recipes.Table)'
+mix run -e 'TermUI.run(IExCounter.Recipes.Stream)'
+```
+
+Each application quits with Esc. Read [input/focus](lib/iex_counter/recipes/input_focus.ex),
+[form](lib/iex_counter/recipes/form.ex), [table](lib/iex_counter/recipes/table.ex),
+and [stream](lib/iex_counter/recipes/stream.ex) beside their
+[behavior tests](test/recipes_test.exs). The normal `mix test` command also
+executes every Elixir code block in the guide against this consumer dependency.
+
 Next: [compose widgets in the showcase](../showcase/README.md).
