@@ -1,21 +1,7 @@
 defmodule TermUI.CharacterSetTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias TermUI.CharacterSet
-
-  setup do
-    original_config = Application.fetch_env(:term_ui, :character_set)
-    original_runtime = :persistent_term.get(:term_ui_character_set, :not_set)
-
-    :persistent_term.erase(:term_ui_character_set)
-
-    on_exit(fn ->
-      restore_character_set_config(original_config)
-      restore_runtime_character_set(original_runtime)
-    end)
-
-    :ok
-  end
 
   # ===========================================================================
   # Task 3.6.1 Tests - Character Set Module
@@ -78,7 +64,7 @@ defmodule TermUI.CharacterSetTest do
     test "all characters are strings" do
       chars = CharacterSet.get(:unicode)
       # These keys are lists, not single strings
-      list_keys = [:bar_levels, :sparkline_levels]
+      list_keys = [:bar_levels, :sparkline_levels, :spinner_frames]
 
       for key <- CharacterSet.keys() do
         value = Map.get(chars, key)
@@ -150,7 +136,7 @@ defmodule TermUI.CharacterSetTest do
     test "all characters are strings" do
       chars = CharacterSet.get(:ascii)
       # These keys are lists, not single strings
-      list_keys = [:bar_levels, :sparkline_levels]
+      list_keys = [:bar_levels, :sparkline_levels, :spinner_frames]
 
       for key <- CharacterSet.keys() do
         value = Map.get(chars, key)
@@ -380,7 +366,7 @@ defmodule TermUI.CharacterSetTest do
     test "ASCII characters are all printable" do
       chars = CharacterSet.get(:ascii)
       # These keys are lists, not single strings
-      list_keys = [:bar_levels, :sparkline_levels]
+      list_keys = [:bar_levels, :sparkline_levels, :spinner_frames]
 
       for key <- CharacterSet.keys() do
         value = Map.get(chars, key)
@@ -517,16 +503,4 @@ defmodule TermUI.CharacterSetTest do
       Application.put_env(:term_ui, :character_set, :unicode)
     end
   end
-
-  defp restore_character_set_config({:ok, value}),
-    do: Application.put_env(:term_ui, :character_set, value)
-
-  defp restore_character_set_config(:error),
-    do: Application.delete_env(:term_ui, :character_set)
-
-  defp restore_runtime_character_set(:not_set),
-    do: :persistent_term.erase(:term_ui_character_set)
-
-  defp restore_runtime_character_set(value),
-    do: :persistent_term.put(:term_ui_character_set, value)
 end

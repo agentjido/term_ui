@@ -1,0 +1,6 @@
+_build
+/deps
+.git
+.elixir_ls
+/doc
+*.tar.gz

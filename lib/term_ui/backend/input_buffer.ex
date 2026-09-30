@@ -1,48 +1,5 @@
 defmodule TermUI.Backend.InputBuffer do
-  @moduledoc """
-  Shared input buffer management for terminal backends.
-
-  This module provides secure input buffer handling with:
-  - Size limits to prevent memory exhaustion
-  - Rate-limited logging to prevent log flooding
-  - Consistent behavior across backends
-
-  ## Security
-
-  The input buffer protects against memory exhaustion attacks where
-  malformed input streams send unterminated escape sequences. Without
-  protection, the buffer would grow indefinitely.
-
-  ### Buffer Size Limits
-
-  - Maximum buffer size: 1024 bytes
-  - Keep size on truncation: 256 bytes
-
-  The 256-byte keep size preserves potential partial escape sequences
-  (typical sequences are 8-20 bytes, max CSI is ~100 bytes).
-
-  ### Rate-Limited Logging
-
-  Buffer overflow warnings are rate-limited to prevent log flooding
-  attacks. Maximum one warning every 5 seconds per backend instance.
-
-  ## Usage
-
-  Backends should use this module instead of implementing their own
-  buffer management:
-
-      # In your backend module
-      alias TermUI.Backend.InputBuffer
-
-      # Appending data
-      new_buffer = InputBuffer.append(state.input_buffer, data)
-
-      # Applying limit (returns {buffer, overflow_occurred?})
-      {limited_buffer, overflowed} = InputBuffer.apply_limit(new_buffer)
-
-      # Or use the combined function that handles state
-      new_state = InputBuffer.append_with_limit(state, data, :input_buffer)
-  """
+  @moduledoc false
 
   require Logger
 
@@ -51,15 +8,15 @@ defmodule TermUI.Backend.InputBuffer do
 
   # Number of bytes to keep when truncating (preserves partial sequences)
   @keep_size 256
+  @paste_start "\e[200~"
+  @paste_end "\e[201~"
+  @max_paste_size 8 * 1024 * 1024
 
   # Minimum time between overflow warnings (5 seconds in milliseconds)
   @warning_interval_ms 5_000
 
   # ETS table for tracking last warning times (created on first use)
   @warning_table :term_ui_input_buffer_warnings
-
-  # Dialyzer: Functions return specific types or constants
-  @dialyzer {:nowarn_function, max_size: 0, keep_size: 0, ensure_table_exists: 0}
 
   @doc """
   Returns the maximum buffer size allowed.
@@ -69,7 +26,7 @@ defmodule TermUI.Backend.InputBuffer do
       iex> TermUI.Backend.InputBuffer.max_size()
       1024
   """
-  @spec max_size() :: pos_integer()
+  @spec max_size() :: 1024
   def max_size, do: @max_buffer_size
 
   @doc """
@@ -80,7 +37,7 @@ defmodule TermUI.Backend.InputBuffer do
       iex> TermUI.Backend.InputBuffer.keep_size()
       256
   """
-  @spec keep_size() :: pos_integer()
+  @spec keep_size() :: 256
   def keep_size, do: @keep_size
 
   @doc """
@@ -187,10 +144,162 @@ defmodule TermUI.Backend.InputBuffer do
   """
   @spec append_with_limit(map(), binary(), atom(), keyword()) :: map()
   def append_with_limit(state, data, field, opts \\ []) when is_map(state) and is_atom(field) do
-    current = Map.get(state, field, "")
-    new_buffer = append(current, data)
-    {limited, _overflowed} = apply_limit(new_buffer, opts)
-    Map.put(state, field, limited)
+    if Keyword.get(opts, :paste_aware, false) do
+      append_terminal_input(state, data, field, opts)
+    else
+      current = Map.get(state, field, "")
+      new_buffer = append(current, data)
+      {limited, _overflowed} = apply_limit(new_buffer, opts)
+      Map.put(state, field, limited)
+    end
+  end
+
+  defp append_terminal_input(state, data, field, opts) do
+    case Map.get(state, :paste_state) do
+      %{mode: :collecting} = paste -> append_paste_data(state, paste, data, field, opts)
+      %{mode: :discarding} = paste -> discard_paste_data(state, paste, data, field, opts)
+      _ -> append_regular_terminal_input(state, data, field, opts)
+    end
+  end
+
+  defp append_regular_terminal_input(state, data, field, opts) do
+    buffer = append(Map.get(state, field, ""), data)
+
+    cond do
+      String.starts_with?(buffer, @paste_start) ->
+        body =
+          binary_part(
+            buffer,
+            byte_size(@paste_start),
+            byte_size(buffer) - byte_size(@paste_start)
+          )
+
+        state
+        |> Map.put(field, @paste_start)
+        |> Map.put(:paste_state, %{mode: :collecting, chunks: [], size: 0, end_buffer: ""})
+        |> append_terminal_input(body, field, opts)
+
+      byte_size(buffer) > @max_buffer_size ->
+        maybe_log_terminal_overflow(opts, byte_size(buffer))
+        Map.put(state, field, "")
+
+      true ->
+        Map.put(state, field, buffer)
+    end
+  end
+
+  defp append_paste_data(state, paste, data, field, opts) do
+    data = paste.end_buffer <> data
+
+    case :binary.match(data, @paste_end) do
+      {position, marker_size} ->
+        body = binary_part(data, 0, position)
+
+        trailing =
+          binary_part(data, position + marker_size, byte_size(data) - position - marker_size)
+
+        complete_paste(state, paste, body, trailing, field, opts)
+
+      :nomatch ->
+        {body, end_buffer} = split_end_marker_prefix(data)
+        body_size = paste.size + byte_size(body)
+
+        if body_size > @max_paste_size do
+          discard_paste(state, body_size, end_buffer, field, opts)
+        else
+          state
+          |> Map.put(field, @paste_start)
+          |> Map.put(:paste_state, %{
+            paste
+            | chunks: prepend_chunk(paste.chunks, body),
+              size: body_size,
+              end_buffer: end_buffer
+          })
+        end
+    end
+  end
+
+  defp complete_paste(state, paste, body, trailing, field, opts) do
+    body_size = paste.size + byte_size(body)
+
+    if body_size > @max_paste_size do
+      discard_paste(state, body_size, "", field, opts, @paste_end <> trailing)
+    else
+      content =
+        paste.chunks
+        |> prepend_chunk(body)
+        |> Enum.reverse()
+        |> IO.iodata_to_binary()
+
+      {trailing, _overflowed} = apply_limit(trailing, opts)
+
+      state
+      |> Map.put(field, @paste_start <> content <> @paste_end <> trailing)
+      |> Map.put(:paste_state, nil)
+    end
+  end
+
+  defp discard_paste(state, body_size, end_buffer, field, opts, remaining \\ "") do
+    maybe_log_terminal_overflow(opts, body_size)
+
+    state =
+      state
+      |> Map.put(field, "")
+      |> Map.put(:paste_state, %{mode: :discarding, end_buffer: end_buffer})
+
+    if remaining == "" do
+      state
+    else
+      discard_paste_data(state, state.paste_state, remaining, field, opts)
+    end
+  end
+
+  defp discard_paste_data(state, paste, data, field, opts) do
+    data = paste.end_buffer <> data
+
+    case :binary.match(data, @paste_end) do
+      {position, marker_size} ->
+        trailing =
+          binary_part(data, position + marker_size, byte_size(data) - position - marker_size)
+
+        state
+        |> Map.put(field, "")
+        |> Map.put(:paste_state, nil)
+        |> append_terminal_input(trailing, field, opts)
+
+      :nomatch ->
+        {_discarded, end_buffer} = split_end_marker_prefix(data)
+
+        state
+        |> Map.put(field, "")
+        |> Map.put(:paste_state, %{mode: :discarding, end_buffer: end_buffer})
+    end
+  end
+
+  defp split_end_marker_prefix(data) do
+    max_prefix_size = min(byte_size(data), byte_size(@paste_end) - 1)
+
+    prefix_size =
+      if max_prefix_size == 0 do
+        0
+      else
+        Enum.find(Range.new(max_prefix_size, 1, -1), 0, fn size ->
+          suffix = binary_part(data, byte_size(data) - size, size)
+          String.starts_with?(@paste_end, suffix)
+        end)
+      end
+
+    body_size = byte_size(data) - prefix_size
+    {binary_part(data, 0, body_size), binary_part(data, body_size, prefix_size)}
+  end
+
+  defp prepend_chunk(chunks, ""), do: chunks
+  defp prepend_chunk(chunks, chunk), do: [chunk | chunks]
+
+  defp maybe_log_terminal_overflow(opts, size) do
+    if Keyword.get(opts, :log, true) do
+      maybe_log_overflow(Keyword.get(opts, :source, :unknown), size, 0)
+    end
   end
 
   # ===========================================================================
@@ -198,7 +307,7 @@ defmodule TermUI.Backend.InputBuffer do
   # ===========================================================================
 
   # Logs a warning if enough time has passed since the last warning.
-  @spec maybe_log_overflow(term(), pos_integer(), pos_integer()) :: :ok
+  @spec maybe_log_overflow(term(), pos_integer(), non_neg_integer()) :: :ok
   defp maybe_log_overflow(source, original_size, keep_size) do
     now = System.monotonic_time(:millisecond)
 
@@ -251,7 +360,8 @@ defmodule TermUI.Backend.InputBuffer do
       :undefined ->
         # Create the table - it might race with another process
         try do
-          :ets.new(@warning_table, [:set, :public, :named_table])
+          _table = :ets.new(@warning_table, [:set, :public, :named_table])
+          :ok
         rescue
           ArgumentError ->
             # Table already exists (race condition), that's fine

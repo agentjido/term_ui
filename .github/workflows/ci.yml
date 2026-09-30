@@ -1,183 +1,268 @@
 name: CI
 
 on:
-  push:
-    branches: [main, develop, "release/**"]
   pull_request:
-    branches: [main, develop, "release/**"]
+  merge_group:
+  push:
+    branches:
+      - main
+      - develop
+      - next/v2
+      - "release/**"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  MIX_ENV: test
+permissions:
+  actions: read
+  contents: read
 
 jobs:
-  test:
-    name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
-    runs-on: ubuntu-latest
+  ci:
+    name: CI
+    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v5
+    secrets: inherit
+    with:
+      test_matrix: '[{"otp":"28","elixir":"1.18.4"},{"otp":"28","elixir":"1.19"},{"otp":"28","elixir":"1.20"},{"otp":"29","elixir":"1.20"}]'
+      format_command: mix do format --check-formatted, xref graph --format cycles --fail-above 0
+      docs_command: mix docs --warnings-as-errors -f html && mix doctor --raise
+      test_command: mix coveralls --warnings-as-errors
+      changelog_guard_mode: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.event.pull_request.title, 'chore(release):')) && 'no_unreleased' || 'no_changes' }}
 
+  acceptance:
+    name: Acceptance specifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+      - name: Run acceptance specifications
+        run: |
+          mix deps.get
+          mix spex
+
+  tty-nif-policy:
+    name: TTY NIF (${{ matrix.mode }}, OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Minimum supported Elixir. Pre-OTP 28 uses the TTY fallback.
-          - elixir: "1.15"
-            otp: "26"
-          - elixir: "1.19"
+          - mode: source
             otp: "28"
-
+            elixir: "1.18.4"
+          - mode: source
+            otp: "29"
+            elixir: "1.20"
+          - mode: disabled
+            otp: "29"
+            elixir: "1.20"
+    env:
+      TERM_UI_TTY_NIF: ${{ matrix.mode }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
-          elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Compile selected native policy
+        run: |
+          mix deps.get
+          mix compile --warnings-as-errors
+      - name: Verify selected native policy
+        run: |
+          if [ "$TERM_UI_TTY_NIF" = "source" ]; then
+            mix run --no-start --no-compile -e \
+              'unless TermUI.Terminal.TtyNif.ensure_loaded() == :ok and TermUI.Terminal.TtyNif.loaded?(), do: raise("TTY NIF did not load")'
+          else
+            test ! -e _build/dev/lib/term_ui/priv/term_ui_tty_nif.so
+            mix run --no-start --no-compile test/support/no_nif_backend_probe.exs
+          fi
+      - name: Test selected native policy
+        run: mix test --warnings-as-errors
 
-      - name: Cache dependencies
-        uses: actions/cache@v6
+  examples:
+    name: Example (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [iex_counter, showcase]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+          otp-version: "29"
+          elixir-version: "1.20"
+      - name: Compile and test example
+        working-directory: examples/${{ matrix.directory }}
+        run: |
+          mix deps.get
+          mix deps.unlock --check-unused
+          git diff --exit-code -- mix.lock
+          mix test --warnings-as-errors
 
-      - name: Install dependencies
-        run: mix deps.get
+  web-browser:
+    name: Web browser (Chromium)
+    runs-on: ubuntu-latest
+    env:
+      TERM_UI_TTY_NIF: disabled
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: examples/web/package-lock.json
+      - name: Compile, audit, and test the web host
+        working-directory: examples/web
+        run: |
+          mix deps.get
+          mix deps.unlock --check-unused
+          git diff --exit-code -- mix.lock
+          mix hex.audit
+          mix test --warnings-as-errors
+      - name: Test the browser without a local TTY NIF
+        working-directory: examples/web
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=low
+          npx playwright install --with-deps chromium
+          npm test
+          npm run benchmark
 
-      - name: Compile with warnings as errors
-        run: mix compile --warnings-as-errors
-
-      - name: Run tests
-        run: mix test
+  ghostty:
+    name: Ghostty (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            browser: true
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            browser: false
+          - name: macOS ARM64
+            os: macos-15
+            browser: false
+    env:
+      TERM_UI_TTY_NIF: disabled
+      TERM: xterm-256color
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "28"
+          elixir-version: "1.19"
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        if: matrix.name == 'Linux ARM64'
+        with:
+          version: "0.15.2"
+      - name: Build Ghostty on native ARM64 from pinned sources
+        if: matrix.name == 'Linux ARM64'
+        working-directory: examples/ghostty
+        run: |
+          sh build_native.sh
+          echo 'GHOSTTY_BUILD=1' >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/deps/ghostty/priv/lib" >> "$GITHUB_ENV"
+      - name: Compile, audit, and test real native sessions
+        working-directory: examples/ghostty
+        run: |
+          mix deps.get
+          mix deps.unlock --check-unused
+          git diff --exit-code -- mix.lock
+          mix hex.audit
+          mix test --warnings-as-errors
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: matrix.browser
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: examples/web/package-lock.json
+      - name: Test the shared browser renderer with a real shell and Vim
+        if: matrix.browser
+        run: |
+          cd examples/web
+          npm ci --ignore-scripts
+          npm audit --audit-level=low
+          npx playwright install --with-deps chromium
+          cd ../ghostty
+          node ../web/node_modules/@playwright/test/cli.js test
 
   platform:
-    name: Platform test (${{ matrix.name }})
+    name: Platform (${{ matrix.name }}, NIF ${{ matrix.mode }})
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: macOS
             os: macos-latest
+            mode: source
+          - name: macOS
+            os: macos-latest
+            mode: disabled
           - name: Windows
             os: windows-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: "1.19"
-          otp-version: "28"
-
-      - name: Cache dependencies
-        uses: actions/cache@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-platform-otp-28-elixir-1.19-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-platform-otp-28-elixir-1.19-
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Compile with warnings as errors
-        run: mix compile --warnings-as-errors
-
-      - name: Run tests
-        run: mix test
-
-  quality:
-    name: Quality and package
-    runs-on: ubuntu-latest
+            mode: source
+          - name: Windows
+            os: windows-latest
+            mode: disabled
     env:
-      MIX_ENV: dev
-
+      TERM_UI_TTY_NIF: ${{ matrix.mode }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        if: runner.os == 'Windows' && matrix.mode == 'source'
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
-          elixir-version: "1.19"
           otp-version: "28"
-
-      - name: Cache dependencies and PLTs
-        uses: actions/cache@v6
-        with:
-          path: |
-            deps
-            _build
-            priv/plts
-          key: ${{ runner.os }}-quality-otp-28-elixir-1.19-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-quality-otp-28-elixir-1.19-
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Check formatting
-        run: mix format --check-formatted
-
-      - name: Compile with warnings as errors
-        run: mix compile --warnings-as-errors
-
-      - name: Run Credo
-        run: mix credo --strict
-
-      - name: Run Dialyzer
-        run: mix dialyzer
-
-      - name: Build documentation
-        run: mix docs --warnings-as-errors
-
-      - name: Check dependencies
+          elixir-version: "1.19"
+      - name: Compile and test platform
         run: |
-          mix deps.unlock --check-unused
-          mix hex.audit
-          mix deps.audit
+          mix deps.get
+          mix compile --warnings-as-errors
+          mix test --warnings-as-errors
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.12"
+      - name: Install Windows console test tools
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install --only-binary=:all: pywinpty==3.0.5 pyte==0.8.2
+      - name: Test real Windows console input, output, and cleanup
+        if: runner.os == 'Windows'
+        run: python test/support/windows_console_check.py
 
-      - name: Build Hex package
-        run: mix hex.build
-
-  examples:
-    name: Compile examples
+  required-checks:
+    name: Required checks
+    if: always()
+    needs: [ci, tty-nif-policy, platform, examples, acceptance, web-browser, ghostty]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: "1.19"
-          otp-version: "28"
-
-      - name: Compile every example with warnings as errors
-        shell: bash
+      - name: Require all CI jobs to pass
+        env:
+          SHARED_CI_RESULT: ${{ needs.ci.result }}
+          TTY_POLICY_RESULT: ${{ needs.tty-nif-policy.result }}
+          PLATFORM_RESULT: ${{ needs.platform.result }}
+          EXAMPLES_RESULT: ${{ needs.examples.result }}
+          ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
+          WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
+          GHOSTTY_RESULT: ${{ needs.ghostty.result }}
         run: |
-          example_deps="$RUNNER_TEMP/term-ui-example-deps"
-          example_build="$RUNNER_TEMP/term-ui-example-build"
-
-          for mix_file in examples/*/mix.exs; do
-            example_dir="${mix_file%/mix.exs}"
-            (
-              cd "$example_dir"
-              MIX_DEPS_PATH="$example_deps" MIX_BUILD_PATH="$example_build" mix deps.get
-              MIX_DEPS_PATH="$example_deps" MIX_BUILD_PATH="$example_build" mix compile --warnings-as-errors
-            )
+          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT" "$WEB_BROWSER_RESULT" "$GHOSTTY_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "A required CI job did not pass: $result"
+              exit 1
+            fi
           done

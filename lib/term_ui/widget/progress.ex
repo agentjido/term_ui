@@ -1,182 +1,82 @@
 defmodule TermUI.Widget.Progress do
-  @moduledoc """
-  A widget for displaying progress bars and spinners.
+  @moduledoc "A pure determinate or indeterminate progress bar."
 
-  Progress supports two modes:
-  - Bar mode: Shows a filled bar proportional to progress value
-  - Spinner mode: Shows an animated indicator for indeterminate progress
+  @behaviour TermUI.Widget
 
-  This module uses the earlier `TermUI.Widget` namespace, accepts a props map
-  directly, and must be embedded as an explicit state machine in the Elm root.
-  A host must call `handle_event(:tick, state)` to advance its spinner.
+  alias TermUI.Style
+  alias TermUI.Widget.Helpers
 
-  ## Usage
+  @type t :: %__MODULE__{
+          value: number(),
+          minimum: number(),
+          maximum: number(),
+          label: String.t() | nil,
+          show_percent: boolean(),
+          indeterminate: boolean(),
+          phase: non_neg_integer()
+        }
 
-      # Bar mode
-      Progress.render(%{value: 0.5}, state, area)
+  defstruct value: 0,
+            minimum: 0,
+            maximum: 100,
+            label: nil,
+            show_percent: true,
+            indeterminate: false,
+            phase: 0
 
-      # With percentage
-      Progress.render(%{value: 0.75, show_percentage: true}, state, area)
-
-      # Spinner mode
-      Progress.render(%{mode: :spinner}, state, area)
-
-  ## Props
-
-  - `:value` - Progress value 0.0 to 1.0 (default: 0.0)
-  - `:mode` - `:bar` or `:spinner` (default: `:bar`)
-  - `:show_percentage` - Show percentage text (default: `false`)
-  - `:filled_char` - Character for filled portion (default: `"█"`)
-  - `:empty_char` - Character for empty portion (default: `"░"`)
-  - `:style` - Style options for the bar
-  """
-
-  use TermUI.StatefulComponent
-
-  alias TermUI.Component.RenderNode
-  alias TermUI.Renderer.Style
-
-  # Dialyzer: Suppress opaque type warnings for Style helpers
-  # no_opaque: Style contains MapSet which triggers false positive call_without_opaque warnings
-  @dialyzer [:no_opaque, nowarn_function: [build_style: 1, positioned_cell_safe: 4]]
-
-  @spinner_frames ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-  @doc """
-  Initializes the progress widget state.
-  """
   @impl true
-  def init(props) do
-    state = %{
-      value: Map.get(props, :value, 0.0),
-      mode: Map.get(props, :mode, :bar),
-      spinner_frame: 0,
-      props: props
+  def init(opts) do
+    %__MODULE__{
+      value: Keyword.get(opts, :value, 0),
+      minimum: Keyword.get(opts, :min, 0),
+      maximum: Keyword.get(opts, :max, 100),
+      label: Keyword.get(opts, :label),
+      show_percent: Keyword.get(opts, :show_percent, true),
+      indeterminate: Keyword.get(opts, :indeterminate, false)
     }
-
-    {:ok, state}
   end
 
-  @doc """
-  Handles events for the progress widget.
-  """
   @impl true
-  def handle_event({:set_value, value}, state) do
-    {:ok, %{state | value: clamp(value, 0.0, 1.0)}}
-  end
+  def update(_event, state), do: {state, []}
 
-  def handle_event(:tick, state) do
-    # Advance spinner frame
-    next_frame = rem(state.spinner_frame + 1, length(@spinner_frames))
-    {:ok, %{state | spinner_frame: next_frame}}
-  end
-
-  def handle_event(_event, state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Renders the progress indicator.
-  """
   @impl true
-  def render(state, area) do
-    props = state.props
-    mode = Map.get(props, :mode, :bar)
-    style_opts = Map.get(props, :style, %{})
-    style = build_style(style_opts)
+  def view(state, {width, _height} = dimensions) do
+    percent = percentage(state)
 
-    cells =
-      case mode do
-        :bar -> render_bar(props, state, area, style)
-        :spinner -> render_spinner(state, area, style)
-      end
+    suffix =
+      if state.show_percent and not state.indeterminate, do: " #{round(percent * 100)}%", else: ""
 
-    RenderNode.cells(cells)
-  end
+    prefix = if state.label, do: state.label <> " ", else: ""
+    bar_width = max(width - String.length(prefix <> suffix) - 2, 1)
 
-  # Private Functions
+    filled =
+      if state.indeterminate, do: rem(state.phase, bar_width), else: round(percent * bar_width)
 
-  defp render_bar(props, state, area, style) do
-    value = state.value
-    show_percentage = Map.get(props, :show_percentage, false)
-    filled_char = Map.get(props, :filled_char, "█")
-    empty_char = Map.get(props, :empty_char, "░")
-
-    # Calculate bar width (reserve space for percentage if shown)
-    bar_width =
-      if show_percentage do
-        # " 100%"
-        max(1, area.width - 5)
-      else
-        area.width
-      end
-
-    filled_width = round(value * bar_width)
-    empty_width = bar_width - filled_width
-
-    # Build bar string
     bar =
-      String.duplicate(filled_char, filled_width) <>
-        String.duplicate(empty_char, empty_width)
-
-    # Add percentage if requested
-    display =
-      if show_percentage do
-        percentage = round(value * 100)
-        bar <> " #{percentage}%"
+      if state.indeterminate do
+        String.duplicate("░", filled) <>
+          "█" <> String.duplicate("░", max(bar_width - filled - 1, 0))
       else
-        bar
+        String.duplicate("█", filled) <> String.duplicate("░", max(bar_width - filled, 0))
       end
 
-    # Create cells
-    display
-    |> String.graphemes()
-    |> Enum.with_index()
-    |> Enum.filter(fn {_char, x} -> x < area.width end)
-    |> Enum.map(fn {char, x} ->
-      positioned_cell_safe(x, 0, char, style)
-    end)
+    row = [prefix, {"[" <> bar <> "]", Style.new(fg: :green)}, suffix]
+    Helpers.frame([row], dimensions)
   end
 
-  defp render_spinner(state, area, style) do
-    frame = Enum.at(@spinner_frames, state.spinner_frame)
+  @doc "Sets the current value."
+  @spec set_value(t(), number()) :: t()
+  def set_value(state, value), do: %{state | value: value}
 
-    if area.width > 0 do
-      [positioned_cell_safe(0, 0, frame, style)]
-    else
-      []
-    end
-  end
+  @doc "Advances an indeterminate progress bar."
+  @spec tick(t()) :: t()
+  def tick(state), do: %{state | phase: state.phase + 1}
 
-  # ----------------------------------------------------------------------------
-  # Style Helper Functions
-  # ----------------------------------------------------------------------------
+  defp percentage(%{maximum: maximum, minimum: minimum}) when maximum <= minimum, do: 0.0
 
-  @spec positioned_cell_safe(integer(), integer(), String.t(), Style.t()) :: RenderNode.t()
-  defp positioned_cell_safe(x, y, char, style),
-    do: positioned_cell(x, y, char, style)
-
-  # ----------------------------------------------------------------------------
-  # Style Building
-  # ----------------------------------------------------------------------------
-
-  defp build_style(opts) when is_map(opts) do
-    style_list =
-      opts
-      |> Enum.map(fn
-        {:fg, color} -> {:fg, color}
-        {:bg, color} -> {:bg, color}
-        {:bold, true} -> {:attrs, [:bold]}
-        _ -> nil
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    Style.new(style_list)
-  end
-
-  defp build_style(_), do: Style.new()
-
-  defp clamp(value, min, max) do
-    value |> max(min) |> min(max)
+  defp percentage(state) do
+    ((state.value - state.minimum) / (state.maximum - state.minimum))
+    |> max(0.0)
+    |> min(1.0)
   end
 end

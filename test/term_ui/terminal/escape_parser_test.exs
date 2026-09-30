@@ -4,36 +4,79 @@ defmodule TermUI.Terminal.EscapeParserTest do
   alias TermUI.Event
   alias TermUI.Terminal.EscapeParser
 
+  test "rejects zero SGR mouse coordinates without raising" do
+    assert {[%TermUI.Event.Key{key: :unknown}], ""} =
+             EscapeParser.parse("\e[<0;0;0M")
+  end
+
+  test "Option+Delete consumes ESC DEL and ESC BS without blocking later input" do
+    for byte <- [8, 127] do
+      assert {[
+                %Event.Key{key: :backspace, modifiers: [:alt]},
+                %Event.Text{text: "x"},
+                %Event.Key{key: :up}
+              ], ""} = EscapeParser.parse(<<27, byte>> <> "x\e[A")
+    end
+  end
+
+  test "Option+Delete recovers at every input chunk boundary" do
+    for byte <- [8, 127] do
+      input = "a" <> <<27, byte>> <> "界\e[A"
+
+      for split <- 1..(byte_size(input) - 1) do
+        {first, buffered} = EscapeParser.parse(binary_part(input, 0, split))
+
+        {second, remaining} =
+          EscapeParser.parse(buffered <> binary_part(input, split, byte_size(input) - split))
+
+        assert remaining == ""
+
+        assert [
+                 %Event.Text{text: "a"},
+                 %Event.Key{key: :backspace, modifiers: [:alt]},
+                 %Event.Text{text: "界"},
+                 %Event.Key{key: :up}
+               ] = first ++ second
+      end
+    end
+  end
+
   describe "parse/1 - single characters" do
     test "parses lowercase letters" do
       {events, remaining} = EscapeParser.parse("a")
       assert remaining == <<>>
-      assert [%Event.Key{key: "a", modifiers: []}] = events
+      assert [%Event.Text{text: "a"}] = events
     end
 
     test "parses uppercase letters" do
       {events, remaining} = EscapeParser.parse("A")
       assert remaining == <<>>
-      assert [%Event.Key{key: "A"}] = events
+      assert [%Event.Text{text: "A"}] = events
     end
 
     test "parses numbers" do
       {events, remaining} = EscapeParser.parse("5")
       assert remaining == <<>>
-      assert [%Event.Key{key: "5"}] = events
+      assert [%Event.Text{text: "5"}] = events
     end
 
     test "parses special characters" do
       {events, remaining} = EscapeParser.parse("@")
       assert remaining == <<>>
-      assert [%Event.Key{key: "@"}] = events
+      assert [%Event.Text{text: "@"}] = events
+    end
+
+    test "parses space as text" do
+      {events, remaining} = EscapeParser.parse(" ")
+      assert remaining == <<>>
+      assert [%Event.Text{text: " "}] = events
     end
 
     test "parses multiple characters" do
       {events, remaining} = EscapeParser.parse("abc")
       assert remaining == <<>>
       assert length(events) == 3
-      assert [%Event.Key{key: "a"}, %Event.Key{key: "b"}, %Event.Key{key: "c"}] = events
+      assert [%Event.Text{text: "a"}, %Event.Text{text: "b"}, %Event.Text{text: "c"}] = events
     end
   end
 
@@ -75,6 +118,10 @@ defmodule TermUI.Terminal.EscapeParserTest do
       {events, remaining} = EscapeParser.parse(<<13>>)
       assert remaining == <<>>
       assert [%Event.Key{key: :enter}] = events
+    end
+
+    test "parses line feed as enter" do
+      assert {[%Event.Key{key: :enter}], ""} = EscapeParser.parse(<<10>>)
     end
 
     test "parses delete (0x7F)" do
@@ -207,18 +254,6 @@ defmodule TermUI.Terminal.EscapeParserTest do
   end
 
   describe "parse/1 - Alt+key" do
-    test "parses macOS Option+Delete (ESC DEL) as Alt+Backspace" do
-      {events, remaining} = EscapeParser.parse(<<27, 127>>)
-      assert remaining == <<>>
-      assert [%Event.Key{key: :backspace, modifiers: [:alt]}] = events
-    end
-
-    test "parses ESC BS as Alt+Backspace" do
-      {events, remaining} = EscapeParser.parse(<<27, 8>>)
-      assert remaining == <<>>
-      assert [%Event.Key{key: :backspace, modifiers: [:alt]}] = events
-    end
-
     test "parses Alt+a" do
       {events, remaining} = EscapeParser.parse("\ea")
       assert remaining == <<>>
@@ -293,6 +328,15 @@ defmodule TermUI.Terminal.EscapeParserTest do
       assert :alt in modifiers
       refute :ctrl in modifiers
     end
+
+    test "rejects a non-numeric arrow modifier" do
+      assert {[
+                %Event.Key{key: :unknown},
+                %Event.Text{text: "A"},
+                %Event.Text{text: "q"}
+              ], ""} =
+               EscapeParser.parse("\e[1;xAq")
+    end
   end
 
   describe "parse/1 - UTF-8 characters" do
@@ -300,25 +344,49 @@ defmodule TermUI.Terminal.EscapeParserTest do
       # é is 0xC3 0xA9
       {events, remaining} = EscapeParser.parse("é")
       assert remaining == <<>>
-      assert [%Event.Key{key: "é"}] = events
+      assert [%Event.Text{text: "é"}] = events
     end
 
     test "parses 3-byte UTF-8 character" do
       # € is 0xE2 0x82 0xAC
       {events, remaining} = EscapeParser.parse("€")
       assert remaining == <<>>
-      assert [%Event.Key{key: "€"}] = events
+      assert [%Event.Text{text: "€"}] = events
     end
 
     test "parses 4-byte UTF-8 character" do
       # 😀 is 0xF0 0x9F 0x98 0x80
       {events, remaining} = EscapeParser.parse("😀")
       assert remaining == <<>>
-      assert [%Event.Key{key: "😀"}] = events
+      assert [%Event.Text{text: "😀"}] = events
     end
   end
 
   describe "parse/1 - incomplete sequences" do
+    test "keeps an incomplete UTF-8 character until its remaining bytes arrive" do
+      for {character, first_chunk} <- [
+            {"é", <<0xC3>>},
+            {"€", <<0xE2, 0x82>>},
+            {"😀", <<0xF0, 0x9F>>}
+          ] do
+        assert {[], ^first_chunk} = EscapeParser.parse(first_chunk)
+
+        remaining =
+          binary_part(
+            character,
+            byte_size(first_chunk),
+            byte_size(character) - byte_size(first_chunk)
+          )
+
+        assert {[%Event.Text{text: ^character}], ""} =
+                 EscapeParser.parse(first_chunk <> remaining)
+      end
+    end
+
+    test "drops an invalid UTF-8 lead byte without dropping later text" do
+      assert {[%Event.Text{text: "a"}], ""} = EscapeParser.parse(<<0xC3, ?a>>)
+    end
+
     test "returns partial escape sequence" do
       {events, remaining} = EscapeParser.parse("\e")
       assert events == []
@@ -337,10 +405,35 @@ defmodule TermUI.Terminal.EscapeParserTest do
       assert remaining == "\e[1;"
     end
 
+    test "returns a partial X10 mouse prefix until its payload is complete" do
+      {events, remaining} = EscapeParser.parse("\e[M")
+
+      assert events == []
+      assert remaining == "\e[M"
+      assert EscapeParser.partial_sequence?(remaining)
+
+      assert {[%Event.Mouse{action: :release, button: nil}], ""} =
+               EscapeParser.parse(remaining <> "#!!")
+    end
+
     test "returns partial SS3 sequence" do
       {events, remaining} = EscapeParser.parse("\eO")
       assert events == []
       assert remaining == "\eO"
+    end
+
+    test "consumes an unsupported complete CSI sequence without emitting its parameters as text" do
+      {events, remaining} = EscapeParser.parse("\e[1;2Hx")
+
+      assert [%Event.Key{key: :unknown}, %Event.Text{text: "x"}] = events
+      assert remaining == ""
+    end
+
+    test "consumes a private CSI sequence without emitting its parameters as text" do
+      {events, remaining} = EscapeParser.parse("\e[?25h")
+
+      assert [%Event.Key{key: :unknown}] = events
+      assert remaining == ""
     end
   end
 
@@ -398,7 +491,7 @@ defmodule TermUI.Terminal.EscapeParserTest do
       input = "\e[200~abc\e[201~xyz"
       {events, remaining} = EscapeParser.parse(input)
 
-      assert [%TermUI.Event.Paste{content: "abc"}, %TermUI.Event.Key{key: "x"} | _] = events
+      assert [%TermUI.Event.Paste{content: "abc"}, %TermUI.Event.Text{text: "x"} | _] = events
       assert remaining == ""
     end
 
@@ -426,5 +519,106 @@ defmodule TermUI.Terminal.EscapeParserTest do
       assert [%TermUI.Event.Paste{content: ^oversized}] = events
       assert remaining == ""
     end
+  end
+
+  describe "parse/1 - focus tracking" do
+    test "parses focus gain and focus loss" do
+      {events, remaining} = EscapeParser.parse("\e[I\e[O")
+
+      assert [
+               %TermUI.Event.Focus{action: :gained},
+               %TermUI.Event.Focus{action: :lost}
+             ] = events
+
+      assert remaining == ""
+    end
+  end
+
+  describe "parse/1 - X10 mouse input" do
+    test "parses an X10 left-button press with zero-based coordinates" do
+      {events, remaining} = EscapeParser.parse("\e[M !!")
+
+      assert [%TermUI.Event.Mouse{action: :press, button: :left, x: 0, y: 0}] = events
+      assert remaining == ""
+    end
+
+    test "parses an X10 button release without inventing a button" do
+      {events, remaining} = EscapeParser.parse("\e[M#!!")
+
+      assert [%TermUI.Event.Mouse{action: :release, button: nil, x: 0, y: 0}] = events
+      assert remaining == ""
+    end
+  end
+
+  describe "parse/1 - SGR mouse input" do
+    test "preserves the released mouse button" do
+      {middle_events, ""} = EscapeParser.parse("\e[<1;5;6m")
+      {right_events, ""} = EscapeParser.parse("\e[<2;7;8m")
+
+      assert [%Event.Mouse{action: :release, button: :middle, x: 4, y: 5}] = middle_events
+      assert [%Event.Mouse{action: :release, button: :right, x: 6, y: 7}] = right_events
+    end
+  end
+
+  test "parses the complete CSI function-key range and stray paste terminator" do
+    cases = [
+      {"12~", :f2},
+      {"13~", :f3},
+      {"14~", :f4},
+      {"17~", :f6},
+      {"18~", :f7},
+      {"19~", :f8},
+      {"20~", :f9},
+      {"21~", :f10},
+      {"23~", :f11},
+      {"201~", :unknown}
+    ]
+
+    for {sequence, key} <- cases do
+      assert {[%Event.Key{key: ^key}], ""} = EscapeParser.parse("\e[" <> sequence)
+    end
+  end
+
+  test "parses SS3 navigation and consumes unsupported complete SS3 input" do
+    for {sequence, key} <- [
+          {"A", :up},
+          {"B", :down},
+          {"C", :right},
+          {"D", :left},
+          {"H", :home},
+          {"F", :end}
+        ] do
+      assert {[%Event.Key{key: ^key}], ""} = EscapeParser.parse("\eO" <> sequence)
+    end
+
+    assert {[], "\eOX"} = EscapeParser.parse("\eOX")
+  end
+
+  test "mouse parsing covers scroll, motion, release, modifiers, and unknown buttons" do
+    cases = [
+      {"\e[<64;2;3M", :scroll_up, nil},
+      {"\e[<65;2;3M", :scroll_down, nil},
+      {"\e[<66;2;3M", :press, :right},
+      {"\e[<67;2;3M", :press, nil},
+      {"\e[<35;2;3M", :move, nil},
+      {"\e[<32;2;3M", :drag, :left},
+      {"\e[<7;2;3M", :press, nil}
+    ]
+
+    for {input, action, button} <- cases do
+      assert {[%Event.Mouse{action: ^action, button: ^button, x: 1, y: 2}], ""} =
+               EscapeParser.parse(input)
+    end
+
+    assert {[%Event.Mouse{modifiers: modifiers}], ""} = EscapeParser.parse("\e[<28;2;3M")
+    assert Enum.sort(modifiers) == [:alt, :ctrl, :shift]
+    assert {[], "\e[<0;1"} = EscapeParser.parse("\e[<0;1")
+  end
+
+  test "invalid escape and CSI bytes are consumed without losing later text" do
+    assert {[], "\e\0x"} = EscapeParser.parse("\e\0x")
+
+    assert {[%Event.Key{key: :unknown}, %Event.Text{text: "x"}], ""} =
+             EscapeParser.parse("\e[\0x")
   end
 end

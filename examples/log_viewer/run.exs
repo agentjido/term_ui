@@ -1,1 +1,0 @@
-LogViewer.App.run()

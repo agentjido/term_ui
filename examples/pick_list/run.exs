@@ -1,1 +1,0 @@
-PickList.App.run()

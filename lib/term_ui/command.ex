@@ -1,234 +1,118 @@
 defmodule TermUI.Command do
   @moduledoc """
-  Commands represent side effects to be performed by the runtime.
+  Data that asks the runtime to do work outside an Elm update.
 
-  Commands are data describing effects - they don't execute immediately.
-  The runtime interprets commands and performs the actual effects,
-  sending result messages back to components.
-
-  ## Command Types
-
-  - `:timer` - Deliver message after delay
-  - `:interval` - Deliver repeated messages at interval
-  - `:file_read` - Read file contents
-  - `:send_after` - Send a delayed message to the root component
-  - `:quit` - Request application shutdown
-  - `:none` - No-op command (useful for conditional commands)
-
-  ## Usage
-
-      # In component update function
-      def update(:start_timer, state) do
-        cmd = Command.timer(1000, :timer_fired)
-        {%{state | timer_active: true}, [cmd]}
-      end
-
-      def update(:timer_fired, state) do
-        {%{state | timer_active: false, count: state.count + 1}, []}
-      end
+  Commands do not contain component identifiers. A runtime delivers command
+  results to its one application state.
   """
 
-  # Dialyzer: Command constructors return specific struct types with known
-  # type: atoms, but the public spec uses the general t() type for API clarity.
-  @dialyzer {:nowarn_function,
-             timer: 2, interval: 2, file_read: 2, send_after: 3, quit: 1, none: 0, valid?: 1}
-
-  @type t :: %__MODULE__{
-          id: reference() | nil,
-          type: atom(),
-          payload: term(),
-          on_result: term(),
-          timeout: pos_integer() | :infinity
+  @type kind :: :message | :send | :timer | :async | :clipboard | :shutdown
+  @type message_command :: %__MODULE__{kind: :message, value: term()}
+  @type send_command :: %__MODULE__{kind: :send, value: {pid(), term()}}
+  @type timer_command :: %__MODULE__{kind: :timer, value: {non_neg_integer(), term()}}
+  @type async_result :: {:ok, term()} | {:error, term()}
+  @type async_command :: %__MODULE__{
+          kind: :async,
+          value: {(-> term()), (async_result() -> term())}
         }
+  @type clipboard_command :: %__MODULE__{
+          kind: :clipboard,
+          value: {TermUI.Clipboard.Operation.t(), (term() -> term())}
+        }
+  @type shutdown_command :: %__MODULE__{kind: :shutdown, value: term()}
 
-  @type command_type :: :timer | :interval | :file_read | :send_after | :quit | :none
+  @type t ::
+          message_command()
+          | send_command()
+          | timer_command()
+          | async_command()
+          | clipboard_command()
+          | shutdown_command()
 
-  defstruct [
-    :id,
-    :type,
-    :payload,
-    :on_result,
-    timeout: :infinity
-  ]
+  @struct_schema Zoi.struct(__MODULE__, %{
+                   kind: Zoi.enum([:message, :send, :timer, :async, :clipboard, :shutdown]),
+                   value: Zoi.any()
+                 })
 
-  @doc """
-  Creates a timer command that delivers a message after delay.
+  @enforce_keys Zoi.Struct.enforce_keys(@struct_schema)
+  defstruct Zoi.Struct.struct_fields(@struct_schema)
 
-  ## Examples
+  @schema Zoi.union([
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:message),
+              value: Zoi.any()
+            }),
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:send),
+              value: Zoi.tuple({Zoi.pid(), Zoi.any()})
+            }),
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:timer),
+              value: Zoi.tuple({Zoi.integer() |> Zoi.non_negative(), Zoi.any()})
+            }),
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:async),
+              value: Zoi.tuple({Zoi.function(arity: 0), Zoi.function(arity: 1)})
+            }),
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:clipboard),
+              value: Zoi.tuple({TermUI.Clipboard.Operation.schema(), Zoi.function(arity: 1)})
+            }),
+            Zoi.struct(__MODULE__, %{
+              kind: Zoi.literal(:shutdown),
+              value: Zoi.any()
+            })
+          ])
 
-      Command.timer(1000, :timer_done)
-      Command.timer(500, {:tick, 1})
-  """
-  @spec timer(non_neg_integer(), term()) :: t()
-  def timer(delay_ms, on_result) when is_integer(delay_ms) and delay_ms >= 0 do
-    %__MODULE__{
-      type: :timer,
-      payload: delay_ms,
-      on_result: on_result
-    }
-  end
+  @doc "Returns the Zoi schema for runtime commands."
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
-  @doc """
-  Creates an interval command that delivers repeated messages.
+  @doc "Delivers a message to the application on the next runtime turn."
+  @spec message(term()) :: message_command()
+  def message(message), do: %__MODULE__{kind: :message, value: message}
 
-  Each tick delivers the `on_result` message. The primary runtime cancels
-  intervals when the root shuts down, but its public API does not expose an
-  individual interval cancellation handle in 1.0.
+  @doc "Sends a message to another process."
+  @spec send(pid(), term()) :: send_command()
+  def send(pid, message) when is_pid(pid),
+    do: %__MODULE__{kind: :send, value: {pid, message}}
 
-  ## Examples
-
-      Command.interval(100, :tick)
-  """
-  @spec interval(pos_integer(), term()) :: t()
-  def interval(interval_ms, on_result) when is_integer(interval_ms) and interval_ms > 0 do
-    %__MODULE__{
-      type: :interval,
-      payload: interval_ms,
-      on_result: on_result
-    }
-  end
-
-  @doc """
-  Creates a file read command.
-
-  Returns `{:ok, content}` or `{:error, reason}` wrapped in the on_result message.
-
-  ## Examples
-
-      Command.file_read("/path/to/file", :file_loaded)
-      # Results in: {:file_loaded, {:ok, "contents"}}
-      # or: {:file_loaded, {:error, :enoent}}
-  """
-  @spec file_read(Path.t(), term()) :: t()
-  def file_read(path, on_result) when is_binary(path) do
-    %__MODULE__{
-      type: :file_read,
-      payload: path,
-      on_result: on_result
-    }
-  end
-
-  @doc """
-  Creates a send_after command that sends a delayed message to a component ID.
-
-  The primary 1.0 runtime has only the reserved `:root` component, so use
-  `:root` there. Lower-level executor integrations may use another component
-  ID as their own routing key.
-
-  ## Examples
-
-      Command.send_after(:root, :wake_up, 1000)
-  """
-  @spec send_after(atom(), term(), pos_integer()) :: t()
-  def send_after(component_id, message, delay_ms)
-      when is_atom(component_id) and is_integer(delay_ms) and delay_ms > 0 do
-    %__MODULE__{
-      type: :send_after,
-      payload: {component_id, message, delay_ms},
-      on_result: :send_after_complete
-    }
-  end
+  @doc "Delivers a message to the application after a delay."
+  @spec timer(non_neg_integer(), term()) :: timer_command()
+  def timer(milliseconds, message) when is_integer(milliseconds) and milliseconds >= 0,
+    do: %__MODULE__{kind: :timer, value: {milliseconds, message}}
 
   @doc """
-  Creates a quit command to request application shutdown.
+  Runs a function and maps one runtime-produced result to an application message.
 
-  The runtime will initiate graceful shutdown, cleaning up all resources
-  and restoring the terminal to its original state.
-
-  ## Examples
-
-      # Simple quit
-      Command.quit()
-
-      # Quit with reason
-      Command.quit(:normal)
-      Command.quit(:user_requested)
+  The function can return any term. The runtime wraps a normal return value as
+  `{:ok, value}` and wraps a raised, thrown, or exited function as
+  `{:error, reason}`. The mapper always receives this one outer result tag. A
+  function return such as `{:ok, value}` therefore reaches the mapper as
+  `{:ok, {:ok, value}}`.
   """
-  @spec quit(term()) :: t()
-  def quit(reason \\ :normal) do
-    %__MODULE__{
-      type: :quit,
-      payload: reason,
-      on_result: nil
-    }
-  end
+  @spec async((-> term()), (async_result() -> term())) :: async_command()
+  def async(function, on_result \\ &{:async_result, &1})
+      when is_function(function, 0) and is_function(on_result, 1),
+      do: %__MODULE__{kind: :async, value: {function, on_result}}
 
-  @doc """
-  Creates a no-op command.
+  @doc "Requests a serialized clipboard operation and maps its `:ok` or error result to a message."
+  @spec clipboard(TermUI.Clipboard.Operation.t(), (term() -> term())) :: clipboard_command()
+  def clipboard(%TermUI.Clipboard.Operation{} = operation, on_result \\ &{:clipboard_result, &1})
+      when is_function(on_result, 1),
+      do: %__MODULE__{kind: :clipboard, value: {operation, on_result}}
 
-  Useful for conditional commands where you might not need an effect.
+  @doc "Requests a final render and runtime shutdown."
+  @spec shutdown(term()) :: shutdown_command()
+  def shutdown(reason \\ :normal), do: %__MODULE__{kind: :shutdown, value: reason}
 
-  ## Examples
+  @doc "Deprecated alias for `shutdown/0`."
+  @deprecated "Use TermUI.Command.shutdown/0 instead."
+  @spec quit() :: shutdown_command()
+  def quit, do: shutdown()
 
-      cmd = if should_fetch?, do: Command.timer(100, :fetch), else: Command.none()
-  """
-  @spec none() :: t()
-  def none do
-    %__MODULE__{
-      type: :none,
-      payload: nil,
-      on_result: nil
-    }
-  end
-
-  @doc """
-  Sets a timeout for command execution.
-
-  The 1.0 executor enforces this field for `timer/2` and `file_read/2`: if the
-  operation takes longer, it is cancelled and `{:error, :timeout}` is sent.
-  Interval and delayed-send execution do not currently enforce this field.
-
-  ## Examples
-
-      Command.file_read(path, :loaded)
-      |> Command.with_timeout(5000)
-  """
-  @spec with_timeout(t(), pos_integer()) :: t()
-  def with_timeout(%__MODULE__{} = command, timeout_ms)
-      when is_integer(timeout_ms) and timeout_ms > 0 do
-    %{command | timeout: timeout_ms}
-  end
-
-  @doc """
-  Validates a command structure.
-
-  Returns `:ok` if valid, `{:error, reason}` otherwise.
-  """
-  @spec validate(t()) :: :ok | {:error, term()}
-  def validate(%__MODULE__{type: :none}), do: :ok
-
-  def validate(%__MODULE__{type: :timer, payload: delay}) when is_integer(delay) and delay >= 0,
-    do: :ok
-
-  def validate(%__MODULE__{type: :interval, payload: interval})
-      when is_integer(interval) and interval > 0,
-      do: :ok
-
-  def validate(%__MODULE__{type: :file_read, payload: path}) when is_binary(path), do: :ok
-
-  def validate(%__MODULE__{type: :send_after, payload: {id, _msg, delay}})
-      when is_atom(id) and is_integer(delay) and delay > 0,
-      do: :ok
-
-  def validate(%__MODULE__{type: :quit}), do: :ok
-
-  def validate(%__MODULE__{type: type, payload: payload}) do
-    {:error, {:invalid_command, type, payload}}
-  end
-
-  def validate(_), do: {:error, :not_a_command}
-
-  @doc """
-  Checks if a term is a valid command.
-  """
-  @spec valid?(term()) :: boolean()
-  def valid?(term), do: validate(term) == :ok
-
-  @doc """
-  Assigns a unique ID to a command for tracking.
-  """
-  @spec assign_id(t()) :: t()
-  def assign_id(%__MODULE__{} = command) do
-    %{command | id: make_ref()}
-  end
+  @doc "Deprecated alias for `shutdown/1`."
+  @deprecated "Use TermUI.Command.shutdown/1 instead."
+  @spec quit(term()) :: shutdown_command()
+  def quit(reason), do: shutdown(reason)
 end

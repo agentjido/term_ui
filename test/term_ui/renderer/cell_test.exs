@@ -1,7 +1,7 @@
-defmodule TermUI.Renderer.CellTest do
+defmodule TermUI.CellTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.Renderer.Cell
+  alias TermUI.Cell
 
   describe "new/1" do
     test "creates cell with character" do
@@ -242,7 +242,7 @@ defmodule TermUI.Renderer.CellTest do
 
     test "strips escape sequence with text after" do
       cell = Cell.new("\e[31mRed")
-      assert cell.char == "Red"
+      assert cell.char == "R"
     end
 
     test "strips null character" do
@@ -288,7 +288,7 @@ defmodule TermUI.Renderer.CellTest do
 
     test "strips escape from mixed content" do
       cell = Cell.new("A\e[0mB")
-      assert cell.char == "AB"
+      assert cell.char == "A"
     end
 
     test "strips multiple control characters" do
@@ -398,7 +398,7 @@ defmodule TermUI.Renderer.CellTest do
     test "strips bidi override from mixed content" do
       # Text with RLO embedded could reverse direction visually
       cell = Cell.new("Hello\u202EWorld")
-      assert cell.char == "HelloWorld"
+      assert cell.char == "H"
     end
 
     # Unicode non-character filtering (Security)
@@ -429,7 +429,7 @@ defmodule TermUI.Renderer.CellTest do
 
     test "strips non-character from mixed content" do
       cell = Cell.new("A\uFFFEB")
-      assert cell.char == "AB"
+      assert cell.char == "A"
     end
   end
 

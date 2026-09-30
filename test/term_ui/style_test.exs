@@ -518,4 +518,39 @@ defmodule TermUI.StyleTest do
       end
     end
   end
+
+  test "option construction and cell conversion preserve all visible values" do
+    style =
+      Style.from(
+        fg: {:rgb, 1, 2, 3},
+        bg: {:indexed, 42},
+        dim: true,
+        blink: true,
+        reverse: true,
+        hidden: true,
+        strikethrough: true
+      )
+
+    for attribute <- [:dim, :blink, :reverse, :hidden, :strikethrough] do
+      assert Style.has_attr?(style, attribute)
+    end
+
+    assert Style.equal?(
+             style,
+             Style.from(
+               style
+               |> Map.from_struct()
+               |> Map.delete(:attrs)
+               |> Map.put(:attrs, style.attrs)
+             )
+           )
+
+    refute Style.empty?(style)
+    assert Style.empty?(Style.new())
+
+    cell = Style.to_cell(style, "界")
+    assert cell.fg == {1, 2, 3}
+    assert cell.bg == 42
+    assert cell.char == "界"
+  end
 end

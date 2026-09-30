@@ -1,7 +1,7 @@
-defmodule TermUI.Renderer.CursorOptimizerTest do
+defmodule TermUI.CursorOptimizerTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.Renderer.CursorOptimizer
+  alias TermUI.CursorOptimizer
 
   describe "new/0 and new/2" do
     test "creates optimizer at default position (1, 1)" do

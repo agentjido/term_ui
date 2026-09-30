@@ -1,288 +1,341 @@
 defmodule TermUI.Widget.TextInput do
   @moduledoc """
-  A single-line text input widget.
+  A pure, single-line text input widget.
 
-  TextInput allows users to type text, navigate with arrow keys,
-  and delete with backspace/delete.
+  The parent application owns the returned state and calls `update/2` for
+  normalized terminal events. The update result is `{state, messages}`.
+  Changes emit `{:changed, value}` and Enter emits `{:submit, value}`.
 
-  This is the earlier single-line widget retained under `TermUI.Widget`. It
-  accepts a props map directly and must be embedded explicitly. New code should
-  normally use `TermUI.Widgets.TextInput`, which provides the current
-  single-line/multiline API and a `new/1` constructor.
+  `init/1` accepts `:value`, `:placeholder`, `:max_length`, and
+  `:selection_style`. `view/2` returns a one-row frame with a visible cursor.
+  `row/2` returns plain fitted text and its one-based cursor column.
+  `row_spans/2` retains selection styles for manual composition.
 
-  ## Usage
+  Shift with Left, Right, Home, or End changes the selection. Ctrl+A selects
+  all text. Ctrl+C returns `{:copy, text}`. Ctrl+X also removes the selection
+  and returns `{:changed, value}`. Mouse press and drag use zero-based local
+  columns from `mouse/3`.
 
-      TextInput.render(%{
-        placeholder: "Enter name...",
-        on_change: fn value -> IO.puts("Value: \#{value}") end,
-        on_submit: fn value -> IO.puts("Submitted: \#{value}") end
-      }, state, area)
+  Alt+Backspace (Option+Delete on macOS) removes trailing spaces and the
+  preceding word. An active selection is removed first.
 
-  ## Props
+  ## Example
 
-  - `:value` - Initial value (default: `""`)
-  - `:placeholder` - Placeholder text when empty
-  - `:on_change` - Callback when value changes
-  - `:on_submit` - Callback when Enter pressed
-  - `:max_length` - Maximum input length
-  - `:style` - Input style
-  - `:cursor_style` - Cursor character style
+      input = TermUI.Widget.TextInput.init(placeholder: "Name", max_length: 80)
+      {input, messages} = TermUI.Widget.TextInput.update(event, input)
+      frame = TermUI.Widget.TextInput.view(input, {40, 1})
   """
 
-  use TermUI.StatefulComponent
+  @behaviour TermUI.Widget
 
-  alias TermUI.Component.RenderNode
-  alias TermUI.Event
-  alias TermUI.Renderer.Style
+  alias TermUI.{DisplayWidth, Event, Frame, Selection, Style}
+  alias TermUI.Widget.Helpers
 
-  # Dialyzer: Suppress opaque type warnings for Style helpers
-  # no_opaque: Style contains MapSet which triggers false positive call_without_opaque warnings
-  @dialyzer [:no_opaque, nowarn_function: [build_style: 1, positioned_cell_safe: 4]]
+  @type t :: %__MODULE__{
+          value: String.t(),
+          cursor: non_neg_integer(),
+          placeholder: String.t(),
+          max_length: pos_integer() | :infinity,
+          selection: Selection.t(),
+          selection_style: Style.t()
+        }
 
-  @doc """
-  Initializes the text input state.
-  """
+  defstruct value: "",
+            cursor: 0,
+            placeholder: "",
+            max_length: :infinity,
+            selection: %Selection{},
+            selection_style: %Style{attrs: MapSet.new([:reverse])}
+
   @impl true
-  def init(props) do
-    value = Map.get(props, :value, "")
+  def init(opts) do
+    value = Keyword.get(opts, :value, "")
 
-    state = %{
+    %__MODULE__{
       value: value,
-      cursor: String.length(value),
-      scroll_offset: 0,
-      props: props
+      cursor: length(String.graphemes(value)),
+      placeholder: Keyword.get(opts, :placeholder, ""),
+      max_length: Keyword.get(opts, :max_length, :infinity),
+      selection_style: Keyword.get(opts, :selection_style, Style.new(attrs: [:reverse]))
     }
-
-    {:ok, state}
   end
 
-  @doc """
-  Handles events for the text input.
-  """
   @impl true
-  def handle_event(%Event.Key{key: :left}, state) do
-    new_cursor = max(0, state.cursor - 1)
-    {:ok, %{state | cursor: new_cursor}}
+  def update(%Event.Text{text: text}, state), do: insert(state, text)
+  def update(%Event.Paste{content: text}, state), do: insert(state, text)
+
+  def update(%Event.Key{key: "a", modifiers: modifiers}, state) do
+    if :ctrl in modifiers,
+      do: {%{state | selection: Selection.select_all(state.selection, state.value)}, []},
+      else: {state, []}
   end
 
-  def handle_event(%Event.Key{key: :right}, state) do
-    new_cursor = min(String.length(state.value), state.cursor + 1)
-    {:ok, %{state | cursor: new_cursor}}
+  def update(%Event.Key{key: "c", modifiers: modifiers}, state) do
+    if :ctrl in modifiers, do: copy_selection(state), else: {state, []}
   end
 
-  def handle_event(%Event.Key{key: :home}, state) do
-    {:ok, %{state | cursor: 0}}
+  def update(%Event.Key{key: "x", modifiers: modifiers}, state) do
+    if :ctrl in modifiers, do: cut_selection(state), else: {state, []}
   end
 
-  def handle_event(%Event.Key{key: :end}, state) do
-    {:ok, %{state | cursor: String.length(state.value)}}
-  end
+  def update(%Event.Key{key: :left, modifiers: modifiers}, state),
+    do: horizontal(state, -1, modifiers)
 
-  def handle_event(%Event.Key{key: :backspace, modifiers: modifiers}, state) do
+  def update(%Event.Key{key: :right, modifiers: modifiers}, state),
+    do: horizontal(state, 1, modifiers)
+
+  def update(%Event.Key{key: :home, modifiers: modifiers}, state),
+    do: navigate(state, 0, modifiers)
+
+  def update(%Event.Key{key: :end, modifiers: modifiers}, state),
+    do: navigate(state, grapheme_count(state.value), modifiers)
+
+  def update(%Event.Key{key: :backspace, modifiers: modifiers}, state) do
     cond do
-      :alt in modifiers and state.cursor > 0 ->
-        {before, after_cursor} = String.split_at(state.value, state.cursor)
-
-        remaining =
-          before
-          |> String.replace(~r/\s+\z/u, "")
-          |> String.replace(~r/\S+\z/u, "")
-
-        new_value = remaining <> after_cursor
-
-        {:ok, %{state | value: new_value, cursor: String.length(remaining)},
-         [{:send, self(), {:changed, new_value}}]}
-
-      state.cursor > 0 ->
-        {before, after_cursor} = String.split_at(state.value, state.cursor)
-        new_value = String.slice(before, 0..-2//1) <> after_cursor
-        new_cursor = state.cursor - 1
-
-        {:ok, %{state | value: new_value, cursor: new_cursor},
-         [{:send, self(), {:changed, new_value}}]}
-
-      true ->
-        {:ok, state}
+      not Selection.empty?(state.selection) -> delete_selection(state)
+      state.cursor == 0 -> {state, []}
+      true -> delete_before_cursor(state, modifiers)
     end
   end
 
-  def handle_event(%Event.Key{key: :delete}, state) do
-    if state.cursor < String.length(state.value) do
-      {before, after_cursor} = String.split_at(state.value, state.cursor)
-      new_value = before <> String.slice(after_cursor, 1..-1//1)
-
-      {:ok, %{state | value: new_value}, [{:send, self(), {:changed, new_value}}]}
-    else
-      {:ok, state}
+  def update(%Event.Key{key: :delete}, state) do
+    cond do
+      not Selection.empty?(state.selection) -> delete_selection(state)
+      state.cursor < grapheme_count(state.value) -> delete_at_cursor(state)
+      true -> {state, []}
     end
   end
 
-  def handle_event(%Event.Key{key: :enter}, state) do
-    {:ok, state, [{:send, self(), {:submit, state.value}}]}
-  end
+  def update(%Event.Key{key: :enter}, state), do: {state, [{:submit, state.value}]}
+  def update(_event, state), do: {state, []}
 
-  def handle_event(%Event.Key{char: char}, state) when is_binary(char) and char != "" do
-    # Insert character at cursor
-    {before, after_cursor} = String.split_at(state.value, state.cursor)
-    new_value = before <> char <> after_cursor
-    new_cursor = state.cursor + String.length(char)
-
-    {:ok, %{state | value: new_value, cursor: new_cursor},
-     [{:send, self(), {:changed, new_value}}]}
-  end
-
-  def handle_event(_event, state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Handles messages to the text input.
-  """
   @impl true
-  def handle_info({:changed, value}, state) do
-    props = state.props
-    on_change = Map.get(props, :on_change)
-    max_length = Map.get(props, :max_length)
-
-    # Enforce max length
-    final_value =
-      if max_length && String.length(value) > max_length do
-        String.slice(value, 0, max_length)
-      else
-        value
-      end
-
-    if is_function(on_change, 1) do
-      on_change.(final_value)
-    end
-
-    if final_value != value do
-      {:ok, %{state | value: final_value, cursor: min(state.cursor, String.length(final_value))}}
-    else
-      {:ok, state}
-    end
+  def view(state, {width, height}) when width > 0 and height > 0 do
+    {content, cursor_column} = row_spans(state, width)
+    Frame.from_rows([content], width, height, cursor: {cursor_column, 1})
   end
 
-  def handle_info({:submit, value}, state) do
-    props = state.props
-    on_submit = Map.get(props, :on_submit)
-
-    if is_function(on_submit, 1) do
-      on_submit.(value)
-    end
-
-    {:ok, state}
-  end
-
-  def handle_info({:set_value, value}, state) do
-    {:ok, %{state | value: value, cursor: String.length(value)}}
-  end
-
-  def handle_info(_msg, state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Renders the text input.
-  """
   @impl true
-  def render(state, area) do
-    props = state.props
-    placeholder = Map.get(props, :placeholder, "")
-    style_opts = Map.get(props, :style, %{})
-    cursor_style_opts = Map.get(props, :cursor_style, %{bg: :white, fg: :black})
+  def mouse(%Event.Mouse{action: :press, button: :left, x: x, modifiers: modifiers}, state, {
+        width,
+        _height
+      }) do
+    position = cursor_at(state, width, x)
 
-    style = build_style(style_opts)
-    cursor_style = build_style(cursor_style_opts)
+    selection =
+      if :shift in modifiers and Selection.active?(state.selection),
+        do: Selection.extend(state.selection, position),
+        else: state.selection |> Selection.start(position)
 
-    # Determine what to display
-    {display_text, show_cursor} =
+    {%{state | cursor: position, selection: selection}, []}
+  end
+
+  def mouse(%Event.Mouse{action: :drag, button: :left, x: x}, state, {width, _height}) do
+    position = cursor_at(state, width, x)
+
+    selection =
+      if Selection.active?(state.selection),
+        do: Selection.extend(state.selection, position),
+        else: state.selection |> Selection.start(state.cursor) |> Selection.extend(position)
+
+    {%{state | cursor: position, selection: selection}, []}
+  end
+
+  def mouse(event, state, _dimensions), do: update(event, state)
+
+  @doc "Returns the fitted row and its one-based cursor column."
+  @spec row(t(), pos_integer()) :: {String.t(), pos_integer()}
+  def row(state, width) when is_integer(width) and width > 0 do
+    layout = row_layout(state, width)
+    {Frame.fit(layout.text, width), layout.cursor_column}
+  end
+
+  @doc "Returns styled fitted content and its one-based cursor column."
+  @spec row_spans(t(), pos_integer()) :: {Frame.row(), pos_integer()}
+  def row_spans(state, width) when is_integer(width) and width > 0 do
+    layout = row_layout(state, width)
+
+    content =
       if state.value == "" do
-        {placeholder, false}
+        layout.text
       else
-        {state.value, true}
+        Enum.map(layout.entries, fn {grapheme, index} ->
+          {grapheme, style_at(state, index)}
+        end)
       end
 
-    # Calculate scroll to keep cursor visible
-    scroll_offset = calculate_scroll(state.cursor, state.scroll_offset, area.width)
-
-    # Create visible portion
-    visible_text =
-      display_text
-      |> String.slice(scroll_offset, area.width)
-      |> String.pad_trailing(area.width)
-
-    # Render cells
-    cursor_pos = state.cursor - scroll_offset
-
-    cells =
-      visible_text
-      |> String.graphemes()
-      |> Enum.with_index()
-      |> Enum.map(fn {char, x} ->
-        cell_style = get_cell_style(x, cursor_pos, show_cursor, cursor_style, state.value, style)
-        positioned_cell_safe(x, 0, char, cell_style)
-      end)
-
-    RenderNode.cells(cells)
+    {content, layout.cursor_column}
   end
 
-  # Private Functions
+  defp insert(state, text) do
+    inserted = text |> String.replace(~r/[\x00-\x1F\x7F]/u, "") |> String.graphemes()
 
-  defp get_cell_style(x, cursor_pos, true, cursor_style, _value, _style) when x == cursor_pos do
-    cursor_style
+    {value, cursor} =
+      if Selection.empty?(state.selection) do
+        {state.value, state.cursor}
+      else
+        {value, cursor, _selection} = Selection.replace(state.selection, state.value, "")
+        {value, cursor}
+      end
+
+    {before, after_cursor} = Enum.split(String.graphemes(value), cursor)
+
+    value_graphemes =
+      (before ++ inserted ++ after_cursor)
+      |> limit(state.max_length)
+
+    value = Enum.join(value_graphemes)
+    cursor = min(length(before) + length(inserted), length(value_graphemes))
+    changed(%{state | value: value, cursor: cursor, selection: Selection.clear(state.selection)})
   end
 
-  defp get_cell_style(_x, _cursor_pos, _show_cursor, _cursor_style, "", _style) do
-    # Placeholder style (dimmed)
-    Style.new(fg: :bright_black)
+  defp horizontal(state, delta, modifiers) do
+    target =
+      if :shift not in modifiers and not Selection.empty?(state.selection) do
+        {start, finish} = Selection.range(state.selection)
+        if delta < 0, do: start, else: finish
+      else
+        state.cursor + delta
+      end
+
+    navigate(state, target, modifiers)
   end
 
-  defp get_cell_style(_x, _cursor_pos, _show_cursor, _cursor_style, _value, style) do
-    style
+  defp navigate(state, target, modifiers) do
+    target = Helpers.clamp(target, 0, grapheme_count(state.value))
+
+    selection =
+      if :shift in modifiers do
+        if Selection.active?(state.selection),
+          do: Selection.extend(state.selection, target),
+          else: state.selection |> Selection.start(state.cursor) |> Selection.extend(target)
+      else
+        Selection.clear(state.selection)
+      end
+
+    {%{state | cursor: target, selection: selection}, []}
   end
 
-  # ----------------------------------------------------------------------------
-  # Style Helper Functions
-  # ----------------------------------------------------------------------------
+  defp copy_selection(state) do
+    if Selection.empty?(state.selection),
+      do: {state, []},
+      else: {state, [{:copy, Selection.extract(state.selection, state.value)}]}
+  end
 
-  @spec positioned_cell_safe(integer(), integer(), String.t(), Style.t()) :: RenderNode.t()
-  defp positioned_cell_safe(x, y, char, style),
-    do: positioned_cell(x, y, char, style)
-
-  # ----------------------------------------------------------------------------
-  # Utility Functions
-  # ----------------------------------------------------------------------------
-
-  defp calculate_scroll(cursor, current_scroll, visible_width) do
-    cond do
-      # Cursor before visible area
-      cursor < current_scroll ->
-        cursor
-
-      # Cursor after visible area
-      cursor >= current_scroll + visible_width ->
-        cursor - visible_width + 1
-
-      # Cursor visible
-      true ->
-        current_scroll
+  defp cut_selection(state) do
+    if Selection.empty?(state.selection) do
+      {state, []}
+    else
+      copied = Selection.extract(state.selection, state.value)
+      {value, cursor, selection} = Selection.replace(state.selection, state.value, "")
+      state = %{state | value: value, cursor: cursor, selection: selection}
+      {state, [{:copy, copied}, {:changed, value}]}
     end
   end
 
-  defp build_style(opts) when is_map(opts) do
-    style_list =
-      opts
-      |> Enum.map(fn
-        {:fg, color} -> {:fg, color}
-        {:bg, color} -> {:bg, color}
-        {:bold, true} -> {:attrs, [:bold]}
-        _ -> nil
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    Style.new(style_list)
+  defp delete_selection(state) do
+    {value, cursor, selection} = Selection.replace(state.selection, state.value, "")
+    changed(%{state | value: value, cursor: cursor, selection: selection})
   end
 
-  defp build_style(_), do: Style.new()
+  defp delete_before_cursor(state, modifiers) do
+    start =
+      if :alt in modifiers,
+        do: Helpers.previous_word_start(state.value, state.cursor),
+        else: state.cursor - 1
+
+    {before, rest} = String.split_at(state.value, start)
+    {_deleted, after_cursor} = String.split_at(rest, state.cursor - start)
+    changed(%{state | value: before <> after_cursor, cursor: start})
+  end
+
+  defp delete_at_cursor(state) do
+    value = state.value |> String.graphemes() |> List.delete_at(state.cursor) |> Enum.join()
+    changed(%{state | value: value})
+  end
+
+  defp changed(state), do: {state, [{:changed, state.value}]}
+  defp grapheme_count(text), do: text |> String.graphemes() |> length()
+  defp limit(graphemes, :infinity), do: graphemes
+
+  defp limit(graphemes, count) when is_integer(count) and count > 0,
+    do: Enum.take(graphemes, count)
+
+  defp visible_before_cursor(graphemes, width) do
+    Enum.reduce_while(Enum.reverse(graphemes), {[], 0}, fn grapheme, {visible, used} ->
+      grapheme_width = max(DisplayWidth.width(grapheme), 0)
+
+      if used + grapheme_width <= width do
+        {:cont, {[grapheme | visible], used + grapheme_width}}
+      else
+        {:halt, {visible, used}}
+      end
+    end)
+  end
+
+  defp take_width(graphemes, width) do
+    graphemes
+    |> Enum.reduce_while({[], 0}, fn grapheme, {visible, used} ->
+      grapheme_width = max(DisplayWidth.width(grapheme), 0)
+
+      if used + grapheme_width <= width do
+        {:cont, {[grapheme | visible], used + grapheme_width}}
+      else
+        {:halt, {visible, used}}
+      end
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  defp row_layout(%{value: ""} = state, width) do
+    %{text: Frame.fit(state.placeholder, width), entries: [], cursor_column: 1, start: 0}
+  end
+
+  defp row_layout(state, width) do
+    {before, after_cursor} = Enum.split(String.graphemes(state.value), state.cursor)
+    {visible_before, before_width} = visible_before_cursor(before, width - 1)
+    room = max(width - before_width, 0)
+    visible_after = take_width(after_cursor, room)
+    start = state.cursor - length(visible_before)
+    visible = visible_before ++ visible_after
+
+    %{
+      text: Enum.join(visible),
+      entries: Enum.with_index(visible, start),
+      cursor_column: min(before_width + 1, width),
+      start: start
+    }
+  end
+
+  defp cursor_at(state, width, x) do
+    layout = row_layout(state, width)
+    x = Helpers.clamp(x, 0, width - 1)
+
+    layout.entries
+    |> Enum.reduce_while({layout.start, 0}, fn {grapheme, index}, {_position, column} ->
+      grapheme_width = max(DisplayWidth.width(grapheme), 1)
+
+      if x < column + grapheme_width do
+        {:halt, position_in_grapheme(index, grapheme_width, x - column)}
+      else
+        {:cont, {index + 1, column + grapheme_width}}
+      end
+    end)
+    |> case do
+      {position, _column} -> position
+      position -> position
+    end
+  end
+
+  defp style_at(state, index) do
+    if Selection.contains?(state.selection, index),
+      do: state.selection_style,
+      else: Style.new()
+  end
+
+  defp position_in_grapheme(index, width, offset) when width > 1 and offset >= div(width, 2),
+    do: index + 1
+
+  defp position_in_grapheme(index, _width, _offset), do: index
 end

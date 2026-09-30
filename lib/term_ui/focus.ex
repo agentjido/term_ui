@@ -1,379 +1,138 @@
 defmodule TermUI.Focus do
   @moduledoc """
-  Focus event utilities for terminal window focus tracking.
+  Pure focus traversal state for an Elm application.
 
-  Provides escape sequences and utilities for detecting when the
-  terminal window gains or loses system focus. This enables optimization
-  opportunities like pausing animations when backgrounded.
-
-  `TermUI.Runtime` parses focus events but does not enable terminal focus
-  reporting automatically. A custom host must write the enable sequence and
-  pair it with `disable/0` during cleanup.
-
-  ## Usage
-
-      # Enable focus reporting
-      IO.write(Focus.enable())
-
-      # Check if focus reporting is supported
-      if Focus.supported?() do
-        IO.write(Focus.enable())
-      end
-
-      # Disable focus reporting
-      IO.write(Focus.disable())
+  The router handles Tab, Shift+Tab, Home, End, and terminal focus events. It
+  returns parent messages and never sends events or stores global state.
   """
 
-  # Focus reporting mode
-  # ESC [ ? 1004 h - Enable focus reporting
-  # ESC [ ? 1004 l - Disable focus reporting
-  @focus_enable "\e[?1004h"
-  @focus_disable "\e[?1004l"
-
-  # Focus event sequences
-  # ESC [ I - Focus gained
-  # ESC [ O - Focus lost
-  @focus_gained "\e[I"
-  @focus_lost "\e[O"
-
-  @doc """
-  Returns escape sequence to enable focus reporting.
-  """
-  @spec enable() :: String.t()
-  def enable, do: @focus_enable
-
-  @doc """
-  Returns escape sequence to disable focus reporting.
-  """
-  @spec disable() :: String.t()
-  def disable, do: @focus_disable
-
-  @doc """
-  Returns the focus gained sequence.
-  """
-  @spec gained_sequence() :: String.t()
-  def gained_sequence, do: @focus_gained
-
-  @doc """
-  Returns the focus lost sequence.
-  """
-  @spec lost_sequence() :: String.t()
-  def lost_sequence, do: @focus_lost
-
-  @doc """
-  Checks if focus reporting is likely supported.
-
-  This is a heuristic check based on terminal type. Many modern
-  terminals support focus reporting but don't advertise it.
-
-  Known supporting terminals:
-  - xterm (with allowWindowOps)
-  - iTerm2
-  - Alacritty
-  - Kitty
-  - WezTerm
-  - foot
-  - GNOME Terminal
-  - Windows Terminal
-  """
-  @spec supported?() :: boolean()
-  def supported? do
-    term = System.get_env("TERM", "")
-    term_program = System.get_env("TERM_PROGRAM", "")
-
-    known_terminal_program?(term_program) or
-      known_terminal_env?() or
-      known_terminal_type?(term)
-  end
-
-  defp known_terminal_program?(term_program) do
-    String.contains?(term_program, "iTerm") or
-      String.contains?(term_program, "Alacritty") or
-      String.contains?(term_program, "WezTerm")
-  end
-
-  defp known_terminal_env? do
-    System.get_env("KITTY_WINDOW_ID") != nil or
-      System.get_env("WT_SESSION") != nil or
-      System.get_env("VTE_VERSION") != nil
-  end
-
-  defp known_terminal_type?(term) do
-    String.starts_with?(term, "xterm") or
-      term == "foot" or
-      term == "foot-extra"
-  end
-
-  @doc """
-  Parses input to detect focus events.
-
-  Returns `{:focus, :gained}`, `{:focus, :lost}`, or `nil` if not a focus event.
-  """
-  @spec parse(String.t()) :: {:focus, :gained | :lost} | nil
-  def parse(@focus_gained), do: {:focus, :gained}
-  def parse(@focus_lost), do: {:focus, :lost}
-  def parse(_), do: nil
-end
-
-defmodule TermUI.Focus.Tracker do
-  @moduledoc """
-  Focus state tracker with action registration.
-
-  Maintains focus state and executes registered actions when
-  focus changes. Supports optimization hooks for reducing work
-  when the application is backgrounded.
-
-  This is a standalone service. It is not started by the TermUI application or
-  wired to `TermUI.Runtime`; a custom host must start it and forward focus
-  events explicitly.
-
-  ## Usage
-
-      {:ok, tracker} = Focus.Tracker.start_link()
-
-      # Register focus actions
-      Focus.Tracker.on_focus_lost(tracker, fn ->
-        save_state()
-      end)
-
-      Focus.Tracker.on_focus_gained(tracker, fn ->
-        refresh_content()
-      end)
-
-      # Update focus state
-      Focus.Tracker.set_focus(tracker, true)
-
-      # Query focus state
-      Focus.Tracker.has_focus?(tracker)
-  """
-
-  use GenServer
+  alias TermUI.Event
 
   @type t :: %__MODULE__{
-          has_focus: boolean(),
-          on_gained: [(-> any())],
-          on_lost: [(-> any())],
-          paused: boolean(),
-          reduced_framerate: boolean(),
-          auto_pause: boolean(),
-          auto_reduce_framerate: boolean()
+          order: [term()],
+          current: term() | nil,
+          disabled: [term()],
+          wrap: boolean(),
+          active: boolean()
         }
 
-  defstruct has_focus: true,
-            on_gained: [],
-            on_lost: [],
-            paused: false,
-            reduced_framerate: false,
-            auto_pause: false,
-            auto_reduce_framerate: false
+  defstruct order: [],
+            current: nil,
+            disabled: [],
+            wrap: true,
+            active: true
 
-  # --- Public API ---
+  @doc "Creates focus state from ids or `%{id: id, disabled: boolean}` entries."
+  @spec new(Enumerable.t(), keyword()) :: t()
+  def new(items \\ [], opts \\ []) do
+    {order, item_disabled} = normalize_items(items)
+    disabled = Enum.uniq(item_disabled ++ Keyword.get(opts, :disabled, []))
+    requested = Keyword.get(opts, :current)
 
-  @doc """
-  Starts the focus tracker.
-  """
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []) do
-    {name, opts} = Keyword.pop(opts, :name)
+    current =
+      if requested in order and requested not in disabled,
+        do: requested,
+        else: first_enabled(order, disabled)
 
-    if name do
-      GenServer.start_link(__MODULE__, opts, name: name)
-    else
-      GenServer.start_link(__MODULE__, opts)
-    end
-  end
-
-  @doc """
-  Sets the focus state.
-  """
-  @spec set_focus(GenServer.server(), boolean()) :: :ok
-  def set_focus(tracker, focused) when is_boolean(focused) do
-    GenServer.call(tracker, {:set_focus, focused})
-  end
-
-  @doc """
-  Returns true if the application has focus.
-  """
-  @spec has_focus?(GenServer.server()) :: boolean()
-  def has_focus?(tracker) do
-    GenServer.call(tracker, :has_focus?)
-  end
-
-  @doc """
-  Registers an action to execute when focus is gained.
-  """
-  @spec on_focus_gained(GenServer.server(), (-> any())) :: :ok
-  def on_focus_gained(tracker, action) when is_function(action, 0) do
-    GenServer.call(tracker, {:on_focus_gained, action})
-  end
-
-  @doc """
-  Registers an action to execute when focus is lost.
-  """
-  @spec on_focus_lost(GenServer.server(), (-> any())) :: :ok
-  def on_focus_lost(tracker, action) when is_function(action, 0) do
-    GenServer.call(tracker, {:on_focus_lost, action})
-  end
-
-  @doc """
-  Clears all registered actions.
-  """
-  @spec clear_actions(GenServer.server()) :: :ok
-  def clear_actions(tracker) do
-    GenServer.call(tracker, :clear_actions)
-  end
-
-  @doc """
-  Returns true if animations should be paused.
-
-  This is set when focus is lost and auto_pause is enabled.
-  """
-  @spec paused?(GenServer.server()) :: boolean()
-  def paused?(tracker) do
-    GenServer.call(tracker, :paused?)
-  end
-
-  @doc """
-  Sets the paused state manually.
-  """
-  @spec set_paused(GenServer.server(), boolean()) :: :ok
-  def set_paused(tracker, paused) when is_boolean(paused) do
-    GenServer.call(tracker, {:set_paused, paused})
-  end
-
-  @doc """
-  Returns true if framerate should be reduced.
-
-  This is set when focus is lost and auto_reduce_framerate is enabled.
-  """
-  @spec reduced_framerate?(GenServer.server()) :: boolean()
-  def reduced_framerate?(tracker) do
-    GenServer.call(tracker, :reduced_framerate?)
-  end
-
-  @doc """
-  Sets the reduced framerate state manually.
-  """
-  @spec set_reduced_framerate(GenServer.server(), boolean()) :: :ok
-  def set_reduced_framerate(tracker, reduced) when is_boolean(reduced) do
-    GenServer.call(tracker, {:set_reduced_framerate, reduced})
-  end
-
-  @doc """
-  Enables automatic pause when focus is lost.
-  """
-  @spec enable_auto_pause(GenServer.server()) :: :ok
-  def enable_auto_pause(tracker) do
-    GenServer.call(tracker, :enable_auto_pause)
-  end
-
-  @doc """
-  Enables automatic framerate reduction when focus is lost.
-  """
-  @spec enable_auto_reduce_framerate(GenServer.server()) :: :ok
-  def enable_auto_reduce_framerate(tracker) do
-    GenServer.call(tracker, :enable_auto_reduce_framerate)
-  end
-
-  # --- GenServer Callbacks ---
-
-  @impl true
-  def init(opts) do
-    state = %__MODULE__{
-      has_focus: Keyword.get(opts, :initial_focus, true)
+    %__MODULE__{
+      order: order,
+      current: current,
+      disabled: disabled,
+      wrap: Keyword.get(opts, :wrap, true),
+      active: Keyword.get(opts, :active, true)
     }
-
-    {:ok, state}
   end
 
-  @impl true
-  def handle_call({:set_focus, focused}, _from, state) do
-    if focused == state.has_focus do
-      {:reply, :ok, state}
-    else
-      # Update focus state
-      state = %{state | has_focus: focused}
+  @doc "Routes one normalized event and returns focus messages."
+  @spec route(Event.t(), t()) :: {t(), [term()]}
+  def route(%Event.Key{key: :tab, modifiers: modifiers}, state),
+    do: move_with_message(state, if(:shift in modifiers, do: -1, else: 1))
 
-      # Update auto-pause and auto-reduce states
-      state =
-        if state.auto_pause do
-          %{state | paused: not focused}
-        else
-          state
-        end
+  def route(%Event.Key{key: :home}, state),
+    do: change(state, first_enabled(state.order, state.disabled))
 
-      state =
-        if state.auto_reduce_framerate do
-          %{state | reduced_framerate: not focused}
-        else
-          state
-        end
+  def route(%Event.Key{key: :end}, state),
+    do: change(state, last_enabled(state.order, state.disabled))
 
-      # Execute actions
-      actions = if focused, do: state.on_gained, else: state.on_lost
+  def route(%Event.Focus{action: :lost}, state),
+    do: {%{state | active: false}, [{:focus_active, false}]}
 
-      Enum.each(actions, fn action ->
-        try do
-          action.()
-        rescue
-          _ -> :ok
-        end
-      end)
+  def route(%Event.Focus{action: :gained}, state),
+    do: {%{state | active: true}, [{:focus_active, true}]}
 
-      {:reply, :ok, state}
+  def route(_event, state), do: {state, []}
+
+  @doc "Moves focus forward by one enabled item."
+  @spec next(t()) :: t()
+  def next(state), do: state |> move(1) |> elem(0)
+
+  @doc "Moves focus backward by one enabled item."
+  @spec previous(t()) :: t()
+  def previous(state), do: state |> move(-1) |> elem(0)
+
+  @doc "Focuses one enabled id."
+  @spec focus(t(), term()) :: t()
+  def focus(state, id), do: state |> change(id) |> elem(0)
+
+  @doc "Disables one id and moves away from it when needed."
+  @spec disable(t(), term()) :: t()
+  def disable(state, id) do
+    state =
+      if id in state.order,
+        do: %{state | disabled: Enum.uniq(state.disabled ++ [id])},
+        else: state
+
+    if state.current == id, do: next(state), else: state
+  end
+
+  @doc "Enables one id."
+  @spec enable(t(), term()) :: t()
+  def enable(state, id), do: %{state | disabled: List.delete(state.disabled, id)}
+
+  @doc "Returns true when an id owns active focus."
+  @spec focused?(t(), term()) :: boolean()
+  def focused?(state, id), do: state.active and state.current == id
+
+  defp move_with_message(state, delta), do: move(state, delta)
+
+  defp move(state, delta) do
+    enabled = Enum.reject(state.order, &(&1 in state.disabled))
+
+    case enabled do
+      [] ->
+        change(state, nil)
+
+      _items ->
+        current_index = Enum.find_index(enabled, &(&1 == state.current))
+        next_index = next_index(current_index, delta, length(enabled), state.wrap)
+        change(state, Enum.at(enabled, next_index))
     end
   end
 
-  @impl true
-  def handle_call(:has_focus?, _from, state) do
-    {:reply, state.has_focus, state}
+  defp change(state, id) do
+    valid? = is_nil(id) or (id in state.order and id not in state.disabled)
+
+    cond do
+      not valid? -> {state, []}
+      state.current == id -> {state, []}
+      true -> {%{state | current: id}, [{:focus_changed, state.current, id}]}
+    end
   end
 
-  @impl true
-  def handle_call({:on_focus_gained, action}, _from, state) do
-    state = %{state | on_gained: state.on_gained ++ [action]}
-    {:reply, :ok, state}
+  defp next_index(nil, delta, count, _wrap), do: if(delta < 0, do: count - 1, else: 0)
+  defp next_index(index, delta, count, true), do: rem(index + delta + count, count)
+  defp next_index(index, delta, count, false), do: min(max(index + delta, 0), count - 1)
+
+  defp normalize_items(items) do
+    items
+    |> Enum.reduce({[], []}, fn
+      %{id: id, disabled: true}, {order, disabled} -> {order ++ [id], disabled ++ [id]}
+      %{id: id}, {order, disabled} -> {order ++ [id], disabled}
+      id, {order, disabled} -> {order ++ [id], disabled}
+    end)
+    |> then(fn {order, disabled} -> {Enum.uniq(order), Enum.uniq(disabled)} end)
   end
 
-  @impl true
-  def handle_call({:on_focus_lost, action}, _from, state) do
-    state = %{state | on_lost: state.on_lost ++ [action]}
-    {:reply, :ok, state}
-  end
-
-  @impl true
-  def handle_call(:clear_actions, _from, state) do
-    state = %{state | on_gained: [], on_lost: []}
-    {:reply, :ok, state}
-  end
-
-  @impl true
-  def handle_call(:paused?, _from, state) do
-    {:reply, state.paused, state}
-  end
-
-  @impl true
-  def handle_call({:set_paused, paused}, _from, state) do
-    {:reply, :ok, %{state | paused: paused}}
-  end
-
-  @impl true
-  def handle_call(:reduced_framerate?, _from, state) do
-    {:reply, state.reduced_framerate, state}
-  end
-
-  @impl true
-  def handle_call({:set_reduced_framerate, reduced}, _from, state) do
-    {:reply, :ok, %{state | reduced_framerate: reduced}}
-  end
-
-  @impl true
-  def handle_call(:enable_auto_pause, _from, state) do
-    {:reply, :ok, %{state | auto_pause: true}}
-  end
-
-  @impl true
-  def handle_call(:enable_auto_reduce_framerate, _from, state) do
-    {:reply, :ok, %{state | auto_reduce_framerate: true}}
-  end
+  defp first_enabled(order, disabled), do: Enum.find(order, &(&1 not in disabled))
+  defp last_enabled(order, disabled), do: order |> Enum.reverse() |> first_enabled(disabled)
 end

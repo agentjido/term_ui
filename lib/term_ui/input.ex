@@ -1,233 +1,204 @@
 defmodule TermUI.Input do
   @moduledoc """
-  Behaviour defining the input abstraction for TermUI.
+  Normalizes input from adapters into the v2 event types.
 
-  This module establishes a unified interface for reading terminal input,
-  regardless of whether the application is running with the Raw backend
-  or the TTY backend.
+  This module is the boundary for input that does not come from a TermUI
+  terminal backend. Printable text, committed input-method composition,
+  special keys, and paste stay different at this boundary.
 
-  ## Input Modes
+  ## Text fields
 
-  TermUI supports two input approaches:
+  Send printable text and committed composition to a text widget as
+  `TermUI.Event.Text`. Send paste as `TermUI.Event.Paste` so the widget can
+  apply its paste policy:
 
-  ### Character Mode (Default)
+      {field, messages} =
+        TermUI.Widget.TextInput.update(
+          TermUI.Input.text("Jido 👩‍💻"),
+          field
+        )
 
-  Both Raw and TTY handlers request one character at a time. Raw mode receives
-  each keystroke immediately. TTY mode leaves the terminal in cooked mode, so
-  the shell or terminal driver may buffer input until Enter. After delivery,
-  both handlers normalize navigation keys into the same TermUI events.
+      {field, messages} =
+        TermUI.Widget.TextInput.update(
+          TermUI.Input.composition("e\u0301"),
+          field
+        )
 
-  This is the primary input mode used by most widgets:
-  - `Menu`, `PickList`, `Table` - navigation with arrows, selection with Enter
-  - `Dialog`, `AlertDialog` - button navigation with Tab
-  - `Tabs`, `TreeView` - keyboard navigation
+      {field, messages} =
+        TermUI.Widget.TextInput.update(
+          TermUI.Input.paste("first\nsecond"),
+          field
+        )
 
-  ### Line Mode (TextInput.Line Only)
+  Call `composition/2` only after an input method commits text. Do not send
+  partial composition updates to a widget.
 
-  The `TermUI.Input.LineReader` module provides line-based input using
-  `IO.gets/1`. This is **only** used by the `TextInput.Line` widget, which
-  benefits from shell line editing features:
-  - Backspace, delete, cursor movement
-  - Command history (if shell supports it)
-  - Input submitted on Enter
+  ## Shortcuts
 
-  Most applications should use character mode. Line mode is a specialized
-  feature for free-form text entry where shell editing is desirable.
+  Use `special_key/2` for named keys and modified printable keys. Common
+  adapter names and modifier names are converted to the TermUI names:
 
-  ## Implementing the Behaviour
+      shortcuts = TermUI.Shortcut.new([{"ctrl+s", :save}])
+      event = TermUI.Input.special_key("s", modifiers: [:control])
+      {_shortcuts, [:save]} = TermUI.Shortcut.route(event, shortcuts)
 
-  Input handlers must implement three callbacks:
+      TermUI.Input.special_key("ArrowUp")
+      #=> %TermUI.Event.Key{key: :up}
 
-  - `poll/2` - Read input with optional timeout
-  - `mode/1` - Return the input mode (`:raw` or `:tty`)
-  - `stop/1` - Cleanup and release resources
-
-  ## Example Implementation
-
-      defmodule MyApp.CustomInput do
-        @behaviour TermUI.Input
-
-        @impl true
-        def poll(state, timeout) do
-          # Read input, return {:ok, event}, :timeout, or :eof
-          {:ok, event, state}
-        end
-
-        @impl true
-        def mode(_state), do: :tty
-
-        @impl true
-        def stop(_state), do: :ok
-      end
-
-  ## Built-in Handlers
-
-  - `TermUI.Input.Raw` - Wraps `TermUI.Terminal.InputReader` for raw mode
-  - `TermUI.Input.TTY` - Uses blocking `IO.getn/2` through the active shell's
-    IO server; cooked-mode delivery may be line-buffered
-
-  Use `TermUI.Input.Selector` to automatically choose the appropriate handler
-  based on the active backend.
+  An unmodified printable value is rejected by `special_key/2`. Use `text/2`
+  for that value. There is no option that converts all printable text to key
+  events.
   """
 
   alias TermUI.Event
 
-  # Type Definitions
+  @type option :: {:timestamp, integer()} | {:modifiers, [atom()]}
 
-  @typedoc """
-  Key event returned from input polling.
+  @named_keys Map.merge(
+                %{
+                  "arrowdown" => :down,
+                  "arrowleft" => :left,
+                  "arrowright" => :right,
+                  "arrowup" => :up,
+                  "backspace" => :backspace,
+                  "delete" => :delete,
+                  "down" => :down,
+                  "end" => :end,
+                  "enter" => :enter,
+                  "esc" => :escape,
+                  "escape" => :escape,
+                  "home" => :home,
+                  "insert" => :insert,
+                  "left" => :left,
+                  "pagedown" => :page_down,
+                  "pageup" => :page_up,
+                  "return" => :enter,
+                  "right" => :right,
+                  "tab" => :tab,
+                  "up" => :up
+                },
+                Map.new(1..24, &{"f#{&1}", String.to_atom("f#{&1}")})
+              )
 
-  This is the standard key event type from `TermUI.Event.Key`.
-  """
-  @type key_event :: Event.Key.t()
+  @modifier_names %{
+    alt: :alt,
+    command: :meta,
+    control: :ctrl,
+    ctrl: :ctrl,
+    meta: :meta,
+    option: :alt,
+    shift: :shift,
+    super: :super
+  }
 
-  @typedoc """
-  Result of an input polling operation.
+  @doc "Creates one text event and keeps all Unicode code points together."
+  @spec text(String.t(), [option()]) :: Event.Text.t()
+  def text(value, opts \\ []) do
+    validate_text!(value, false)
+    Event.text(value, timestamp_opts(opts))
+  end
 
-  - `{:ok, key_event()}` - A key event was received
-  - `{:ok, Event.Mouse.t()}` - A mouse event was received
-  - `{:ok, Event.Paste.t()}` - A paste event was received (bracketed paste)
-  - `:timeout` - No input within the timeout period
-  - `:eof` - End of input stream
-  """
-  @type input_result ::
-          {:ok, key_event() | Event.Mouse.t() | Event.Paste.t()}
-          | :timeout
-          | :eof
+  @doc "Creates one text event for text that an input method has committed."
+  @spec composition(String.t(), [option()]) :: Event.Text.t()
+  def composition(value, opts \\ []) do
+    validate_text!(value, false)
+    Event.text(value, timestamp_opts(opts))
+  end
 
-  @typedoc """
-  Result of poll/2 including updated state.
-  """
-  @type poll_result :: {input_result(), state()}
+  @doc "Creates one paste event without splitting or changing its content."
+  @spec paste(String.t(), [option()]) :: Event.Paste.t()
+  def paste(content, opts \\ []) do
+    validate_text!(content, true)
+    Event.paste(content, timestamp_opts(opts))
+  end
 
-  @typedoc """
-  Opaque state maintained by the input handler.
+  @doc "Creates a named-key event or a modified one-grapheme key event."
+  @spec special_key(atom() | String.t(), [option()]) :: Event.Key.t()
+  def special_key(key, opts \\ []) do
+    modifiers = opts |> Keyword.get(:modifiers, []) |> normalize_modifiers!()
+    key = normalize_key!(key, modifiers)
+    Event.key(key, Keyword.put(timestamp_opts(opts), :modifiers, modifiers))
+  end
 
-  Each handler implementation defines its own state structure.
-  """
-  @type state :: term()
+  defp normalize_key!(key, _modifiers) when is_atom(key), do: key
 
-  @typedoc """
-  Input mode indicator.
+  defp normalize_key!(key, modifiers) when is_binary(key) do
+    validate_text!(key, false)
 
-  - `:raw` - Raw mode with full terminal control
-  - `:tty` - TTY mode with shell present
-  """
-  @type mode :: :raw | :tty
+    case Map.fetch(@named_keys, normalize_key_name(key)) do
+      {:ok, named_key} ->
+        named_key
 
-  # Callbacks
+      :error ->
+        if modifiers != [] and one_grapheme?(key) do
+          key
+        else
+          raise ArgumentError,
+                "unmodified printable input must use TermUI.Input.text/2"
+        end
+    end
+  end
 
-  @doc """
-  Poll for input with an optional timeout.
+  defp normalize_key!(key, _modifiers) do
+    raise ArgumentError, "special key must be an atom or a string, got: #{inspect(key)}"
+  end
 
-  Reads input from the terminal and returns a parsed event. The timeout
-  specifies the maximum time to wait for input in milliseconds.
+  defp normalize_key_name(key) do
+    key
+    |> String.downcase()
+    |> String.replace(~r/[\s_-]/u, "")
+  end
 
-  ## Parameters
-
-  - `state` - Handler-specific state (escape sequence buffer, etc.)
-  - `timeout` - Maximum wait time in milliseconds (0 for non-blocking)
-
-  ## Returns
-
-  - `{{:ok, event}, new_state}` - An event was received
-  - `{:timeout, new_state}` - No input within timeout
-  - `{:eof, new_state}` - End of input stream
-
-  ## Timeout Semantics
-
-  The timeout is best-effort:
-
-  - **Raw mode**: Supports non-blocking reads; timeout is honored accurately
-  - **TTY mode**: Uses blocking `IO.getn/2`; timeout may not be honored
-
-  Direct callers should not use input polling to schedule application work;
-  use timers in another process. `TermUI.Runtime` already places blocking TTY
-  polling in a dedicated reader process, so its render and command timers keep
-  running while input waits.
-
-  ## Escape Sequences
-
-  Handlers are responsible for buffering and parsing escape sequences.
-  Multi-byte sequences (arrow keys, function keys) should be assembled
-  before returning an event. Incomplete sequences should be buffered
-  in the state and completed on subsequent calls.
-
-  ## Examples
-
-      # Non-blocking poll
-      {result, new_state} = MyInput.poll(state, 0)
-
-      # Wait up to 100ms
-      {result, new_state} = MyInput.poll(state, 100)
-
-      # Process result
-      case result do
-        {:ok, %Event.Key{key: :enter}} -> handle_enter()
-        {:ok, %Event.Key{key: :up}} -> handle_up()
-        :timeout -> continue_animation()
-        :eof -> shutdown()
+  defp normalize_modifiers!(modifiers) when is_list(modifiers) do
+    modifiers
+    |> Enum.map(fn modifier ->
+      case Map.fetch(@modifier_names, modifier) do
+        {:ok, normalized} -> normalized
+        :error -> raise ArgumentError, "unsupported input modifier: #{inspect(modifier)}"
       end
-  """
-  @callback poll(state(), timeout :: non_neg_integer()) :: poll_result()
+    end)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
 
-  @doc """
-  Return the input mode for this handler.
+  defp normalize_modifiers!(modifiers) do
+    raise ArgumentError, "input modifiers must be a list, got: #{inspect(modifiers)}"
+  end
 
-  Returns `:raw` or `:tty` to indicate which mode the handler operates in.
-  This allows components to adapt their behavior if needed. Most widgets handle
-  the normalized events identically, although event delivery timing differs.
+  defp validate_text!(value, allow_empty?) when is_binary(value) do
+    cond do
+      not String.valid?(value) ->
+        raise ArgumentError, "input text must be valid UTF-8"
 
-  ## Use Cases
+      value == "" and not allow_empty? ->
+        raise ArgumentError, "input text must not be empty"
 
-  Most widgets do not need to check the mode—input events are normalized
-  across both handlers. However, some specialized components might use this:
+      true ->
+        :ok
+    end
+  end
 
-  - Displaying mode indicator in status bar
-  - Adjusting behavior for mode-specific features
-  - Debugging and logging
+  defp validate_text!(value, _allow_empty?) do
+    raise ArgumentError, "input text must be a string, got: #{inspect(value)}"
+  end
 
-  ## Examples
+  defp one_grapheme?(value) do
+    case String.graphemes(value) do
+      [_grapheme] -> true
+      _other -> false
+    end
+  end
 
-      mode = MyInput.mode(state)
-      # => :raw or :tty
-  """
-  @callback mode(state()) :: mode()
+  defp timestamp_opts(opts) do
+    case Keyword.fetch(opts, :timestamp) do
+      {:ok, timestamp} when is_integer(timestamp) ->
+        [timestamp: timestamp]
 
-  @doc """
-  Stop the input handler and release any resources.
+      {:ok, timestamp} ->
+        raise ArgumentError, "input timestamp must be an integer: #{inspect(timestamp)}"
 
-  This callback is called during runtime shutdown to allow the handler
-  to perform cleanup operations such as:
-
-  - Restoring terminal IO options
-  - Stopping any background processes
-  - Closing file descriptors or ports
-
-  The function should be idempotent—calling it multiple times should
-  have the same effect as calling it once.
-
-  ## Parameters
-
-  - `state` - Handler-specific state
-
-  ## Returns
-
-  - `:ok` - Cleanup completed successfully
-
-  ## Examples
-
-      :ok = MyInput.stop(state)
-
-  ## Implementation Notes
-
-  - **Raw handler**: Typically a no-op since InputReader is managed separately
-  - **TTY handler**: Should restore IO options (echo, binary mode)
-  - Custom handlers: Implement any necessary cleanup
-
-  This callback is always called during runtime shutdown, even if
-  the handler was never successfully started or has already been
-  stopped due to EOF.
-  """
-  @callback stop(state()) :: :ok
+      :error ->
+        []
+    end
+  end
 end

@@ -5,7 +5,7 @@ defmodule IExCounter.MixProject do
     [
       app: :iex_counter,
       version: "0.1.0",
-      elixir: "~> 1.15",
+      elixir: ">= 1.18.4 and < 2.0.0",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]

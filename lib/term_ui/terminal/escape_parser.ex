@@ -1,27 +1,9 @@
 defmodule TermUI.Terminal.EscapeParser do
-  @moduledoc """
-  Parses terminal escape sequences into Event structs.
-
-  Handles CSI sequences (ESC[...), SS3 sequences (ESCO...), and control
-  characters. Returns parsed events and any remaining unparsed bytes.
-
-  ## Supported Sequences
-
-  - Arrow keys: ESC[A/B/C/D
-  - Function keys: F1-F12 (both SS3 and CSI variants)
-  - Home/End/Insert/Delete/PageUp/PageDown
-  - Ctrl+key: 0x01-0x1A
-  - Alt+key: ESC followed by key
-  - Regular printable characters
-  """
+  @moduledoc false
 
   import Bitwise
 
-  alias TermUI.Event
-
-  # Dialyzer: parse_bytes/2 and parse_escape_sequence/1 call Event.key with string args
-  # Key.new/2 spec says atom() but the function works with strings too
-  @dialyzer {:nowarn_function, parse_bytes: 2, parse_escape_sequence: 1}
+  alias TermUI.{Event, Input}
 
   @escape 0x1B
   @delete 0x7F
@@ -41,7 +23,7 @@ defmodule TermUI.Terminal.EscapeParser do
   Returns `{events, remaining}` where events is a list of Event.Key structs
   and remaining is bytes that couldn't be parsed yet (partial sequences).
   """
-  @spec parse(binary()) :: {[Event.Key.t()], binary()}
+  @spec parse(binary()) :: {[Event.t()], binary()}
   def parse(<<>>), do: {[], <<>>}
 
   def parse(input) when is_binary(input) do
@@ -64,19 +46,19 @@ defmodule TermUI.Terminal.EscapeParser do
 
   # Backspace / Ctrl+H
   defp parse_bytes(<<8, rest::binary>>, events) do
-    event = Event.key(:backspace)
+    event = Input.special_key(:backspace)
     parse_bytes(rest, [event | events])
   end
 
   # Tab / Ctrl+I
   defp parse_bytes(<<9, rest::binary>>, events) do
-    event = Event.key(:tab)
+    event = Input.special_key(:tab)
     parse_bytes(rest, [event | events])
   end
 
-  # Enter / Ctrl+M
-  defp parse_bytes(<<13, rest::binary>>, events) do
-    event = Event.key(:enter)
+  # Enter / Ctrl+J or Ctrl+M
+  defp parse_bytes(<<char, rest::binary>>, events) when char in [10, 13] do
+    event = Input.special_key(:enter)
     parse_bytes(rest, [event | events])
   end
 
@@ -84,66 +66,51 @@ defmodule TermUI.Terminal.EscapeParser do
   defp parse_bytes(<<char, rest::binary>>, events) when char in 1..26 do
     # Convert to lowercase letter
     key = <<char + 96>>
-    event = Event.key(key, modifiers: [:ctrl])
+    event = Input.special_key(key, modifiers: [:ctrl])
     parse_bytes(rest, [event | events])
   end
 
   # Delete key
   defp parse_bytes(<<@delete, rest::binary>>, events) do
-    event = Event.key(:backspace)
+    event = Input.special_key(:backspace)
     parse_bytes(rest, [event | events])
   end
 
   # Regular printable ASCII
   defp parse_bytes(<<char, rest::binary>>, events) when char in 32..126 do
     char_str = <<char>>
-    event = Event.key(char_str, char: char_str)
+    event = Input.text(char_str)
     parse_bytes(rest, [event | events])
   end
 
-  # UTF-8 multi-byte sequences (2-byte)
-  defp parse_bytes(<<0b110::3, _::5, 0b10::2, _::6, _rest::binary>> = input, events) do
-    case input do
-      <<char::utf8, rest::binary>> ->
-        char_str = <<char::utf8>>
-        event = Event.key(char_str, char: char_str)
-        parse_bytes(rest, [event | events])
+  # UTF-8 multi-byte sequences
+  defp parse_bytes(<<lead, _rest::binary>> = input, events) when lead in 0xC2..0xDF,
+    do: parse_utf8(input, 2, events)
 
-      _ ->
-        # Incomplete UTF-8
-        {Enum.reverse(events), input}
-    end
-  end
+  defp parse_bytes(<<lead, _rest::binary>> = input, events) when lead in 0xE0..0xEF,
+    do: parse_utf8(input, 3, events)
 
-  # UTF-8 multi-byte sequences (3-byte)
-  defp parse_bytes(<<0b1110::4, _::4, _rest::binary>> = input, events) do
-    case input do
-      <<char::utf8, rest::binary>> ->
-        char_str = <<char::utf8>>
-        event = Event.key(char_str, char: char_str)
-        parse_bytes(rest, [event | events])
-
-      _ ->
-        {Enum.reverse(events), input}
-    end
-  end
-
-  # UTF-8 multi-byte sequences (4-byte)
-  defp parse_bytes(<<0b11110::5, _::3, _rest::binary>> = input, events) do
-    case input do
-      <<char::utf8, rest::binary>> ->
-        char_str = <<char::utf8>>
-        event = Event.key(char_str, char: char_str)
-        parse_bytes(rest, [event | events])
-
-      _ ->
-        {Enum.reverse(events), input}
-    end
-  end
+  defp parse_bytes(<<lead, _rest::binary>> = input, events) when lead in 0xF0..0xF4,
+    do: parse_utf8(input, 4, events)
 
   # Unknown byte - skip it
   defp parse_bytes(<<_char, rest::binary>>, events) do
     parse_bytes(rest, events)
+  end
+
+  defp parse_utf8(input, expected_bytes, events) when byte_size(input) < expected_bytes,
+    do: {Enum.reverse(events), input}
+
+  defp parse_utf8(input, expected_bytes, events) do
+    character = binary_part(input, 0, expected_bytes)
+    rest = binary_part(input, expected_bytes, byte_size(input) - expected_bytes)
+
+    if String.valid?(character) do
+      parse_bytes(rest, [Input.text(character) | events])
+    else
+      <<_invalid_lead, rest::binary>> = input
+      parse_bytes(rest, events)
+    end
   end
 
   # Parse escape sequences
@@ -161,17 +128,15 @@ defmodule TermUI.Terminal.EscapeParser do
     parse_ss3_sequence(rest)
   end
 
-  # Alt+Backspace. macOS terminals commonly encode Option+Delete as ESC DEL,
-  # while some terminal profiles use ESC BS. Consume both forms immediately
-  # instead of leaving them in the partial-sequence buffer indefinitely.
+  # Option+Delete / Alt+Backspace uses ESC DEL or ESC BS.
   defp parse_escape_sequence(<<char, rest::binary>>) when char in [8, @delete] do
-    {:ok, Event.key(:backspace, modifiers: [:alt]), rest}
+    {:ok, Input.special_key(:backspace, modifiers: [:alt]), rest}
   end
 
   # Alt+key (ESC followed by printable character)
   defp parse_escape_sequence(<<char, rest::binary>>) when char in 32..126 do
     char_str = <<char>>
-    event = Event.key(char_str, char: char_str, modifiers: [:alt])
+    event = Input.special_key(char_str, modifiers: [:alt])
     {:ok, event, rest}
   end
 
@@ -186,25 +151,39 @@ defmodule TermUI.Terminal.EscapeParser do
   end
 
   # Arrow keys
-  defp parse_csi_sequence(<<"A", rest::binary>>), do: {:ok, Event.key(:up), rest}
-  defp parse_csi_sequence(<<"B", rest::binary>>), do: {:ok, Event.key(:down), rest}
-  defp parse_csi_sequence(<<"C", rest::binary>>), do: {:ok, Event.key(:right), rest}
-  defp parse_csi_sequence(<<"D", rest::binary>>), do: {:ok, Event.key(:left), rest}
+  defp parse_csi_sequence(<<"A", rest::binary>>), do: {:ok, Input.special_key(:up), rest}
+  defp parse_csi_sequence(<<"B", rest::binary>>), do: {:ok, Input.special_key(:down), rest}
+  defp parse_csi_sequence(<<"C", rest::binary>>), do: {:ok, Input.special_key(:right), rest}
+  defp parse_csi_sequence(<<"D", rest::binary>>), do: {:ok, Input.special_key(:left), rest}
 
   defp parse_csi_sequence(<<"Z", rest::binary>>),
-    do: {:ok, Event.key(:tab, modifiers: [:shift]), rest}
+    do: {:ok, Input.special_key(:tab, modifiers: [:shift]), rest}
 
   # Home/End
-  defp parse_csi_sequence(<<"H", rest::binary>>), do: {:ok, Event.key(:home), rest}
-  defp parse_csi_sequence(<<"F", rest::binary>>), do: {:ok, Event.key(:end), rest}
+  defp parse_csi_sequence(<<"H", rest::binary>>), do: {:ok, Input.special_key(:home), rest}
+  defp parse_csi_sequence(<<"F", rest::binary>>), do: {:ok, Input.special_key(:end), rest}
+
+  # Terminal focus tracking
+  defp parse_csi_sequence(<<"I", rest::binary>>), do: {:ok, Event.focus(:gained), rest}
+  defp parse_csi_sequence(<<"O", rest::binary>>), do: {:ok, Event.focus(:lost), rest}
+
+  # X10 mouse events: ESC [ M Cb Cx Cy. Each value has an offset of 32.
+  defp parse_csi_sequence(<<"M", rest::binary>>) when byte_size(rest) < 3,
+    do: :incomplete
+
+  defp parse_csi_sequence(<<"M", cb, cx, cy, rest::binary>>)
+       when cb >= 32 and cx >= 33 and cy >= 33 do
+    event = decode_mouse_event(cb - 32, cx - 32, cy - 32, :x10)
+    {:ok, event, rest}
+  end
 
   # Tilde sequences: ESC [ number ~
-  defp parse_csi_sequence(<<"1~", rest::binary>>), do: {:ok, Event.key(:home), rest}
-  defp parse_csi_sequence(<<"2~", rest::binary>>), do: {:ok, Event.key(:insert), rest}
-  defp parse_csi_sequence(<<"3~", rest::binary>>), do: {:ok, Event.key(:delete), rest}
-  defp parse_csi_sequence(<<"4~", rest::binary>>), do: {:ok, Event.key(:end), rest}
-  defp parse_csi_sequence(<<"5~", rest::binary>>), do: {:ok, Event.key(:page_up), rest}
-  defp parse_csi_sequence(<<"6~", rest::binary>>), do: {:ok, Event.key(:page_down), rest}
+  defp parse_csi_sequence(<<"1~", rest::binary>>), do: {:ok, Input.special_key(:home), rest}
+  defp parse_csi_sequence(<<"2~", rest::binary>>), do: {:ok, Input.special_key(:insert), rest}
+  defp parse_csi_sequence(<<"3~", rest::binary>>), do: {:ok, Input.special_key(:delete), rest}
+  defp parse_csi_sequence(<<"4~", rest::binary>>), do: {:ok, Input.special_key(:end), rest}
+  defp parse_csi_sequence(<<"5~", rest::binary>>), do: {:ok, Input.special_key(:page_up), rest}
+  defp parse_csi_sequence(<<"6~", rest::binary>>), do: {:ok, Input.special_key(:page_down), rest}
 
   # Bracketed paste: ESC [ 200 ~ content ESC [ 201 ~
   # Scan forward for the end marker and emit the parked content as a single
@@ -217,10 +196,10 @@ defmodule TermUI.Terminal.EscapeParser do
       {pos, _len} ->
         content = binary_part(rest, 0, pos)
         tail = binary_part(rest, pos + 6, byte_size(rest) - pos - 6)
-        {:ok, Event.paste(content), tail}
+        {:ok, Input.paste(content), tail}
 
       :nomatch when byte_size(rest) > @max_paste_buffer ->
-        {:ok, Event.paste(rest), <<>>}
+        {:ok, Input.paste(rest), <<>>}
 
       :nomatch ->
         :incomplete
@@ -228,27 +207,28 @@ defmodule TermUI.Terminal.EscapeParser do
   end
 
   # Stray paste-end marker (defensive): consume silently.
-  defp parse_csi_sequence(<<"201~", rest::binary>>), do: {:ok, Event.key(:unknown), rest}
+  defp parse_csi_sequence(<<"201~", rest::binary>>),
+    do: {:ok, Input.special_key(:unknown), rest}
 
   # Function keys F1-F4 (some terminals)
-  defp parse_csi_sequence(<<"11~", rest::binary>>), do: {:ok, Event.key(:f1), rest}
-  defp parse_csi_sequence(<<"12~", rest::binary>>), do: {:ok, Event.key(:f2), rest}
-  defp parse_csi_sequence(<<"13~", rest::binary>>), do: {:ok, Event.key(:f3), rest}
-  defp parse_csi_sequence(<<"14~", rest::binary>>), do: {:ok, Event.key(:f4), rest}
+  defp parse_csi_sequence(<<"11~", rest::binary>>), do: {:ok, Input.special_key(:f1), rest}
+  defp parse_csi_sequence(<<"12~", rest::binary>>), do: {:ok, Input.special_key(:f2), rest}
+  defp parse_csi_sequence(<<"13~", rest::binary>>), do: {:ok, Input.special_key(:f3), rest}
+  defp parse_csi_sequence(<<"14~", rest::binary>>), do: {:ok, Input.special_key(:f4), rest}
 
   # Function keys F5-F12
-  defp parse_csi_sequence(<<"15~", rest::binary>>), do: {:ok, Event.key(:f5), rest}
-  defp parse_csi_sequence(<<"17~", rest::binary>>), do: {:ok, Event.key(:f6), rest}
-  defp parse_csi_sequence(<<"18~", rest::binary>>), do: {:ok, Event.key(:f7), rest}
-  defp parse_csi_sequence(<<"19~", rest::binary>>), do: {:ok, Event.key(:f8), rest}
-  defp parse_csi_sequence(<<"20~", rest::binary>>), do: {:ok, Event.key(:f9), rest}
-  defp parse_csi_sequence(<<"21~", rest::binary>>), do: {:ok, Event.key(:f10), rest}
-  defp parse_csi_sequence(<<"23~", rest::binary>>), do: {:ok, Event.key(:f11), rest}
-  defp parse_csi_sequence(<<"24~", rest::binary>>), do: {:ok, Event.key(:f12), rest}
+  defp parse_csi_sequence(<<"15~", rest::binary>>), do: {:ok, Input.special_key(:f5), rest}
+  defp parse_csi_sequence(<<"17~", rest::binary>>), do: {:ok, Input.special_key(:f6), rest}
+  defp parse_csi_sequence(<<"18~", rest::binary>>), do: {:ok, Input.special_key(:f7), rest}
+  defp parse_csi_sequence(<<"19~", rest::binary>>), do: {:ok, Input.special_key(:f8), rest}
+  defp parse_csi_sequence(<<"20~", rest::binary>>), do: {:ok, Input.special_key(:f9), rest}
+  defp parse_csi_sequence(<<"21~", rest::binary>>), do: {:ok, Input.special_key(:f10), rest}
+  defp parse_csi_sequence(<<"23~", rest::binary>>), do: {:ok, Input.special_key(:f11), rest}
+  defp parse_csi_sequence(<<"24~", rest::binary>>), do: {:ok, Input.special_key(:f12), rest}
 
   # Modified arrow keys with modifiers: ESC [ 1 ; modifier A/B/C/D
   defp parse_csi_sequence(<<"1;", modifier, dir, rest::binary>>)
-       when dir in [?A, ?B, ?C, ?D] do
+       when modifier in ?0..?9 and dir in [?A, ?B, ?C, ?D] do
     key =
       case dir do
         ?A -> :up
@@ -258,14 +238,14 @@ defmodule TermUI.Terminal.EscapeParser do
       end
 
     modifiers = decode_modifier(modifier - ?0)
-    event = Event.key(key, modifiers: modifiers)
+    event = Input.special_key(key, modifiers: modifiers)
     {:ok, event, rest}
   end
 
   # Modified Shift+Tab sequence: ESC [ 1 ; modifier Z
   defp parse_csi_sequence(<<"1;", modifier, "Z", rest::binary>>) when modifier in ?0..?9 do
     modifiers = decode_modifier(modifier - ?0)
-    event = Event.key(:tab, modifiers: modifiers)
+    event = Input.special_key(:tab, modifiers: modifiers)
     {:ok, event, rest}
   end
 
@@ -274,16 +254,24 @@ defmodule TermUI.Terminal.EscapeParser do
     parse_sgr_mouse(rest)
   end
 
-  # Incomplete CSI sequence - need more bytes
+  # Consume an unsupported CSI sequence through its final byte. Returning the
+  # original input here would parse its parameters as ordinary text.
   defp parse_csi_sequence(input) do
-    # Check if we have a partial number sequence
-    if partial_csi?(input) do
-      :incomplete
-    else
-      # Unknown sequence, skip it
-      {:ok, Event.key(:unknown), input}
+    case consume_unknown_csi(input) do
+      {:ok, rest} -> {:ok, Input.special_key(:unknown), rest}
+      :incomplete -> :incomplete
     end
   end
+
+  defp consume_unknown_csi(<<>>), do: :incomplete
+
+  defp consume_unknown_csi(<<final, rest::binary>>) when final in 0x40..0x7E,
+    do: {:ok, rest}
+
+  defp consume_unknown_csi(<<byte, rest::binary>>) when byte in 0x20..0x3F,
+    do: consume_unknown_csi(rest)
+
+  defp consume_unknown_csi(<<_invalid, rest::binary>>), do: {:ok, rest}
 
   # SS3 sequence parsing (ESC O)
   defp parse_ss3_sequence(<<>>) do
@@ -291,20 +279,20 @@ defmodule TermUI.Terminal.EscapeParser do
   end
 
   # Function keys F1-F4
-  defp parse_ss3_sequence(<<"P", rest::binary>>), do: {:ok, Event.key(:f1), rest}
-  defp parse_ss3_sequence(<<"Q", rest::binary>>), do: {:ok, Event.key(:f2), rest}
-  defp parse_ss3_sequence(<<"R", rest::binary>>), do: {:ok, Event.key(:f3), rest}
-  defp parse_ss3_sequence(<<"S", rest::binary>>), do: {:ok, Event.key(:f4), rest}
+  defp parse_ss3_sequence(<<"P", rest::binary>>), do: {:ok, Input.special_key(:f1), rest}
+  defp parse_ss3_sequence(<<"Q", rest::binary>>), do: {:ok, Input.special_key(:f2), rest}
+  defp parse_ss3_sequence(<<"R", rest::binary>>), do: {:ok, Input.special_key(:f3), rest}
+  defp parse_ss3_sequence(<<"S", rest::binary>>), do: {:ok, Input.special_key(:f4), rest}
 
   # Keypad arrows (application mode)
-  defp parse_ss3_sequence(<<"A", rest::binary>>), do: {:ok, Event.key(:up), rest}
-  defp parse_ss3_sequence(<<"B", rest::binary>>), do: {:ok, Event.key(:down), rest}
-  defp parse_ss3_sequence(<<"C", rest::binary>>), do: {:ok, Event.key(:right), rest}
-  defp parse_ss3_sequence(<<"D", rest::binary>>), do: {:ok, Event.key(:left), rest}
+  defp parse_ss3_sequence(<<"A", rest::binary>>), do: {:ok, Input.special_key(:up), rest}
+  defp parse_ss3_sequence(<<"B", rest::binary>>), do: {:ok, Input.special_key(:down), rest}
+  defp parse_ss3_sequence(<<"C", rest::binary>>), do: {:ok, Input.special_key(:right), rest}
+  defp parse_ss3_sequence(<<"D", rest::binary>>), do: {:ok, Input.special_key(:left), rest}
 
   # Home/End (keypad)
-  defp parse_ss3_sequence(<<"H", rest::binary>>), do: {:ok, Event.key(:home), rest}
-  defp parse_ss3_sequence(<<"F", rest::binary>>), do: {:ok, Event.key(:end), rest}
+  defp parse_ss3_sequence(<<"H", rest::binary>>), do: {:ok, Input.special_key(:home), rest}
+  defp parse_ss3_sequence(<<"F", rest::binary>>), do: {:ok, Input.special_key(:end), rest}
 
   defp parse_ss3_sequence(_input) do
     :incomplete
@@ -321,7 +309,7 @@ defmodule TermUI.Terminal.EscapeParser do
             {:ok, event, rest}
 
           :error ->
-            {:ok, Event.key(:unknown), input}
+            {:ok, Input.special_key(:unknown), rest}
         end
 
       :incomplete ->
@@ -343,16 +331,9 @@ defmodule TermUI.Terminal.EscapeParser do
     {:ok, acc, :release, rest}
   end
 
-  defp find_mouse_terminator(<<char, rest::binary>>, acc) when char in [?0..?9, ?;] do
+  defp find_mouse_terminator(<<char, rest::binary>>, acc)
+       when char in ?0..?9 or char == ?; do
     find_mouse_terminator(rest, <<acc::binary, char>>)
-  end
-
-  defp find_mouse_terminator(<<char, rest::binary>>, acc) when char >= ?0 and char <= ?9 do
-    find_mouse_terminator(rest, <<acc::binary, char>>)
-  end
-
-  defp find_mouse_terminator(<<";", rest::binary>>, acc) do
-    find_mouse_terminator(rest, <<acc::binary, ";">>)
   end
 
   defp find_mouse_terminator(_input, _acc), do: :incomplete
@@ -364,8 +345,8 @@ defmodule TermUI.Terminal.EscapeParser do
              {cx, ""} <- Integer.parse(cx_str),
              {cy, ""} <- Integer.parse(cy_str),
              true <- cb >= 0 and cb <= 255,
-             true <- cx >= 0 and cx <= @max_mouse_coordinate,
-             true <- cy >= 0 and cy <= @max_mouse_coordinate do
+             true <- cx >= 1 and cx <= @max_mouse_coordinate,
+             true <- cy >= 1 and cy <= @max_mouse_coordinate do
           {:ok, cb, cx, cy}
         else
           _ -> :error
@@ -388,17 +369,23 @@ defmodule TermUI.Terminal.EscapeParser do
   end
 
   defp determine_mouse_action(cb, button_code, terminator) do
-    is_scroll = (cb &&& 64) != 0
-    is_motion = (cb &&& 32) != 0
-
     cond do
-      is_scroll and button_code == 0 -> {:scroll_up, nil}
-      is_scroll and button_code == 1 -> {:scroll_down, nil}
-      is_motion and terminator == :press -> {:drag, decode_button(button_code)}
-      terminator == :release -> {:release, :left}
-      true -> {:press, decode_button(button_code)}
+      (cb &&& 64) != 0 -> scroll_action(button_code)
+      (cb &&& 32) != 0 -> motion_action(button_code)
+      true -> button_action(button_code, terminator)
     end
   end
+
+  defp scroll_action(0), do: {:scroll_up, nil}
+  defp scroll_action(1), do: {:scroll_down, nil}
+  defp scroll_action(button_code), do: {:press, decode_button(button_code)}
+
+  defp motion_action(3), do: {:move, nil}
+  defp motion_action(button_code), do: {:drag, decode_button(button_code)}
+
+  defp button_action(button_code, :release), do: {:release, decode_button(button_code)}
+  defp button_action(3, :x10), do: {:release, nil}
+  defp button_action(button_code, _terminator), do: {:press, decode_button(button_code)}
 
   defp extract_mouse_modifiers(cb) do
     []
@@ -416,13 +403,7 @@ defmodule TermUI.Terminal.EscapeParser do
   defp decode_button(2), do: :right
   defp decode_button(_), do: nil
 
-  # Check if input looks like a partial CSI sequence
-  defp partial_csi?(input) do
-    # CSI sequences end with a letter or ~
-    # If we only have numbers and ; so far, it's partial
-    # Also handle SGR mouse sequences that start with <
-    String.match?(input, ~r/^[\d;]*$/) or String.match?(input, ~r/^<[\d;]*$/)
-  end
+  defp partial_csi?(input), do: consume_unknown_csi(input) == :incomplete
 
   # Decode modifier byte (2=shift, 3=alt, 4=shift+alt, 5=ctrl, etc.)
   # Returns a list of modifiers like [:shift, :alt, :ctrl]
@@ -444,6 +425,7 @@ defmodule TermUI.Terminal.EscapeParser do
   @spec partial_sequence?(binary()) :: boolean()
   def partial_sequence?(<<@escape>>), do: true
   def partial_sequence?(<<@escape, "[">>), do: true
+  def partial_sequence?(<<@escape, "[M", rest::binary>>) when byte_size(rest) < 3, do: true
   def partial_sequence?(<<@escape, "[200~", _rest::binary>>), do: true
   def partial_sequence?(<<@escape, "[", rest::binary>>), do: partial_csi?(rest)
   def partial_sequence?(<<@escape, "O">>), do: true

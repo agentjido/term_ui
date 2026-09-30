@@ -66,6 +66,22 @@ defmodule TermUI.TermUtilsTest do
       assert {:error, :command_not_allowed} = TermUtils.safe_command("rm", ["-rf", "/"])
       assert {:error, :command_not_allowed} = TermUtils.safe_command("cat", ["/etc/passwd"])
     end
+
+    test "stops the command task after a timeout" do
+      owner = self()
+
+      validate = fn _output ->
+        send(owner, {:validator, self()})
+        Process.sleep(:infinity)
+      end
+
+      # The deadline also includes starting an external command on CI workers.
+      assert {:error, :timeout} =
+               TermUtils.safe_test(["-n", "term_ui"], timeout: 5_000, validate: validate)
+
+      assert_receive {:validator, validator}, 1_000
+      refute Process.alive?(validator)
+    end
   end
 
   describe "validate_stty_settings/1" do
@@ -108,11 +124,31 @@ defmodule TermUI.TermUtilsTest do
     end
   end
 
-  describe "default_validate/1 (private)" do
-    test "rejects output with null bytes" do
-      # We can't test private functions directly, but we test through safe_stty
-      # which uses default_validate internally
-      # This test documents the expected behavior
+  describe "command validation and output validation" do
+    test "rejects empty terminal command arguments" do
+      assert {:error, :invalid_arguments} = TermUtils.safe_stty([])
+      assert {:error, :invalid_arguments} = TermUtils.safe_test([])
+    end
+
+    test "accepts bounded file descriptors and single test flags" do
+      refute match?({:error, :invalid_arguments}, TermUtils.safe_test(["-t", "255"]))
+      assert {:ok, _output} = TermUtils.safe_test(["-n"])
+    end
+
+    test "custom validators can reject output or fail safely" do
+      assert {:error, :output_validation_failed} =
+               TermUtils.safe_test(["-n", "term_ui"], validate: fn _ -> {:error, :bad} end)
+
+      assert {:error, :execution_failed} =
+               TermUtils.safe_test(["-n", "term_ui"], validate: fn _ -> raise "bad validator" end)
+    end
+
+    test "infocmp validates safe flags and rejects unsafe terminal names" do
+      result = TermUtils.safe_infocmp(["-1", "xterm"])
+      refute match?({:error, :invalid_arguments}, result)
+
+      assert {:error, :invalid_arguments} = TermUtils.safe_infocmp(["xterm;rm"])
+      assert {:error, :invalid_arguments} = TermUtils.safe_infocmp([String.duplicate("x", 64)])
     end
   end
 
@@ -152,6 +188,7 @@ defmodule TermUI.TermUtilsTest do
 
   describe "integration - command execution" do
     @tag :external
+    @tag :requires_terminal
     test "safe_stty can save and restore settings" do
       # Save current settings
       case TermUtils.safe_stty(["-g"]) do
@@ -163,17 +200,11 @@ defmodule TermUI.TermUtilsTest do
           # Just verify the command format is accepted
           assert {:ok, _} = TermUtils.safe_stty([settings])
 
-        {:error, :command_not_found} ->
-          # stty is unavailable in this environment.
-          :ok
+        {:error, reason} when reason in [:command_not_found, :not_tty] ->
+          assert reason in [:command_not_found, :not_tty]
 
-        {:error, :not_tty} ->
-          # CI and non-interactive shells may not have a controlling terminal.
-          :ok
-
-        {:error, {:exit_code, _}} ->
-          # Older command paths may report the non-TTY condition as an exit code.
-          :ok
+        {:error, {:exit_code, code}} ->
+          assert is_integer(code)
 
         {:error, reason} ->
           flunk("Unexpected error: #{inspect(reason)}")

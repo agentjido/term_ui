@@ -1,216 +1,148 @@
 defmodule TermUI.Event do
   @moduledoc """
-  Event type definitions for TermUI.
+  Normalized input from a terminal backend.
 
-  Events represent user input from the terminal: keyboard presses, mouse
-  actions, focus changes, resize, paste, ticks, and custom input. The primary
-  `TermUI.Runtime` delivers events to its single root Elm module.
-  `TermUI.EventRouter` is an independent lower-level service for applications
-  that explicitly start and populate the process-oriented component subsystem.
-
-  ## Event Types
-
-  - `Key` - Keyboard input (key press, char input)
-  - `Mouse` - Mouse actions (click, move, scroll)
-  - `Focus` - Focus changes (gained, lost)
-  - `Custom` - Application-defined events
-  - `Resize` - Terminal dimensions changed
-  - `Paste` - Bracketed-paste content
-  - `Tick` - Host-created timing metadata (commands normally deliver messages)
-
-  ## Examples
-
-      # Key event
-      event = Event.key(:enter)
-      event = Event.key(:a, char: "a")
-      event = Event.key(:c, modifiers: [:ctrl])
-
-      # Mouse event
-      event = Event.mouse(:click, :left, 10, 20)
-      event = Event.mouse(:move, nil, 15, 25)
-
-      # Focus event
-      event = Event.focus(:gained)
-      event = Event.focus(:lost)
-
-      # Resize, paste, and host-created tick events
-      event = Event.resize(120, 40)
-      event = Event.paste("pasted text")
-      event = Event.tick(16)
+  Printable input is `Text`. Named or modified keys are `Key`. Paste, mouse,
+  resize, and focus input have separate types. Use `TermUI.Input` to normalize
+  data from an external input adapter. Applications do not parse terminal byte
+  sequences.
   """
 
-  @typedoc "Union type for all event types"
   @type t ::
           __MODULE__.Key.t()
-          | __MODULE__.Mouse.t()
-          | __MODULE__.Focus.t()
-          | __MODULE__.Custom.t()
-          | __MODULE__.Resize.t()
+          | __MODULE__.Text.t()
           | __MODULE__.Paste.t()
-          | __MODULE__.Tick.t()
-
-  # Key Event
+          | __MODULE__.Mouse.t()
+          | __MODULE__.Resize.t()
+          | __MODULE__.Focus.t()
 
   defmodule Key do
-    @moduledoc """
-    Keyboard input event.
+    @moduledoc "A named or modified key press."
+    @type t :: %__MODULE__{key: atom() | String.t(), modifiers: [atom()], timestamp: integer()}
+    @schema Zoi.struct(__MODULE__, %{
+              key: Zoi.union([Zoi.atom(), Zoi.string()]),
+              modifiers: Zoi.array(Zoi.atom()) |> Zoi.default([]),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
 
-    Represents a key press with optional character and modifiers.
-    """
+    @doc false
+    def schema, do: @schema
 
-    @type t :: %__MODULE__{
-            key: atom() | String.t(),
-            char: String.t() | nil,
-            modifiers: [atom()],
-            timestamp: integer()
-          }
-
-    defstruct key: nil,
-              char: nil,
-              modifiers: [],
-              timestamp: 0
-
-    @doc """
-    Creates a new key event.
-    """
-    def new(key, opts \\ []) do
+    @doc false
+    def new(key, opts) when is_atom(key) or is_binary(key) do
       %__MODULE__{
         key: key,
-        char: Keyword.get(opts, :char),
-        modifiers: Keyword.get(opts, :modifiers, []),
+        modifiers: opts |> Keyword.get(:modifiers, []) |> Enum.uniq(),
         timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
       }
     end
   end
 
-  # Mouse Event
+  defmodule Text do
+    @moduledoc "Printable Unicode text input."
+    @type t :: %__MODULE__{text: String.t(), timestamp: integer()}
+    @schema Zoi.struct(__MODULE__, %{
+              text: Zoi.string() |> Zoi.min(1),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
+
+    @doc false
+    def schema, do: @schema
+
+    @doc false
+    def new(text, opts) when is_binary(text) and text != "" do
+      %__MODULE__{
+        text: text,
+        timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
+      }
+    end
+  end
+
+  defmodule Paste do
+    @moduledoc "Text received in one bracketed-paste operation."
+    @type t :: %__MODULE__{content: String.t(), timestamp: integer()}
+    @schema Zoi.struct(__MODULE__, %{
+              content: Zoi.string(),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
+
+    @doc false
+    def schema, do: @schema
+
+    @doc false
+    def new(content, opts) when is_binary(content) do
+      %__MODULE__{
+        content: content,
+        timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
+      }
+    end
+  end
 
   defmodule Mouse do
-    @moduledoc """
-    Mouse input event.
-
-    Represents mouse actions with position and button info.
-    """
-
-    @type action ::
-            :click | :double_click | :move | :drag | :scroll_up | :scroll_down | :press | :release
+    @moduledoc "A normalized mouse action."
+    @type action :: :press | :release | :move | :drag | :scroll_up | :scroll_down
     @type button :: :left | :middle | :right | nil
-
     @type t :: %__MODULE__{
             action: action(),
             button: button(),
-            x: integer(),
-            y: integer(),
+            x: non_neg_integer(),
+            y: non_neg_integer(),
             modifiers: [atom()],
             timestamp: integer()
           }
+    @schema Zoi.struct(__MODULE__, %{
+              action: Zoi.enum([:press, :release, :move, :drag, :scroll_up, :scroll_down]),
+              button: Zoi.enum([:left, :middle, :right, nil]),
+              x: Zoi.integer() |> Zoi.non_negative(),
+              y: Zoi.integer() |> Zoi.non_negative(),
+              modifiers: Zoi.array(Zoi.atom()) |> Zoi.default([]),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
 
-    defstruct action: :click,
-              button: :left,
-              x: 0,
-              y: 0,
-              modifiers: [],
-              timestamp: 0
+    @doc false
+    def schema, do: @schema
 
-    @doc """
-    Creates a new mouse event.
-    """
-    def new(action, button, x, y, opts \\ []) do
+    @doc false
+    def new(action, button, x, y, opts)
+        when action in [:press, :release, :move, :drag, :scroll_up, :scroll_down] and
+               button in [:left, :middle, :right, nil] and is_integer(x) and x >= 0 and
+               is_integer(y) and y >= 0 do
       %__MODULE__{
         action: action,
         button: button,
         x: x,
         y: y,
-        modifiers: Keyword.get(opts, :modifiers, []),
+        modifiers: opts |> Keyword.get(:modifiers, []) |> Enum.uniq(),
         timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
       }
     end
   end
-
-  # Focus Event
-
-  defmodule Focus do
-    @moduledoc """
-    Focus change event.
-
-    Sent to components when they gain or lose focus.
-    """
-
-    @type action :: :gained | :lost
-
-    @type t :: %__MODULE__{
-            action: action(),
-            timestamp: integer()
-          }
-
-    defstruct action: :gained,
-              timestamp: 0
-
-    @doc """
-    Creates a new focus event.
-    """
-    def new(action, opts \\ []) when action in [:gained, :lost] do
-      %__MODULE__{
-        action: action,
-        timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
-      }
-    end
-  end
-
-  # Custom Event
-
-  defmodule Custom do
-    @moduledoc """
-    Application-defined custom event.
-
-    For app-specific events not covered by standard types.
-    """
-
-    @type t :: %__MODULE__{
-            name: atom(),
-            payload: term(),
-            timestamp: integer()
-          }
-
-    defstruct name: nil,
-              payload: nil,
-              timestamp: 0
-
-    @doc """
-    Creates a new custom event.
-    """
-    def new(name, payload \\ nil, opts \\ []) do
-      %__MODULE__{
-        name: name,
-        payload: payload,
-        timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
-      }
-    end
-  end
-
-  # Resize Event
 
   defmodule Resize do
-    @moduledoc """
-    Terminal resize event.
+    @moduledoc "A terminal size change in columns and rows."
+    @type t :: %__MODULE__{width: pos_integer(), height: pos_integer(), timestamp: integer()}
+    @schema Zoi.struct(__MODULE__, %{
+              width: Zoi.integer() |> Zoi.positive(),
+              height: Zoi.integer() |> Zoi.positive(),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
 
-    Sent when the terminal window dimensions change.
-    """
+    @doc false
+    def schema, do: @schema
 
-    @type t :: %__MODULE__{
-            width: pos_integer(),
-            height: pos_integer(),
-            timestamp: integer()
-          }
-
-    defstruct width: 80,
-              height: 24,
-              timestamp: 0
-
-    @doc """
-    Creates a new resize event.
-    """
-    def new(width, height, opts \\ []) when is_integer(width) and is_integer(height) do
+    @doc false
+    def new(width, height, opts)
+        when is_integer(width) and width > 0 and is_integer(height) and height > 0 do
       %__MODULE__{
         width: width,
         height: height,
@@ -219,231 +151,76 @@ defmodule TermUI.Event do
     end
   end
 
-  # Paste Event
+  defmodule Focus do
+    @moduledoc "A terminal focus change."
+    @type t :: %__MODULE__{action: :gained | :lost, timestamp: integer()}
+    @schema Zoi.struct(__MODULE__, %{
+              action: Zoi.enum([:gained, :lost]),
+              timestamp: Zoi.integer() |> Zoi.default(0)
+            })
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
 
-  defmodule Paste do
-    @moduledoc """
-    Clipboard paste event.
+    @doc false
+    def schema, do: @schema
 
-    Sent when content is pasted from the clipboard via bracketed paste mode.
-    """
-
-    @type t :: %__MODULE__{
-            content: String.t(),
-            timestamp: integer()
-          }
-
-    defstruct content: "",
-              timestamp: 0
-
-    @doc """
-    Creates a new paste event.
-    """
-    def new(content, opts \\ []) when is_binary(content) do
+    @doc false
+    def new(action, opts) when action in [:gained, :lost] do
       %__MODULE__{
-        content: content,
+        action: action,
         timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
       }
     end
   end
 
-  # Tick Event
+  @doc "Creates a named or modified key event."
+  @spec key(atom() | String.t(), keyword()) :: Key.t()
+  def key(key, opts \\ []), do: Key.new(key, opts)
 
-  defmodule Tick do
-    @moduledoc """
-    Host-created timer tick event.
+  @doc "Creates a printable text event."
+  @spec text(String.t(), keyword()) :: Text.t()
+  def text(text, opts \\ []), do: Text.new(text, opts)
 
-    Represents timing metadata for animations and time-based updates. The 1.0
-    runtime's `Command.timer/2` and `Command.interval/2` deliver their configured
-    messages; they do not construct `%Event.Tick{}` automatically.
-    """
+  @doc "Creates a bracketed-paste event."
+  @spec paste(String.t(), keyword()) :: Paste.t()
+  def paste(content, opts \\ []), do: Paste.new(content, opts)
 
-    @type t :: %__MODULE__{
-            interval: pos_integer(),
-            timestamp: integer()
-          }
+  @doc "Creates a mouse event."
+  @spec mouse(Mouse.action(), Mouse.button(), non_neg_integer(), non_neg_integer(), keyword()) ::
+          Mouse.t()
+  def mouse(action, button, x, y, opts \\ []), do: Mouse.new(action, button, x, y, opts)
 
-    defstruct interval: 16,
-              timestamp: 0
+  @doc "Creates a resize event."
+  @spec resize(pos_integer(), pos_integer(), keyword()) :: Resize.t()
+  def resize(width, height, opts \\ []), do: Resize.new(width, height, opts)
 
-    @doc """
-    Creates a new tick event.
-    """
-    def new(interval, opts \\ []) when is_integer(interval) and interval > 0 do
-      %__MODULE__{
-        interval: interval,
-        timestamp: Keyword.get(opts, :timestamp, System.monotonic_time(:millisecond))
-      }
-    end
+  @doc "Creates a focus event."
+  @spec focus(:gained | :lost, keyword()) :: Focus.t()
+  def focus(action, opts \\ []), do: Focus.new(action, opts)
 
-    @doc """
-    Returns the tick rate in Hz (ticks per second).
-    """
-    def rate(%__MODULE__{interval: interval}) do
-      1000 / interval
-    end
+  @doc "Returns the Zoi schema for all normalized terminal events."
+  @spec schema() :: Zoi.schema()
+  def schema do
+    Zoi.union([
+      Key.schema(),
+      Text.schema(),
+      Paste.schema(),
+      Mouse.schema(),
+      Resize.schema(),
+      Focus.schema()
+    ])
   end
 
-  # Convenience constructors
-
-  @doc """
-  Creates a key event.
-
-  ## Examples
-
-      Event.key(:enter)
-      Event.key(:a, char: "a")
-      Event.key(:c, modifiers: [:ctrl])
-  """
-  @spec key(atom() | String.t(), keyword()) :: __MODULE__.Key.t()
-  def key(key, opts \\ []) do
-    Key.new(key, opts)
-  end
-
-  @doc """
-  Creates a mouse event.
-
-  ## Examples
-
-      Event.mouse(:click, :left, 10, 20)
-      Event.mouse(:move, nil, x, y)
-  """
-  @spec mouse(
-          __MODULE__.Mouse.action(),
-          __MODULE__.Mouse.button(),
-          integer(),
-          integer(),
-          keyword()
-        ) :: __MODULE__.Mouse.t()
-  def mouse(action, button, x, y, opts \\ []) do
-    Mouse.new(action, button, x, y, opts)
-  end
-
-  @doc """
-  Creates a focus event.
-
-  ## Examples
-
-      Event.focus(:gained)
-      Event.focus(:lost)
-  """
-  @spec focus(__MODULE__.Focus.action(), keyword()) :: __MODULE__.Focus.t()
-  def focus(action, opts \\ []) do
-    Focus.new(action, opts)
-  end
-
-  @doc """
-  Creates a custom event.
-
-  ## Examples
-
-      Event.custom(:submit, %{value: "hello"})
-  """
-  @spec custom(atom(), term(), keyword()) :: __MODULE__.Custom.t()
-  def custom(name, payload \\ nil, opts \\ []) do
-    Custom.new(name, payload, opts)
-  end
-
-  @doc """
-  Creates a resize event.
-
-  ## Examples
-
-      Event.resize(120, 40)
-  """
-  @spec resize(pos_integer(), pos_integer(), keyword()) :: __MODULE__.Resize.t()
-  def resize(width, height, opts \\ []) do
-    Resize.new(width, height, opts)
-  end
-
-  @doc """
-  Creates a paste event.
-
-  ## Examples
-
-      Event.paste("Hello, World!")
-  """
-  @spec paste(String.t(), keyword()) :: __MODULE__.Paste.t()
-  def paste(content, opts \\ []) do
-    Paste.new(content, opts)
-  end
-
-  @doc """
-  Creates a tick event.
-
-  ## Examples
-
-      Event.tick(16)  # ~60 FPS
-      Event.tick(1000)  # 1 second
-  """
-  @spec tick(pos_integer(), keyword()) :: __MODULE__.Tick.t()
-  def tick(interval, opts \\ []) do
-    Tick.new(interval, opts)
-  end
-
-  # Type checks
-
-  @doc "Returns true if event is a key event"
-  @spec key?(term()) :: boolean()
-  def key?(%Key{}), do: true
-  def key?(_), do: false
-
-  @doc "Returns true if event is a mouse event"
-  @spec mouse?(term()) :: boolean()
-  def mouse?(%Mouse{}), do: true
-  def mouse?(_), do: false
-
-  @doc "Returns true if event is a focus event"
-  @spec focus?(term()) :: boolean()
-  def focus?(%Focus{}), do: true
-  def focus?(_), do: false
-
-  @doc "Returns true if event is a custom event"
-  @spec custom?(term()) :: boolean()
-  def custom?(%Custom{}), do: true
-  def custom?(_), do: false
-
-  @doc "Returns true if event is a resize event"
-  @spec resize?(term()) :: boolean()
-  def resize?(%Resize{}), do: true
-  def resize?(_), do: false
-
-  @doc "Returns true if event is a paste event"
-  @spec paste?(term()) :: boolean()
-  def paste?(%Paste{}), do: true
-  def paste?(_), do: false
-
-  @doc "Returns true if event is a tick event"
-  @spec tick?(term()) :: boolean()
-  def tick?(%Tick{}), do: true
-  def tick?(_), do: false
-
-  @doc """
-  Returns the event type as an atom.
-  """
-  @spec type(
-          __MODULE__.Key.t()
-          | __MODULE__.Mouse.t()
-          | __MODULE__.Focus.t()
-          | __MODULE__.Custom.t()
-          | __MODULE__.Resize.t()
-          | __MODULE__.Paste.t()
-          | __MODULE__.Tick.t()
-        ) ::
-          :key | :mouse | :focus | :custom | :resize | :paste | :tick
+  @doc "Returns the event type."
+  @spec type(t()) :: :key | :text | :paste | :mouse | :resize | :focus
   def type(%Key{}), do: :key
-  def type(%Mouse{}), do: :mouse
-  def type(%Focus{}), do: :focus
-  def type(%Custom{}), do: :custom
-  def type(%Resize{}), do: :resize
+  def type(%Text{}), do: :text
   def type(%Paste{}), do: :paste
-  def type(%Tick{}), do: :tick
+  def type(%Mouse{}), do: :mouse
+  def type(%Resize{}), do: :resize
+  def type(%Focus{}), do: :focus
 
-  @doc """
-  Checks if a modifier is present in the event.
-  """
-  @spec has_modifier?(__MODULE__.Key.t() | __MODULE__.Mouse.t(), atom()) :: boolean()
-  def has_modifier?(%{modifiers: modifiers}, modifier) do
-    modifier in modifiers
-  end
+  @doc "Returns true when the event contains a modifier."
+  @spec has_modifier?(Key.t() | Mouse.t(), atom()) :: boolean()
+  def has_modifier?(%{modifiers: modifiers}, modifier), do: modifier in modifiers
 end

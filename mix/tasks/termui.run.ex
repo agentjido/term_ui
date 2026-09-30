@@ -8,21 +8,20 @@ defmodule Mix.Tasks.Termui.Run do
 
   ## Examples
 
-  From a TermUI example directory:
+  When the Mix app name maps to its runnable module:
       mix termui.run
 
-  From any project with a TermUI app:
+  From any other project with a TermUI app:
       mix termui.run --module MyApp
 
   ## Options
 
       --module MODULE    - Module name containing run/0 (default: autodetect)
       --function NAME    - Function name to call (default: run)
-      --iex              - Run in IEx-compatible mode (same as env TERM_UI_IEX_MODE=true)
 
   ## How it works
 
-  1. Autodetects the module containing `run/0` from mix.exs app name
+  1. Autodetects the module containing `run/0` from the mix.exs app name
   2. Compiles the project
   3. Calls `Module.run()` to start the TUI application
 
@@ -35,9 +34,7 @@ defmodule Mix.Tasks.Termui.Run do
   @impl true
   def run(args) do
     {opts, _} =
-      OptionParser.parse!(args,
-        strict: [module: :string, function: :string, iex: :boolean]
-      )
+      OptionParser.parse!(args, strict: [module: :string, function: :string])
 
     # Ensure project is compiled
     Mix.Project.get!()
@@ -53,11 +50,6 @@ defmodule Mix.Tasks.Termui.Run do
       end
 
     function = Keyword.get(opts, :function, "run") |> String.to_atom()
-
-    # Set IEx mode if requested
-    if Keyword.get(opts, :iex) do
-      Application.put_env(:term_ui, :iex_compatible, true)
-    end
 
     # Run the application
     apply(module, function, [])
@@ -104,6 +96,7 @@ defmodule Mix.Tasks.Termui.Run do
       case segment do
         "iex" -> "IEx"
         "io" -> "IO"
+        "ui" -> "UI"
         "otp" -> "OTP"
         "tls" -> "TLS"
         "tcp" -> "TCP"

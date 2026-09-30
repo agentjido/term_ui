@@ -39,6 +39,7 @@ defmodule TermUI.CharacterSet do
   - `bar_empty` - Empty/light block for unfilled progress
   - `bar_levels` - List of characters for fractional progress (8 levels Unicode, 5 ASCII)
   - `sparkline_levels` - List of vertical bar characters for sparklines
+  - `spinner_frames` - List of animation frames for spinners
 
   ### Indicators
   - `check` - Check mark for success/selected
@@ -62,12 +63,11 @@ defmodule TermUI.CharacterSet do
 
   ## Configuration
 
-  When no runtime context exists, the fallback character set can be configured
-  in your application:
+  The default character set can be configured in your application:
 
       config :term_ui, :character_set, :unicode
 
-  Or changed while no runtime-managed value is present:
+  Or at runtime:
 
       Application.put_env(:term_ui, :character_set, :ascii)
   """
@@ -78,9 +78,6 @@ defmodule TermUI.CharacterSet do
   - `:unicode` - Full Unicode box-drawing characters
   - `:ascii` - ASCII fallback characters
   """
-
-  # Dialyzer: Functions return specific list types
-  @dialyzer {:nowarn_function, keys: 0}
 
   @type charset :: :unicode | :ascii
 
@@ -139,6 +136,7 @@ defmodule TermUI.CharacterSet do
           info: String.t(),
           warning: String.t(),
           loading: String.t(),
+          spinner_frames: [String.t()],
           # Misc
           ellipsis: String.t(),
           dot: String.t()
@@ -198,6 +196,7 @@ defmodule TermUI.CharacterSet do
     info: "ℹ",
     warning: "⚠",
     loading: "⟳",
+    spinner_frames: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
     # Misc
     ellipsis: "…",
     dot: "•"
@@ -256,6 +255,7 @@ defmodule TermUI.CharacterSet do
     info: "i",
     warning: "!",
     loading: "*",
+    spinner_frames: ["|", "/", "-", "\\"],
     # Misc (ASCII)
     ellipsis: "...",
     dot: "*"
@@ -296,9 +296,7 @@ defmodule TermUI.CharacterSet do
   @doc """
   Returns the currently configured character set type.
 
-  Reads from persistent_term via PersistentTerms (set by Runtime from detected
-  Unicode capabilities), falling back to application config. Defaults to
-  `:unicode` if neither is configured.
+  Reads application configuration and defaults to `:unicode`.
 
   ## Returns
 
@@ -309,13 +307,18 @@ defmodule TermUI.CharacterSet do
       iex> TermUI.CharacterSet.current()
       :unicode
 
-      # After Runtime sets it based on capabilities
-      iex> :persistent_term.put(:term_ui_character_set, :ascii)
+      iex> Application.put_env(:term_ui, :character_set, :ascii)
       iex> TermUI.CharacterSet.current()
       :ascii
+      iex> Application.delete_env(:term_ui, :character_set)
   """
   @spec current() :: charset()
-  def current, do: TermUI.PersistentTerms.character_set()
+  def current do
+    case Application.get_env(:term_ui, :character_set, :unicode) do
+      character_set when character_set in [:unicode, :ascii] -> character_set
+      _invalid -> :unicode
+    end
+  end
 
   @doc """
   Returns the current character set as a map.
@@ -359,7 +362,7 @@ defmodule TermUI.CharacterSet do
       iex> :tl in TermUI.CharacterSet.keys()
       true
   """
-  @spec keys() :: [atom()]
+  @spec keys() :: nonempty_list(atom())
   def keys, do: @charset_keys
 
   # ----------------------------------------------------------------------------

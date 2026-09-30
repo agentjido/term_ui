@@ -1,7 +1,7 @@
-defmodule TermUI.Renderer.DisplayWidthTest do
+defmodule TermUI.DisplayWidthTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.Renderer.DisplayWidth
+  alias TermUI.DisplayWidth
 
   describe "width/1" do
     test "ASCII characters are single-width" do

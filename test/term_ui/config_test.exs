@@ -1,258 +1,179 @@
 defmodule TermUI.ConfigTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+  import ExUnit.CaptureLog
+
+  alias TermUI.Backend.{CapabilityFilter, Raw, TTY}
   alias TermUI.Config
 
-  # Clean up application environment between tests
+  @legacy_keys [:backend, :color_mode, :character_set, :render_interval, :iex_compatible]
+
   setup do
-    # Store original values
-    original_backend = Application.get_env(:term_ui, :backend)
-    original_color_mode = Application.get_env(:term_ui, :color_mode)
-    original_character_set = Application.get_env(:term_ui, :character_set)
-    original_render_interval = Application.get_env(:term_ui, :render_interval)
+    previous = Map.new(@legacy_keys, &{&1, Application.fetch_env(:term_ui, &1)})
+    Enum.each(@legacy_keys, &Application.delete_env(:term_ui, &1))
+    Config.reset_deprecation_warnings()
 
     on_exit(fn ->
-      # Restore original values or erase
-      if original_backend do
-        Application.put_env(:term_ui, :backend, original_backend)
-      else
-        Application.delete_env(:term_ui, :backend)
-      end
+      Enum.each(previous, fn
+        {key, {:ok, value}} -> Application.put_env(:term_ui, key, value)
+        {key, :error} -> Application.delete_env(:term_ui, key)
+      end)
 
-      if original_color_mode do
-        Application.put_env(:term_ui, :color_mode, original_color_mode)
-      else
-        Application.delete_env(:term_ui, :color_mode)
-      end
-
-      if original_character_set do
-        Application.put_env(:term_ui, :character_set, original_character_set)
-      else
-        Application.delete_env(:term_ui, :character_set)
-      end
-
-      if original_render_interval do
-        Application.put_env(:term_ui, :render_interval, original_render_interval)
-      else
-        Application.delete_env(:term_ui, :render_interval)
-      end
+      Config.reset_deprecation_warnings()
     end)
 
     :ok
   end
 
-  describe "get/2" do
-    test "returns default for backend when not configured" do
-      Application.delete_env(:term_ui, :backend)
-      assert Config.get(:backend) == :auto
+  test "maps every direct v1 key and emits each warning one time" do
+    Application.put_env(:term_ui, :backend, :tty)
+    Application.put_env(:term_ui, :color_mode, :color_256)
+    Application.put_env(:term_ui, :character_set, :ascii)
+    Application.put_env(:term_ui, :render_interval, 33)
+
+    log =
+      capture_log(fn ->
+        assert {:ok, opts} = Config.merge_runtime_options([])
+        assert opts[:backend] == :tty
+        assert opts[:render_interval] == 33
+        assert opts[:backend_opts][:color_mode] == :color_256
+        assert opts[:backend_opts][:character_set] == :ascii
+
+        assert {:ok, _same_values} = Config.merge_runtime_options([])
+      end)
+
+    for key <- [:backend, :color_mode, :character_set, :render_interval] do
+      assert count_warning(log, key) == 1
     end
 
-    test "returns default for color_mode when not configured" do
-      Application.delete_env(:term_ui, :color_mode)
-      assert Config.get(:color_mode) == :auto
+    assert log =~ ":backend runtime option"
+    assert log =~ ":backend_opts option :color_mode"
+    assert log =~ ":backend_opts option :character_set"
+    assert log =~ ":render_interval runtime option"
+  end
+
+  test "maps all supported backend and IEx values" do
+    for backend <- [:auto, :raw, :tty] do
+      Application.put_env(:term_ui, :backend, backend)
+      assert {:ok, opts} = Config.merge_runtime_options([])
+      assert opts[:backend] == backend
     end
 
-    test "returns default for character_set when not configured" do
-      Application.delete_env(:term_ui, :character_set)
-      assert Config.get(:character_set) == :auto
-    end
+    Application.delete_env(:term_ui, :backend)
 
-    test "returns default for render_interval when not configured" do
-      Application.delete_env(:term_ui, :render_interval)
-      assert Config.get(:render_interval) == 16
-    end
-
-    test "returns configured value for backend" do
-      Application.put_env(:term_ui, :backend, :raw)
-      assert Config.get(:backend) == :raw
-    end
-
-    test "returns configured value for color_mode" do
-      Application.put_env(:term_ui, :color_mode, :true_color)
-      assert Config.get(:color_mode) == :true_color
-    end
-
-    test "returns configured value for character_set" do
-      Application.put_env(:term_ui, :character_set, :ascii)
-      assert Config.get(:character_set) == :ascii
-    end
-
-    test "returns configured value for render_interval" do
-      Application.put_env(:term_ui, :render_interval, 33)
-      assert Config.get(:render_interval) == 33
-    end
-
-    test "returns custom default when provided" do
-      Application.delete_env(:term_ui, :backend)
-      assert Config.get(:backend, :custom) == :custom
-    end
-
-    test "custom default is not used when value is configured" do
-      Application.put_env(:term_ui, :backend, :tty)
-      assert Config.get(:backend, :custom) == :tty
-    end
-
-    test "returns any key from application env" do
-      Application.put_env(:term_ui, :custom_key, :custom_value)
-      assert Config.get(:custom_key) == :custom_value
+    for {iex_value, expected_backend} <- [{:auto, :auto}, {false, :auto}, {true, :tty}] do
+      Application.put_env(:term_ui, :iex_compatible, iex_value)
+      assert {:ok, opts} = Config.merge_runtime_options([])
+      assert opts[:backend] == expected_backend
     end
   end
 
-  describe "all/0" do
-    test "returns all configuration values as keyword list" do
-      Application.put_env(:term_ui, :backend, :tty)
-      Application.put_env(:term_ui, :color_mode, :color_256)
-      Application.put_env(:term_ui, :character_set, :ascii)
-      Application.put_env(:term_ui, :render_interval, 60)
-
-      all = Config.all()
-
-      assert all[:backend] == :tty
-      assert all[:color_mode] == :color_256
-      assert all[:character_set] == :ascii
-      assert all[:render_interval] == 60
+  test "maps all supported color and character values" do
+    for color <- [:auto, :true_color, :color_256, :color_16, :monochrome] do
+      Application.put_env(:term_ui, :color_mode, color)
+      assert {:ok, opts} = Config.merge_runtime_options([])
+      assert opts[:backend_opts][:color_mode] == color
     end
 
-    test "returns defaults when nothing configured" do
-      Application.delete_env(:term_ui, :backend)
-      Application.delete_env(:term_ui, :color_mode)
-      Application.delete_env(:term_ui, :character_set)
-      Application.delete_env(:term_ui, :render_interval)
-
-      all = Config.all()
-
-      assert all[:backend] == :auto
-      assert all[:color_mode] == :auto
-      assert all[:character_set] == :auto
-      assert all[:render_interval] == 16
-    end
-
-    test "contains all expected keys" do
-      all = Config.all()
-
-      keys = Keyword.keys(all)
-      assert :backend in keys
-      assert :color_mode in keys
-      assert :character_set in keys
-      assert :render_interval in keys
+    for character_set <- [:auto, :unicode, :ascii] do
+      Application.put_env(:term_ui, :character_set, character_set)
+      assert {:ok, opts} = Config.merge_runtime_options([])
+      assert opts[:backend_opts][:character_set] == character_set
     end
   end
 
-  describe "merge_options/2" do
-    test "returns defaults when no config and no options" do
-      Application.delete_env(:term_ui, :backend)
-      Application.delete_env(:term_ui, :color_mode)
+  test "explicit v2 values take precedence and do not read old keys" do
+    Application.put_env(:term_ui, :backend, :raw)
+    Application.put_env(:term_ui, :color_mode, :monochrome)
+    Application.put_env(:term_ui, :character_set, :ascii)
+    Application.put_env(:term_ui, :render_interval, 99)
+    Application.put_env(:term_ui, :iex_compatible, true)
 
-      merged = Config.merge_options([])
+    explicit = [
+      backend: :tty,
+      backend_opts: [color_mode: :color_16, character_set: :unicode],
+      render_interval: 20
+    ]
 
-      assert merged[:backend] == :auto
-      assert merged[:color_mode] == :auto
-    end
+    log =
+      capture_log(fn ->
+        assert {:ok, ^explicit} = Config.merge_runtime_options(explicit)
+      end)
 
-    test "config values are used when no runtime option provided" do
-      Application.put_env(:term_ui, :backend, :tty)
-      Application.put_env(:term_ui, :render_interval, 60)
-
-      merged = Config.merge_options([])
-
-      assert merged[:backend] == :tty
-      assert merged[:render_interval] == 60
-    end
-
-    test "runtime options override config values" do
-      Application.put_env(:term_ui, :backend, :tty)
-
-      merged = Config.merge_options(backend: :raw)
-
-      assert merged[:backend] == :raw
-    end
-
-    test "runtime options override for multiple keys" do
-      Application.put_env(:term_ui, :backend, :tty)
-      Application.put_env(:term_ui, :render_interval, 60)
-
-      merged = Config.merge_options(backend: :raw, render_interval: 33)
-
-      assert merged[:backend] == :raw
-      assert merged[:render_interval] == 33
-    end
-
-    test "runtime options and config can coexist" do
-      Application.put_env(:term_ui, :backend, :tty)
-      # render_interval not configured
-
-      merged = Config.merge_options(backend: :raw, render_interval: 33)
-
-      # Runtime override
-      assert merged[:backend] == :raw
-      # Runtime option
-      assert merged[:render_interval] == 33
-      # Default
-      assert merged[:color_mode] == :auto
-    end
-
-    test "arbitrary options are passed through" do
-      merged = Config.merge_options(custom_key: :custom_value)
-
-      assert merged[:custom_key] == :custom_value
-    end
-
-    test "does not modify original options list" do
-      Application.put_env(:term_ui, :backend, :tty)
-      original_opts = [backend: :raw]
-
-      merged = Config.merge_options(original_opts)
-
-      # Should use runtime option
-      assert merged[:backend] == :raw
-      # Original unchanged
-      assert original_opts[:backend] == :raw
-    end
-
-    test "handles nil values in config" do
-      Application.put_env(:term_ui, :backend, nil)
-
-      merged = Config.merge_options([])
-
-      # nil in config should be treated as "not set", so default applies
-      assert merged[:backend] == nil
-    end
-
-    test "skip_terminal option is preserved" do
-      merged = Config.merge_options(skip_terminal: true)
-
-      assert merged[:skip_terminal] == true
-    end
-
-    test "use_input_handler option is preserved" do
-      merged = Config.merge_options(use_input_handler: true)
-
-      assert merged[:use_input_handler] == true
-    end
+    assert log == ""
   end
 
-  describe "defaults/0" do
-    test "returns default options without reading config" do
-      Application.put_env(:term_ui, :backend, :tty)
-      Application.put_env(:term_ui, :render_interval, 60)
+  test "backend tuple options also take precedence" do
+    Application.put_env(:term_ui, :color_mode, :monochrome)
+    Application.put_env(:term_ui, :character_set, :ascii)
 
-      defaults = Config.defaults()
+    explicit = [backend: {TTY, [color_mode: :color_16, character_set: :unicode]}]
+    assert {:ok, ^explicit} = Config.merge_runtime_options(explicit)
+  end
 
-      # Defaults should ignore application config
-      assert defaults[:backend] == :auto
-      assert defaults[:render_interval] == 16
-      assert defaults[:color_mode] == :auto
-      assert defaults[:character_set] == :auto
-    end
+  test "an unsupported old backend returns a clear error and warning" do
+    Application.put_env(:term_ui, :backend, :component_backend)
 
-    test "contains all expected default keys" do
-      defaults = Config.defaults()
+    log =
+      capture_log(fn ->
+        assert {:error,
+                {:invalid_legacy_config, :backend, :component_backend,
+                 "expected one of :auto, :raw, :tty"}} = Config.merge_runtime_options([])
+      end)
 
-      keys = Keyword.keys(defaults)
-      assert :backend in keys
-      assert :color_mode in keys
-      assert :character_set in keys
-      assert :render_interval in keys
-    end
+    assert count_warning(log, :backend) == 1
+    assert log =~ "matching v2 runtime or backend option"
+  end
+
+  test "capability preferences can reduce but never increase reported support" do
+    limited = %{colors: :color_16, unicode: false}
+
+    assert CapabilityFilter.filter(limited, color_mode: :true_color, character_set: :unicode) ==
+             limited
+
+    assert CapabilityFilter.filter(
+             %{colors: :true_color, unicode: true},
+             color_mode: :monochrome,
+             character_set: :ascii
+           ) == %{colors: :monochrome, unicode: false}
+
+    capture_io(fn ->
+      assert {:ok, tty} =
+               TTY.init(
+                 size: {2, 5},
+                 capabilities: limited,
+                 color_mode: :true_color,
+                 character_set: :unicode,
+                 bracketed_paste: false,
+                 focus_events: false
+               )
+
+      assert tty.color_mode == :color_16
+      assert tty.character_set == :ascii
+      assert TTY.capabilities(tty).colors == :color_16
+      assert TTY.capabilities(tty).unicode == false
+      TTY.shutdown(tty, :normal)
+
+      assert {:ok, raw} =
+               Raw.init(
+                 size: {2, 5},
+                 color_mode: :color_16,
+                 character_set: :ascii,
+                 alternate_screen: false,
+                 bracketed_paste: false,
+                 focus_events: false
+               )
+
+      assert Raw.capabilities(raw).colors == :color_16
+      assert Raw.capabilities(raw).unicode == false
+      Raw.shutdown(raw, :normal)
+    end)
+  end
+
+  defp count_warning(log, key) do
+    log
+    |> String.split("\n")
+    |> Enum.count(&String.contains?(&1, "config :term_ui, #{inspect(key)} is deprecated"))
   end
 end

@@ -1,1 +1,0 @@
-MarkdownViewer.App.run()

@@ -21,3 +21,8 @@ term_ui-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Native build output in the package priv directory.
+/priv/*.so
+/priv/*.dll
+/priv/*.dylib

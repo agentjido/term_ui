@@ -4,11 +4,6 @@
 
 **Status:** Accepted
 
-> **Superseded for 1.0 integration.** The current runtime requires one Elm root,
-> while `StatefulComponent` remains the standard behavior for interactive
-> widgets embedded as state machines in that root. See
-> `guides/component_system.md` for the current model.
-
 ---
 
 ## Context

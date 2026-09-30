@@ -1,1 +1,0 @@
-Sparkline.App.run()

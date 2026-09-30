@@ -1,37 +1,5 @@
 defmodule TermUI.Terminal.SizeDetector do
-  @moduledoc """
-  Terminal size detection utilities.
-
-  This module provides centralized terminal size detection that can be used
-  by both the Terminal module and backend implementations. It attempts multiple
-  methods in order of reliability:
-
-  1. Erlang `:io` module (most reliable when available)
-  2. LINES/COLUMNS environment variables
-  3. `stty size` command (last resort)
-
-  All methods validate dimensions against practical bounds to prevent resource
-  exhaustion from malicious input.
-
-  ## Size Format
-
-  All functions return size as `{rows, cols}` (height, width) to match standard
-  terminal conventions where rows come first.
-
-  ## Example
-
-      iex> SizeDetector.detect()
-      {:ok, {24, 80}}
-
-      iex> SizeDetector.detect(size: {40, 120})
-      {:ok, {40, 120}}
-
-  ## Bounds Checking
-
-  Detected sizes are validated against `max_dimension/0` (9999) to prevent
-  integer overflow or resource exhaustion attacks through environment variables
-  or malicious terminal responses.
-  """
+  @moduledoc false
   alias TermUI.TermUtils
 
   # Maximum terminal dimension (rows or columns).
@@ -39,19 +7,13 @@ defmodule TermUI.Terminal.SizeDetector do
   # malicious environment variables or terminal responses.
   @max_terminal_dimension 9999
 
-  # Dialyzer: Functions return specific types or constants
-  @dialyzer {:nowarn_function,
-             max_dimension: 0,
-             detect: 0,
-             detect: 1,
-             detect_from_io: 0,
-             detect_from_stty: 0,
-             validate_size: 2}
+  @type dimension :: 1..9999
+  @type size :: {dimension(), dimension()}
 
   @doc """
   Returns the maximum valid terminal dimension.
   """
-  @spec max_dimension() :: pos_integer()
+  @spec max_dimension() :: 9999
   def max_dimension, do: @max_terminal_dimension
 
   @doc """
@@ -77,7 +39,8 @@ defmodule TermUI.Terminal.SizeDetector do
       # Use explicit size
       {:ok, {40, 120}} = SizeDetector.detect(size: {40, 120})
   """
-  @spec detect(keyword()) :: {:ok, {pos_integer(), pos_integer()}} | {:error, term()}
+  @spec detect(keyword()) ::
+          {:ok, size()} | {:error, :invalid_size | :size_detection_failed}
   def detect(opts \\ []) do
     case Keyword.get(opts, :size) do
       nil -> auto_detect()
@@ -99,7 +62,7 @@ defmodule TermUI.Terminal.SizeDetector do
     * `{:ok, {rows, cols}}` - Successfully detected size
     * `{:error, :size_detection_failed}` - All methods failed
   """
-  @spec auto_detect() :: {:ok, {pos_integer(), pos_integer()}} | {:error, :size_detection_failed}
+  @spec auto_detect() :: {:ok, size()} | {:error, :size_detection_failed}
   def auto_detect do
     # Return the first success
     with {:error, _} <- detect_from_io(),
@@ -117,7 +80,9 @@ defmodule TermUI.Terminal.SizeDetector do
   Uses `:io.rows/0` and `:io.columns/0` which query the terminal directly.
   This is the most reliable method when running in a real terminal.
   """
-  @spec detect_from_io() :: {:ok, {pos_integer(), pos_integer()}} | {:error, term()}
+  @spec detect_from_io() ::
+          {:ok, size()}
+          | {:error, :invalid_size | :io_detection_failed | :io_not_available}
   def detect_from_io do
     if function_exported?(:io, :rows, 0) and function_exported?(:io, :columns, 0) do
       case {:io.rows(), :io.columns()} do
@@ -138,7 +103,7 @@ defmodule TermUI.Terminal.SizeDetector do
   These are standard environment variables set by many shells and terminal
   emulators. Values are validated against practical bounds.
   """
-  @spec detect_from_env() :: {:ok, {pos_integer(), pos_integer()}} | {:error, term()}
+  @spec detect_from_env() :: {:ok, size()} | {:error, :env_detection_failed}
   def detect_from_env do
     with {:ok, lines} <- get_env_int("LINES"),
          {:ok, columns} <- get_env_int("COLUMNS") do
@@ -154,7 +119,9 @@ defmodule TermUI.Terminal.SizeDetector do
   This is a fallback method that works on most Unix-like systems.
   It spawns a subprocess to run `stty size` with safety protections.
   """
-  @spec detect_from_stty() :: {:ok, {pos_integer(), pos_integer()}} | {:error, term()}
+  @spec detect_from_stty() ::
+          {:ok, size()}
+          | {:error, :invalid_size | :stty_failed | :stty_parse_failed | :stty_timeout}
   def detect_from_stty do
     case TermUtils.safe_stty(["size"]) do
       {:ok, output} ->
@@ -177,7 +144,7 @@ defmodule TermUI.Terminal.SizeDetector do
     * `{:error, :invalid_size}` - Invalid dimensions
   """
   @spec validate_size(term(), term()) ::
-          {:ok, {pos_integer(), pos_integer()}} | {:error, :invalid_size}
+          {:ok, size()} | {:error, :invalid_size}
   def validate_size(rows, cols)
       when is_integer(rows) and is_integer(cols) and
              rows > 0 and rows <= @max_terminal_dimension and

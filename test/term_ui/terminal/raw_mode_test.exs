@@ -1,224 +1,173 @@
 defmodule TermUI.Terminal.RawModeTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
-  alias TermUI.Terminal
+  alias TermUI.Terminal.{RawMode, TtyNif}
 
-  describe "raw mode enable/disable" do
-    test "enable_raw_mode returns ok tuple" do
-      # This test needs the Terminal GenServer running
-      {:ok, _pid} = Terminal.start_link()
-
-      result = Terminal.enable_raw_mode()
-
-      case result do
-        {:ok, _state} ->
-          # Successfully enabled - now disable
-          assert :ok = Terminal.disable_raw_mode()
-
-        {:error, :not_a_terminal} ->
-          # Expected when running in non-interactive environment (CI, tests)
-          assert true
-
-        {:error, reason} ->
-          # Some other error - document for compatibility research
-          IO.puts("Raw mode enable failed with: #{inspect(reason)}")
-          assert true
-      end
-
-      Terminal.restore()
-      GenServer.stop(Terminal)
+  defmodule FakeTtyNif do
+    def ensure_loaded do
+      send(self(), :ensure_tty_nif_loaded)
+      Process.get({__MODULE__, :load_result}, :ok)
     end
 
-    test "disable_raw_mode returns ok when not in raw mode" do
-      {:ok, _pid} = Terminal.start_link()
-
-      # Should be safe to disable even when not enabled
-      result = Terminal.disable_raw_mode()
-      assert result == :ok
-
-      GenServer.stop(Terminal)
+    def disable_control_flags do
+      send(self(), :disable_control_flags)
+      Process.get({__MODULE__, :disable_result}, {:ok, {1, 2}})
     end
 
-    test "raw_mode? returns false initially" do
-      {:ok, _pid} = Terminal.start_link()
-
-      refute Terminal.raw_mode?()
-
-      GenServer.stop(Terminal)
-    end
-
-    test "raw_mode? returns true after enable" do
-      {:ok, _pid} = Terminal.start_link()
-
-      result = Terminal.enable_raw_mode()
-
-      case result do
-        {:ok, _state} ->
-          assert Terminal.raw_mode?()
-          Terminal.disable_raw_mode()
-
-        {:error, _reason} ->
-          # Not a terminal in test environment
-          refute Terminal.raw_mode?()
-      end
-
-      GenServer.stop(Terminal)
-    end
-
-    test "raw_mode? returns false after disable" do
-      {:ok, _pid} = Terminal.start_link()
-
-      case Terminal.enable_raw_mode() do
-        {:ok, _state} ->
-          assert Terminal.raw_mode?()
-          Terminal.disable_raw_mode()
-          refute Terminal.raw_mode?()
-
-        {:error, _reason} ->
-          refute Terminal.raw_mode?()
-      end
-
-      GenServer.stop(Terminal)
+    def restore_control_flags(flags) do
+      send(self(), {:restore_control_flags, flags})
+      Process.get({__MODULE__, :restore_result}, :ok)
     end
   end
 
-  describe "restore/0" do
-    test "restore returns ok" do
-      {:ok, _pid} = Terminal.start_link()
-
-      result = Terminal.restore()
-      assert result == :ok
-
-      GenServer.stop(Terminal)
-    end
-
-    test "restore clears raw mode state" do
-      {:ok, _pid} = Terminal.start_link()
-
-      case Terminal.enable_raw_mode() do
-        {:ok, _state} ->
-          Terminal.restore()
-          refute Terminal.raw_mode?()
-
-        {:error, _reason} ->
-          Terminal.restore()
-          refute Terminal.raw_mode?()
-      end
-
-      GenServer.stop(Terminal)
-    end
-
-    test "restore can be called multiple times safely" do
-      {:ok, _pid} = Terminal.start_link()
-
-      assert :ok = Terminal.restore()
-      assert :ok = Terminal.restore()
-      assert :ok = Terminal.restore()
-
-      GenServer.stop(Terminal)
-    end
+  @tag :tty_nif
+  test "the source-built NIF loads on request" do
+    assert :ok = TtyNif.ensure_loaded()
+    assert TtyNif.loaded?()
   end
 
-  describe "get_state/0" do
-    test "get_state returns state struct" do
-      {:ok, _pid} = Terminal.start_link()
+  test "legacy entry disables controls and exit restores the saved flags" do
+    shell_start = successful_shell_start()
 
-      state = Terminal.get_state()
-      assert is_struct(state, TermUI.Terminal.State)
-      assert state.cursor_visible == true
-      assert state.raw_mode_active == false
+    assert {:ok, {:native, {1, 2}} = session} =
+             RawMode.enter(
+               shell_start: shell_start,
+               signals_api?: false,
+               tty_nif: FakeTtyNif
+             )
 
-      GenServer.stop(Terminal)
-    end
+    assert_receive {:shell_start, {:noshell, :raw}}
+    assert_receive :ensure_tty_nif_loaded
+    assert_receive :disable_control_flags
 
-    test "state reflects raw mode activation" do
-      {:ok, _pid} = Terminal.start_link()
+    assert :ok =
+             RawMode.exit(session,
+               shell_start: shell_start,
+               tty_nif: FakeTtyNif
+             )
 
-      case Terminal.enable_raw_mode() do
-        {:ok, _result} ->
-          state = Terminal.get_state()
-          assert state.raw_mode_active == true
-          # Original settings should be captured
-          assert state.original_settings != nil
-          Terminal.disable_raw_mode()
-
-        {:error, _reason} ->
-          state = Terminal.get_state()
-          assert state.raw_mode_active == false
-      end
-
-      GenServer.stop(Terminal)
-    end
+    assert_receive {:shell_start, {:noshell, :cooked}}
+    assert_receive {:restore_control_flags, {1, 2}}
   end
 
-  describe "terminal detection" do
-    test "returns not_a_terminal error when not a tty" do
-      # In test environment, stdin is typically not a terminal
-      # So we expect this error
-      {:ok, _pid} = Terminal.start_link()
+  test "the OTP signals API does not call the native fallback" do
+    shell_start = successful_shell_start()
 
-      result = Terminal.enable_raw_mode()
+    assert {:ok, :otp_signals} =
+             RawMode.enter(
+               shell_start: shell_start,
+               signals_api?: true,
+               tty_nif: FakeTtyNif
+             )
 
-      case result do
-        {:error, :not_a_terminal} ->
-          # Expected in test environment
-          assert true
-
-        {:ok, _state} ->
-          # Running with a real terminal
-          Terminal.disable_raw_mode()
-          assert true
-
-        {:error, _reason} ->
-          # Some other error
-          assert true
-      end
-
-      GenServer.stop(Terminal)
-    end
+    assert_receive {:shell_start, {:noshell, %{mode: :raw, signals: false}}}
+    refute_receive :disable_control_flags
   end
 
-  describe "double enable/disable" do
-    test "double enable is safe" do
-      {:ok, _pid} = Terminal.start_link()
-
-      result1 = Terminal.enable_raw_mode()
-      result2 = Terminal.enable_raw_mode()
-
-      # Second enable should return the same state
-      case {result1, result2} do
-        {{:ok, _}, {:ok, _}} ->
-          # Both succeeded
-          assert Terminal.raw_mode?()
-          Terminal.disable_raw_mode()
-
-        {{:error, _}, {:error, _}} ->
-          # Both failed (not a terminal)
-          refute Terminal.raw_mode?()
-
-        _ ->
-          # Unexpected combination
-          Terminal.disable_raw_mode()
-      end
-
-      GenServer.stop(Terminal)
+  test "an unavailable signals API uses the native fallback" do
+    shell_start = fn
+      {:noshell, :raw} = argument ->
+        send(self(), {:shell_start, argument})
+        :ok
     end
 
-    test "double disable is safe" do
-      {:ok, _pid} = Terminal.start_link()
+    assert {:ok, {:native, {1, 2}}} =
+             RawMode.enter(
+               shell_start: shell_start,
+               signals_api?: true,
+               tty_nif: FakeTtyNif
+             )
 
-      case Terminal.enable_raw_mode() do
-        {:ok, _state} ->
-          assert :ok = Terminal.disable_raw_mode()
-          assert :ok = Terminal.disable_raw_mode()
-          refute Terminal.raw_mode?()
+    assert_receive {:shell_start, {:noshell, :raw}}
+    assert_receive :disable_control_flags
+  end
 
-        {:error, _reason} ->
-          assert :ok = Terminal.disable_raw_mode()
-          assert :ok = Terminal.disable_raw_mode()
-      end
+  test "a native setup failure returns the terminal to cooked mode" do
+    Process.put({FakeTtyNif, :disable_result}, {:error, :not_loaded})
+    shell_start = successful_shell_start()
 
-      GenServer.stop(Terminal)
+    assert {:error, {:control_flags_unavailable, :not_loaded, :ok}} =
+             RawMode.enter(
+               shell_start: shell_start,
+               signals_api?: false,
+               tty_nif: FakeTtyNif
+             )
+
+    assert_receive {:shell_start, {:noshell, :raw}}
+    assert_receive :disable_control_flags
+    assert_receive {:shell_start, {:noshell, :cooked}}
+  end
+
+  test "an unavailable native module returns the terminal to cooked mode" do
+    Process.put({FakeTtyNif, :load_result}, {:error, :missing_artifact})
+    shell_start = successful_shell_start()
+
+    assert {:error, {:control_flags_unavailable, :missing_artifact, :ok}} =
+             RawMode.enter(
+               shell_start: shell_start,
+               signals_api?: false,
+               tty_nif: FakeTtyNif
+             )
+
+    assert_receive {:shell_start, {:noshell, :raw}}
+    assert_receive :ensure_tty_nif_loaded
+    refute_receive :disable_control_flags
+    assert_receive {:shell_start, {:noshell, :cooked}}
+  end
+
+  test "exit attempts flag restoration when cooked-mode restoration fails" do
+    Process.put({FakeTtyNif, :restore_result}, {:error, :restore_failed})
+
+    shell_start = fn argument ->
+      send(self(), {:shell_start, argument})
+      {:error, :cooked_failed}
+    end
+
+    assert {:error, {:cooked_mode, :cooked_failed, :control_flags, :restore_failed}} =
+             RawMode.exit({:native, {3, 4}},
+               shell_start: shell_start,
+               tty_nif: FakeTtyNif
+             )
+
+    assert_receive {:shell_start, {:noshell, :cooked}}
+    assert_receive {:restore_control_flags, {3, 4}}
+  end
+
+  test "resume disables controls but exit retains the original saved flags" do
+    session = {:native, {3, 4}}
+    Process.put({FakeTtyNif, :disable_result}, {:ok, {8, 9}})
+    opts = [tty_nif: FakeTtyNif, shell_start: successful_shell_start()]
+
+    assert :ok = RawMode.resume(session, opts)
+    assert_receive :disable_control_flags
+    refute_receive {:shell_start, _argument}
+
+    assert :ok = RawMode.exit(session, opts)
+    assert_receive {:shell_start, {:noshell, :cooked}}
+    assert_receive {:restore_control_flags, {3, 4}}
+  end
+
+  test "resume keeps the OTP signals API in its existing mode" do
+    assert :ok = RawMode.resume(:otp_signals, tty_nif: FakeTtyNif)
+    refute_receive :disable_control_flags
+  end
+
+  test "resume reports a native flag failure" do
+    Process.put({FakeTtyNif, :disable_result}, {:error, :not_tty})
+
+    assert {:error, {:control_flags, :not_tty}} =
+             RawMode.resume({:native, {1, 2}}, tty_nif: FakeTtyNif)
+  end
+
+  test "resume reports an unavailable native module without replacing the session" do
+    assert {:error, {:control_flags, {:native_exception, %UndefinedFunctionError{}}}} =
+             RawMode.resume({:native, {3, 4}}, tty_nif: NotAvailableTtyNif)
+  end
+
+  defp successful_shell_start do
+    fn argument ->
+      send(self(), {:shell_start, argument})
+      :ok
     end
   end
 end

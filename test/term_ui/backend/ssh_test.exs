@@ -2,576 +2,270 @@ defmodule TermUI.Backend.SSHTest do
   use ExUnit.Case, async: true
 
   alias TermUI.Backend.SSH
+  alias TermUI.{Command, Event, Frame, Runtime}
 
-  # Helper: init SSH backend with a StringIO device to capture output
-  defp init_ssh(opts \\ []) do
-    {:ok, device} = StringIO.open("")
-    opts = Keyword.put_new(opts, :device, device)
-    {:ok, state} = SSH.init(opts)
-    {state, device}
-  end
+  defmodule SessionApp do
+    use TermUI.Elm
 
-  # Helper: read all output written to the StringIO device
-  defp device_output(device) do
-    {_input, output} = StringIO.contents(device)
-    output
-  end
-
-  # ===========================================================================
-  # Module Structure
-  # ===========================================================================
-
-  describe "behaviour declaration" do
-    test "module declares @behaviour TermUI.Backend" do
-      behaviours = SSH.__info__(:attributes)[:behaviour] || []
-      assert TermUI.Backend in behaviours
+    @impl true
+    def init(opts) do
+      %{
+        dimensions: Keyword.fetch!(opts, :dimensions),
+        events: [],
+        label: Keyword.get(opts, :label, "ready")
+      }
     end
 
-    test "module compiles without warnings" do
-      assert Code.ensure_loaded?(SSH)
-    end
-  end
+    @impl true
+    def event_to_msg(event, _state), do: {:msg, {:event, event}}
 
-  # ===========================================================================
-  # State Struct
-  # ===========================================================================
+    @impl true
+    def update({:label, label}, state), do: %{state | label: label}
 
-  describe "state struct defaults" do
-    test "has device field with default nil" do
-      state = %SSH{}
-      assert state.device == nil
+    def update({:event, %Event.Resize{width: width, height: height} = event}, state) do
+      {%{state | dimensions: {width, height}, events: state.events ++ [event]}, []}
     end
 
-    test "has size field with default {24, 80}" do
-      state = %SSH{}
-      assert state.size == {24, 80}
+    def update({:event, %Event.Text{text: "q"} = event}, state) do
+      {%{state | events: state.events ++ [event]}, [Command.shutdown(:normal)]}
     end
 
-    test "has cursor_visible field with default false" do
-      state = %SSH{}
-      assert state.cursor_visible == false
+    def update({:event, event}, state) do
+      %{state | events: state.events ++ [event]}
     end
 
-    test "has cursor_position field with default nil" do
-      state = %SSH{}
-      assert state.cursor_position == nil
-    end
-
-    test "has alternate_screen field with default false" do
-      state = %SSH{}
-      assert state.alternate_screen == false
-    end
-
-    test "has mouse_mode field with default :none" do
-      state = %SSH{}
-      assert state.mouse_mode == :none
-    end
-
-    test "has current_style field with default nil" do
-      state = %SSH{}
-      assert state.current_style == nil
+    @impl true
+    def view(state) do
+      {width, height} = state.dimensions
+      Frame.from_rows([state.label, "events:#{length(state.events)}"], width, height)
     end
   end
 
-  # ===========================================================================
-  # init/1
-  # ===========================================================================
+  test "direct sessions parse remote terminal input and resize the v2 runtime" do
+    session = start_session(label: "remote", mouse_tracking: :all)
+    runtime = session |> SSH.session_info() |> Map.fetch!(:runtime)
 
-  describe "init/1" do
-    test "returns {:ok, state} with device" do
-      {state, _device} = init_ssh()
-      assert %SSH{} = state
+    {setup_token, setup} = receive_output(session)
+    assert setup =~ "\e[?1049h"
+    assert setup =~ "\e[?1003h"
+    assert setup =~ "\e[?2004h"
+    assert setup =~ "\e[?1004h"
+    SSH.ack_output(session, setup_token, :ok)
+
+    {frame_token, frame} = receive_output(session)
+    assert frame =~ "remote"
+    SSH.ack_output(session, frame_token, :ok)
+
+    assert :ok =
+             SSH.input(
+               session,
+               "é\e[200~pasted text\e[201~\e[I\e[<0;3;2M"
+             )
+
+    assert :ok = SSH.resize(session, 40, 120)
+
+    eventually(fn ->
+      state = Runtime.get_state(runtime).app_state
+
+      assert state.dimensions == {120, 40}
+      assert Enum.any?(state.events, &match?(%Event.Text{text: "é"}, &1))
+      assert Enum.any?(state.events, &match?(%Event.Paste{content: "pasted text"}, &1))
+      assert Enum.any?(state.events, &match?(%Event.Focus{action: :gained}, &1))
+      assert Enum.any?(state.events, &match?(%Event.Mouse{action: :press, x: 2, y: 1}, &1))
+    end)
+  end
+
+  test "concurrent sessions isolate application state and failure" do
+    session_a = start_session(label: "session-a")
+    session_b = start_session(label: "session-b")
+    runtime_a = SSH.session_info(session_a).runtime
+    runtime_b = SSH.session_info(session_b).runtime
+
+    acknowledge_initial_output(session_a, "session-a")
+    acknowledge_initial_output(session_b, "session-b")
+
+    assert :ok = SSH.input(session_a, "α")
+
+    eventually(fn ->
+      assert [%Event.Text{text: "α"}] = Runtime.get_state(runtime_a).app_state.events
+      assert [] = Runtime.get_state(runtime_b).app_state.events
+    end)
+
+    reference = Process.monitor(session_a)
+    assert :ok = SSH.disconnect(session_a, :test_disconnect)
+    assert_receive {:DOWN, ^reference, :process, ^session_a, :normal}, 1_000
+
+    assert Process.alive?(session_b)
+    assert Process.alive?(runtime_b)
+  end
+
+  test "a slow output target retains only one in-flight and one current frame" do
+    session = start_session(label: "frame-0", output_timeout: 60_000)
+    runtime = SSH.session_info(session).runtime
+
+    {setup_token, _setup} = receive_output(session)
+
+    for index <- 1..100 do
+      Runtime.send_message(runtime, {:label, "frame-#{index}"})
+      Runtime.force_render(runtime)
+      assert :ok = Runtime.sync(runtime)
     end
 
-    test "stores device in state" do
-      {:ok, device} = StringIO.open("")
-      {:ok, state} = SSH.init(device: device)
-      assert state.device == device
+    assert %{
+             output_queue: %{capacity: 2, in_flight: 1, pending_frames: 1}
+           } = SSH.session_info(session)
+
+    SSH.ack_output(session, setup_token, :ok)
+    {frame_token, frame} = receive_output(session)
+
+    assert frame =~ "frame-100"
+    refute frame =~ "frame-99"
+    SSH.ack_output(session, frame_token, :ok)
+
+    eventually(fn ->
+      assert %{output_queue: %{in_flight: 0, pending_frames: 0}} =
+               SSH.session_info(session)
+    end)
+  end
+
+  test "a forced redraw survives a delayed acknowledgement and replaced waiting frame" do
+    session = start_session(label: "initial", output_timeout: 60_000)
+    runtime = SSH.session_info(session).runtime
+    acknowledge_initial_output(session, "initial")
+
+    Runtime.send_message(runtime, {:label, "in-flight"})
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    {in_flight_token, _frame} = receive_output(session)
+
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    Runtime.send_message(runtime, {:label, "latest"})
+    Runtime.force_render(runtime)
+    :ok = Runtime.sync(runtime)
+    assert SSH.session_info(session).output_queue.pending_frames == 1
+
+    SSH.ack_output(session, in_flight_token, :ok)
+    {redraw_token, redraw} = receive_output(session)
+    assert redraw =~ "\e[0m\e[2J"
+    assert redraw =~ "latest"
+    refute redraw =~ "in-flight"
+    SSH.ack_output(session, redraw_token, :ok)
+
+    eventually(fn -> assert SSH.session_info(session).output_queue.in_flight == 0 end)
+  end
+
+  test "a function output target is serialized outside the session process" do
+    owner = self()
+
+    output = fn data ->
+      send(owner, {:function_output, self(), data})
+      :ok
     end
 
-    test "stores custom size" do
-      {state, _device} = init_ssh(size: {50, 120})
-      assert state.size == {50, 120}
-    end
+    {:ok, session} =
+      SSH.start_session(SessionApp,
+        output: output,
+        size: {6, 20},
+        runtime_options: [label: "function"]
+      )
 
-    test "defaults size to {24, 80}" do
-      {state, _device} = init_ssh()
-      assert state.size == {24, 80}
-    end
+    on_exit(fn -> disconnect_session(session) end)
 
-    test "raises on missing device" do
-      assert_raise KeyError, fn ->
-        SSH.init([])
-      end
-    end
+    assert_receive {:function_output, writer_a, setup}, 500
+    assert setup =~ "\e[2J"
+    refute writer_a == session
 
-    test "enters alternate screen by default" do
-      {state, device} = init_ssh()
-      assert state.alternate_screen == true
-      assert device_output(device) =~ "\e[?1049h"
-    end
+    assert_receive {:function_output, writer_b, frame}, 500
+    assert frame =~ "function"
+    refute writer_b == session
+  end
 
-    test "skips alternate screen when disabled" do
-      {state, device} = init_ssh(alternate_screen: false)
-      assert state.alternate_screen == false
-      refute device_output(device) =~ "\e[?1049h"
-    end
+  test "disconnect stops a session without waiting for a blocked client" do
+    session = start_session(output_timeout: 60_000)
+    runtime = SSH.session_info(session).runtime
+    assert_receive {:term_ui_ssh_output, ^session, _token, _data}
 
-    test "hides cursor by default" do
-      {_state, device} = init_ssh()
-      assert device_output(device) =~ "\e[?25l"
-    end
+    session_reference = Process.monitor(session)
+    runtime_reference = Process.monitor(runtime)
 
-    test "skips hiding cursor when disabled" do
-      {state, device} = init_ssh(hide_cursor: false)
-      assert state.cursor_visible == true
-      refute device_output(device) =~ "\e[?25l"
-    end
+    assert :ok = SSH.disconnect(session, :closed)
 
-    test "clears screen on init" do
-      {_state, device} = init_ssh()
-      output = device_output(device)
-      assert output =~ "\e[2J"
-      assert output =~ "\e[H"
-    end
+    assert_receive {:DOWN, ^runtime_reference, :process, ^runtime, _reason}, 1_000
+    assert_receive {:DOWN, ^session_reference, :process, ^session, :normal}, 1_000
+  end
 
-    test "disables autowrap on init" do
-      {_state, device} = init_ssh()
-      assert device_output(device) =~ "\e[?7l"
-    end
+  @tag capture_log: true
+  test "unconfirmed output stops the runtime and session at the configured timeout" do
+    session = start_session(output_timeout: 1_000)
+    runtime = SSH.session_info(session).runtime
+    session_reference = Process.monitor(session)
+    runtime_reference = Process.monitor(runtime)
+    {_token, _setup} = receive_output(session)
 
-    test "enables mouse tracking when requested" do
-      {state, device} = init_ssh(mouse_tracking: :click)
-      assert state.mouse_mode == :click
-      assert device_output(device) =~ "\e[?1000h"
-    end
+    assert_receive {:DOWN, ^runtime_reference, :process, ^runtime,
+                    {:backend, SSH, :input, {:output_failed, :output_timeout}}},
+                   2_500
 
-    test "no mouse tracking by default" do
-      {state, _device} = init_ssh()
-      assert state.mouse_mode == :none
+    assert_receive {:DOWN, ^session_reference, :process, ^session, :normal}, 1_000
+  end
+
+  test "SSH backend state never selects the local raw terminal backend" do
+    session = start_session()
+    state = Runtime.get_state(SSH.session_info(session).runtime)
+
+    assert state.backend == SSH
+    assert state.capabilities.remote == :ssh
+    refute state.backend == TermUI.Backend.Raw
+  end
+
+  defp start_session(opts \\ []) do
+    runtime_options = Keyword.get(opts, :runtime_options, [])
+    label = Keyword.get(opts, :label, "ready")
+
+    opts =
+      opts
+      |> Keyword.delete(:label)
+      |> Keyword.put_new(:output, self())
+      |> Keyword.put_new(:size, {6, 20})
+      |> Keyword.put(:runtime_options, Keyword.put(runtime_options, :label, label))
+
+    assert {:ok, session} = SSH.start_session(SessionApp, opts)
+    on_exit(fn -> disconnect_session(session) end)
+    session
+  end
+
+  defp acknowledge_initial_output(session, label) do
+    {setup_token, _setup} = receive_output(session)
+    SSH.ack_output(session, setup_token, :ok)
+    {frame_token, frame} = receive_output(session)
+    assert frame =~ label
+    SSH.ack_output(session, frame_token, :ok)
+  end
+
+  defp receive_output(session) do
+    assert_receive {:term_ui_ssh_output, ^session, token, data}, 500
+    {token, data}
+  end
+
+  defp disconnect_session(session) do
+    if Process.alive?(session) do
+      Process.unlink(session)
+      reference = Process.monitor(session)
+      SSH.disconnect(session, :test_cleanup)
+      assert_receive {:DOWN, ^reference, :process, ^session, _reason}, 1_000
     end
   end
 
-  # ===========================================================================
-  # shutdown/1
-  # ===========================================================================
-
-  describe "shutdown/1" do
-    test "returns :ok" do
-      {state, _device} = init_ssh()
-      assert :ok = SSH.shutdown(state)
-    end
-
-    test "shows cursor on shutdown" do
-      {state, device} = init_ssh()
-      # Clear init output
-      StringIO.contents(device)
-      SSH.shutdown(state)
-      {_input, output} = StringIO.contents(device)
-      assert output =~ "\e[?25h"
-    end
-
-    test "leaves alternate screen on shutdown" do
-      {state, device} = init_ssh()
-      SSH.shutdown(state)
-      {_input, output} = StringIO.contents(device)
-      assert output =~ "\e[?1049l"
-    end
-
-    test "resets attributes on shutdown" do
-      {state, device} = init_ssh()
-      SSH.shutdown(state)
-      {_input, output} = StringIO.contents(device)
-      assert output =~ "\e[0m"
-    end
-
-    test "disables mouse tracking on shutdown" do
-      {state, device} = init_ssh(mouse_tracking: :all)
-      SSH.shutdown(state)
-      {_input, output} = StringIO.contents(device)
-      assert output =~ "\e[?1000l"
-    end
-
-    test "restores autowrap on shutdown" do
-      {state, device} = init_ssh()
-      SSH.shutdown(state)
-      assert device_output(device) =~ "\e[?7h"
-    end
-
-    test "handles closed device gracefully" do
-      {state, device} = init_ssh()
-      StringIO.close(device)
-      # Should not raise
-      assert :ok = SSH.shutdown(state)
-    end
-  end
-
-  # ===========================================================================
-  # size/1
-  # ===========================================================================
-
-  describe "size/1" do
-    test "returns cached size" do
-      {state, _device} = init_ssh(size: {40, 160})
-      assert {:ok, {40, 160}} = SSH.size(state)
-    end
-
-    test "returns default size" do
-      {state, _device} = init_ssh()
-      assert {:ok, {24, 80}} = SSH.size(state)
-    end
-  end
-
-  # ===========================================================================
-  # update_size/3
-  # ===========================================================================
-
-  describe "update_size/3" do
-    test "updates size in state" do
-      {state, _device} = init_ssh()
-      {:ok, new_state} = SSH.update_size(state, 50, 120)
-      assert {:ok, {50, 120}} = SSH.size(new_state)
-    end
-
-    test "rejects zero rows" do
-      {state, _device} = init_ssh()
-
-      assert_raise FunctionClauseError, fn ->
-        SSH.update_size(state, 0, 80)
-      end
-    end
-
-    test "rejects zero cols" do
-      {state, _device} = init_ssh()
-
-      assert_raise FunctionClauseError, fn ->
-        SSH.update_size(state, 24, 0)
-      end
-    end
-
-    test "rejects negative dimensions" do
-      {state, _device} = init_ssh()
-
-      assert_raise FunctionClauseError, fn ->
-        SSH.update_size(state, -1, 80)
-      end
-    end
-  end
-
-  # ===========================================================================
-  # Cursor operations
-  # ===========================================================================
-
-  describe "move_cursor/2" do
-    test "writes cursor position sequence" do
-      {state, device} = init_ssh()
-      {:ok, _state} = SSH.move_cursor(state, {5, 10})
-      assert device_output(device) =~ "\e[5;10H"
-    end
-
-    test "updates cursor_position in state" do
-      {state, _device} = init_ssh()
-      {:ok, state} = SSH.move_cursor(state, {5, 10})
-      assert state.cursor_position == {5, 10}
-    end
-
-    test "clamps row to terminal bounds" do
-      {state, _device} = init_ssh(size: {24, 80})
-      {:ok, state} = SSH.move_cursor(state, {100, 10})
-      assert state.cursor_position == {24, 10}
-    end
-
-    test "clamps col to terminal bounds" do
-      {state, _device} = init_ssh(size: {24, 80})
-      {:ok, state} = SSH.move_cursor(state, {5, 200})
-      assert state.cursor_position == {5, 80}
-    end
-
-    test "clamps minimum to 1" do
-      {state, _device} = init_ssh()
-      {:ok, state} = SSH.move_cursor(state, {0, 0})
-      assert state.cursor_position == {1, 1}
-    end
-  end
-
-  describe "hide_cursor/1" do
-    test "writes hide sequence" do
-      {state, _device} = init_ssh(hide_cursor: false)
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-      {:ok, state} = SSH.hide_cursor(state)
-      assert device_output(device) =~ "\e[?25l"
-      assert state.cursor_visible == false
-    end
-
-    test "no-op when already hidden" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device, cursor_visible: false}
-      {:ok, _state} = SSH.hide_cursor(state)
-      assert device_output(device) == ""
-    end
-  end
-
-  describe "show_cursor/1" do
-    test "writes show sequence" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device, cursor_visible: false}
-      {:ok, state} = SSH.show_cursor(state)
-      assert device_output(device) =~ "\e[?25h"
-      assert state.cursor_visible == true
-    end
-
-    test "no-op when already visible" do
-      {state, _device} = init_ssh(hide_cursor: false)
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device, cursor_visible: true}
-      {:ok, _state} = SSH.show_cursor(state)
-      assert device_output(device) == ""
-    end
-  end
-
-  # ===========================================================================
-  # Rendering
-  # ===========================================================================
-
-  describe "clear/1" do
-    test "writes clear and home sequences" do
-      {state, device} = init_ssh()
-      {:ok, _state} = SSH.clear(state)
-      output = device_output(device)
-      # clear appears at init and again on clear call
-      assert String.contains?(output, "\e[2J\e[H")
-    end
-
-    test "resets cursor position" do
-      {state, _device} = init_ssh()
-      {:ok, state} = SSH.move_cursor(state, {10, 20})
-      {:ok, state} = SSH.clear(state)
-      assert state.cursor_position == {1, 1}
-    end
-
-    test "resets style state" do
-      {state, _device} = init_ssh()
-      state = %{state | current_style: %{fg: :red, bg: :default, attrs: []}}
-      {:ok, state} = SSH.clear(state)
-      assert state.current_style == nil
-    end
-  end
-
-  describe "draw_cells/2" do
-    test "returns {:ok, state} for empty cells" do
-      {state, _device} = init_ssh()
-      assert {:ok, %SSH{}} = SSH.draw_cells(state, [])
-    end
-
-    test "writes character to device" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{1, 1}, {"A", :default, :default, []}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      assert output =~ "A"
-    end
-
-    test "writes cursor position for first cell" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{3, 5}, {"X", :default, :default, []}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      assert output =~ "\e[3;5H"
-    end
-
-    test "draws multiple cells" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [
-        {{1, 1}, {"H", :default, :default, []}},
-        {{1, 2}, {"i", :default, :default, []}}
-      ]
-
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      assert output =~ "H"
-      assert output =~ "i"
-    end
-
-    test "moves the cursor across a gap between cells" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [
-        {{1, 1}, {"A", :default, :default, []}},
-        {{1, 3}, {"B", :default, :default, []}}
-      ]
-
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      assert device_output(device) =~ "\e[1;3H"
-    end
-
-    test "tracks display width for wide graphemes" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      {:ok, state} =
-        SSH.draw_cells(state, [{{1, 1}, {"界", :default, :default, []}}])
-
-      assert state.cursor_position == {1, 3}
-    end
-
-    test "emits SGR for colored text" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{1, 1}, {"R", {255, 0, 0}, :default, []}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      # Should contain RGB foreground sequence
-      assert output =~ "\e[38;2;255;0;0m"
-    end
-
-    test "emits bold attribute" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{1, 1}, {"B", :default, :default, [:bold]}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      assert output =~ "\e[1m"
-    end
-
-    test "tracks cursor position after draw" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{5, 10}, {"Z", :default, :default, []}}]
-      {:ok, state} = SSH.draw_cells(state, cells)
-
-      # After drawing "Z" at {5, 10}, cursor should be at {5, 11}
-      assert state.cursor_position == {5, 11}
-    end
-
-    test "style delta skips unchanged style" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      # First draw sets the style
-      cells = [{{1, 1}, {"A", :default, :default, []}}]
-      {:ok, state} = SSH.draw_cells(state, cells)
-
-      # Clear the device and draw again with same style
-      {:ok, device2} = StringIO.open("")
-      state = %{state | device: device2}
-      cells = [{{1, 2}, {"B", :default, :default, []}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device2)
-      # Should NOT contain a reset since style is unchanged
-      refute output =~ "\e[0m"
-    end
-
-    test "sanitizes empty string to space" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      cells = [{{1, 1}, {"", :default, :default, []}}]
-      {:ok, _state} = SSH.draw_cells(state, cells)
-
-      output = device_output(device)
-      assert output =~ " "
-    end
-
-    test "sanitizes control characters" do
-      {state, _device} = init_ssh()
-      {:ok, device} = StringIO.open("")
-      state = %{state | device: device}
-
-      {:ok, _state} = SSH.draw_cells(state, [{{1, 1}, {"\n", :default, :default, []}}])
-
-      output = device_output(device)
-      refute output =~ "\n"
-      assert output =~ " "
-    end
-  end
-
-  describe "flush/1" do
-    test "returns {:ok, state}" do
-      {state, _device} = init_ssh()
-      assert {:ok, %SSH{}} = SSH.flush(state)
-    end
-
-    test "does not modify state" do
-      {state, _device} = init_ssh()
-      {:ok, new_state} = SSH.flush(state)
-      assert state == new_state
-    end
-  end
-
-  # ===========================================================================
-  # Input
-  # ===========================================================================
-
-  describe "poll_event/2" do
-    test "returns {:timeout, state}" do
-      {state, _device} = init_ssh()
-      assert {:timeout, %SSH{}} = SSH.poll_event(state, 100)
-    end
-
-    test "does not modify state" do
-      {state, _device} = init_ssh()
-      {:timeout, new_state} = SSH.poll_event(state, 100)
-      assert state == new_state
-    end
-  end
-
-  # ===========================================================================
-  # Mouse Tracking
-  # ===========================================================================
-
-  describe "mouse tracking modes" do
-    test "click mode enables normal + SGR tracking" do
-      {state, device} = init_ssh(mouse_tracking: :click)
-      assert state.mouse_mode == :click
-      output = device_output(device)
-      assert output =~ "\e[?1000h"
-      assert output =~ "\e[?1006h"
-    end
-
-    test "drag mode enables button + SGR tracking" do
-      {state, device} = init_ssh(mouse_tracking: :drag)
-      assert state.mouse_mode == :drag
-      output = device_output(device)
-      assert output =~ "\e[?1002h"
-      assert output =~ "\e[?1006h"
-    end
-
-    test "all mode enables any-event + SGR tracking" do
-      {state, device} = init_ssh(mouse_tracking: :all)
-      assert state.mouse_mode == :all
-      output = device_output(device)
-      assert output =~ "\e[?1003h"
-      assert output =~ "\e[?1006h"
-    end
+  defp eventually(assertion, attempts \\ 100)
+
+  defp eventually(assertion, 0), do: assertion.()
+
+  defp eventually(assertion, attempts) do
+    assertion.()
+  rescue
+    ExUnit.AssertionError ->
+      Process.sleep(10)
+      eventually(assertion, attempts - 1)
   end
 end

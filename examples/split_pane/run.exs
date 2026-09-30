@@ -1,1 +1,0 @@
-SplitPane.App.run()

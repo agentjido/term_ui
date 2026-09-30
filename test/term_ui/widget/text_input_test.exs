@@ -1,281 +1,147 @@
 defmodule TermUI.Widget.TextInputTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.Component.RenderNode
-  alias TermUI.Event
-  alias TermUI.Widget.TextInput
+  alias TermUI.{Event, Frame, Selection}
+  alias TermUI.Widget
+  alias TermUI.Widget.{Button, TextInput}
 
-  @area %{x: 0, y: 0, width: 20, height: 1}
+  test "the parent can own all widget state and messages" do
+    state = TextInput.init(placeholder: "name", max_length: 4)
+    assert {"name    ", 1} = TextInput.row(state, 8)
 
-  describe "init/1" do
-    test "initializes with empty value" do
-      {:ok, state} = TextInput.init(%{})
+    assert {state1, [{:changed, "a界"}]} = TextInput.update(Event.text("a界"), state)
+    assert {"a界     ", 4} = TextInput.row(state1, 8)
 
-      assert state.value == ""
-      assert state.cursor == 0
-      assert state.scroll_offset == 0
-    end
+    frame = TextInput.view(state1, {8, 1})
+    assert frame.cursor == {4, 1}
+    assert TermUI.Frame.row_text(frame, 1) == "a界     "
 
-    test "initializes with provided value" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-
-      assert state.value == "Hello"
-      # at end
-      assert state.cursor == 5
-    end
-
-    test "stores props in state" do
-      props = %{placeholder: "Enter..."}
-      {:ok, state} = TextInput.init(props)
-      assert state.props == props
-    end
+    assert {state2, [{:changed, "a"}]} = TextInput.update(Event.key(:backspace), state1)
+    assert {state3, [{:submit, "a"}]} = TextInput.update(Event.key(:enter), state2)
+    assert state3.value == "a"
   end
 
-  describe "handle_event/2 cursor movement" do
-    test "left arrow moves cursor left" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :left}, state)
-
-      assert new_state.cursor == 4
-    end
-
-    test "left arrow stops at beginning" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      state = %{state | cursor: 0}
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :left}, state)
-
-      assert new_state.cursor == 0
-    end
-
-    test "right arrow moves cursor right" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      state = %{state | cursor: 2}
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :right}, state)
-
-      assert new_state.cursor == 3
-    end
-
-    test "right arrow stops at end" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :right}, state)
-
-      assert new_state.cursor == 5
-    end
-
-    test "home moves cursor to beginning" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :home}, state)
-
-      assert new_state.cursor == 0
-    end
-
-    test "end moves cursor to end" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      state = %{state | cursor: 2}
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :end}, state)
-
-      assert new_state.cursor == 5
-    end
+  test "paste is sanitized and bounded by graphemes" do
+    state = TextInput.init(max_length: 3)
+    assert {state1, [{:changed, "abc"}]} = TextInput.update(Event.paste("a\nbcdef"), state)
+    assert state1.cursor == 3
   end
 
-  describe "handle_event/2 editing" do
-    test "Alt+Backspace deletes the word before the cursor" do
-      {:ok, state} = TextInput.init(%{value: "Hello brave world"})
+  test "horizontal scrolling keeps the suffix before the cursor contiguous" do
+    state = TextInput.init(value: "a界b")
 
-      {:ok, new_state, commands} =
-        TextInput.handle_event(%Event.Key{key: :backspace, modifiers: [:alt]}, state)
-
-      assert new_state.value == "Hello brave "
-      assert new_state.cursor == String.length("Hello brave ")
-      assert [{:send, _pid, {:changed, "Hello brave "}}] = commands
-    end
-
-    test "backspace deletes character before cursor" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, new_state, commands} = TextInput.handle_event(%Event.Key{key: :backspace}, state)
-
-      assert new_state.value == "Hell"
-      assert new_state.cursor == 4
-      assert [{:send, _pid, {:changed, "Hell"}}] = commands
-    end
-
-    test "backspace at beginning does nothing" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      state = %{state | cursor: 0}
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :backspace}, state)
-
-      assert new_state.value == "Hello"
-    end
-
-    test "delete removes character after cursor" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      state = %{state | cursor: 0}
-      {:ok, new_state, commands} = TextInput.handle_event(%Event.Key{key: :delete}, state)
-
-      assert new_state.value == "ello"
-      assert new_state.cursor == 0
-      assert [{:send, _pid, {:changed, "ello"}}] = commands
-    end
-
-    test "delete at end does nothing" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, new_state} = TextInput.handle_event(%Event.Key{key: :delete}, state)
-
-      assert new_state.value == "Hello"
-    end
-
-    test "character input inserts at cursor" do
-      {:ok, state} = TextInput.init(%{value: "Hllo"})
-      state = %{state | cursor: 1}
-      {:ok, new_state, commands} = TextInput.handle_event(%Event.Key{char: "e"}, state)
-
-      assert new_state.value == "Hello"
-      assert new_state.cursor == 2
-      assert [{:send, _pid, {:changed, "Hello"}}] = commands
-    end
-
-    test "enter triggers submit command" do
-      {:ok, state} = TextInput.init(%{value: "Hello"})
-      {:ok, _state, commands} = TextInput.handle_event(%Event.Key{key: :enter}, state)
-
-      assert [{:send, _pid, {:submit, "Hello"}}] = commands
-    end
+    assert {"b  ", 2} = TextInput.row(state, 3)
+    assert {"  ", 1} = TextInput.row(TextInput.init(value: "a界"), 2)
   end
 
-  describe "handle_info/2" do
-    test "changed message invokes on_change callback" do
-      test_pid = self()
-      callback = fn value -> send(test_pid, {:changed, value}) end
-      props = %{on_change: callback}
-      {:ok, state} = TextInput.init(props)
+  test "shift navigation selects graphemes and input replaces the selection" do
+    state = TextInput.init(value: "a界🙂z")
+    {state, []} = TextInput.update(Event.key(:left, modifiers: [:shift]), state)
+    {state, []} = TextInput.update(Event.key(:left, modifiers: [:shift]), state)
 
-      {:ok, _state} = TextInput.handle_info({:changed, "New"}, state)
-      assert_receive {:changed, "New"}
-    end
+    assert Selection.range(state.selection) == {2, 4}
+    assert Selection.extract(state.selection, state.value) == "🙂z"
+    assert {state, [{:copy, "🙂z"}]} = TextInput.update(Event.key("c", modifiers: [:ctrl]), state)
 
-    test "changed message enforces max_length" do
-      props = %{max_length: 5}
-      {:ok, state} = TextInput.init(props)
-      state = %{state | cursor: 10}
+    frame = TextInput.view(state, {8, 1})
+    assert :reverse in Frame.cell(frame, 1, 4).attrs
+    assert :reverse in Frame.cell(frame, 1, 6).attrs
 
-      {:ok, new_state} = TextInput.handle_info({:changed, "TooLongValue"}, state)
-      assert new_state.value == "TooLo"
-      # adjusted to end
-      assert new_state.cursor == 5
-    end
-
-    test "submit message invokes on_submit callback" do
-      test_pid = self()
-      callback = fn value -> send(test_pid, {:submitted, value}) end
-      props = %{on_submit: callback}
-      {:ok, state} = TextInput.init(props)
-
-      {:ok, _state} = TextInput.handle_info({:submit, "Hello"}, state)
-      assert_receive {:submitted, "Hello"}
-    end
-
-    test "set_value updates value and cursor" do
-      {:ok, state} = TextInput.init(%{})
-      {:ok, new_state} = TextInput.handle_info({:set_value, "New value"}, state)
-
-      assert new_state.value == "New value"
-      assert new_state.cursor == 9
-    end
+    assert {state, [{:changed, "a界X"}]} = TextInput.update(Event.text("X"), state)
+    refute Selection.active?(state.selection)
+    assert state.cursor == 3
   end
 
-  describe "render/2" do
-    test "renders value" do
-      props = %{value: "Hello"}
-      {:ok, state} = TextInput.init(props)
-      result = TextInput.render(state, @area)
+  test "select all and cut return clipboard data and a changed value" do
+    state = TextInput.init(value: "hello")
+    {state, []} = TextInput.update(Event.key("a", modifiers: [:ctrl]), state)
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      chars = Enum.map(Enum.take(cells, 5), fn c -> c.cell.char end)
-      assert chars == ["H", "e", "l", "l", "o"]
-    end
+    assert {state, [{:copy, "hello"}, {:changed, ""}]} =
+             TextInput.update(Event.key("x", modifiers: [:ctrl]), state)
 
-    test "renders placeholder when empty" do
-      props = %{placeholder: "Enter name..."}
-      {:ok, state} = TextInput.init(props)
-      result = TextInput.render(state, @area)
+    assert state.cursor == 0
+    refute Selection.active?(state.selection)
+  end
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      char_list = Enum.map(cells, & &1.cell.char)
-      chars = char_list |> Enum.join() |> String.trim()
-      assert String.starts_with?(chars, "Enter name...")
+  test "routed local mouse events set and extend selection" do
+    state = TextInput.init(value: "abcd")
 
-      # Placeholder should be gray
-      first_cell = hd(cells)
-      assert first_cell.cell.fg == :bright_black
-    end
+    {state, []} =
+      Widget.mouse(TextInput, Event.mouse(:press, :left, 0, 0), state, {4, 1})
 
-    test "shows cursor with inverted style" do
-      props = %{value: "Hello", cursor_style: %{bg: :white, fg: :black}}
-      {:ok, state} = TextInput.init(props)
-      # cursor at 'l'
-      state = %{state | cursor: 2}
-      result = TextInput.render(state, @area)
+    {state, []} =
+      Widget.mouse(TextInput, Event.mouse(:drag, :left, 3, 0), state, {4, 1})
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      cursor_cell = Enum.at(cells, 2)
-      assert cursor_cell.cell.fg == :black
-      assert cursor_cell.cell.bg == :white
-    end
+    assert Selection.extract(state.selection, state.value) == "bc"
+    assert state.cursor == 3
+  end
 
-    test "applies custom style" do
-      props = %{value: "Hello", style: %{fg: :blue}}
-      {:ok, state} = TextInput.init(props)
-      result = TextInput.render(state, @area)
+  test "widgets without a specialized mouse callback use update" do
+    button = Button.init(id: :save, label: "Save")
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      # Non-cursor cells should have custom style
-      first_cell = hd(cells)
-      assert first_cell.cell.fg == :blue
-    end
+    assert {_button, [{:pressed, :save}]} =
+             Widget.mouse(Button, Event.mouse(:release, :left, 1, 0), button, {10, 1})
+  end
 
-    test "pads to area width" do
-      props = %{value: "Hi"}
-      {:ok, state} = TextInput.init(props)
-      result = TextInput.render(state, @area)
+  test "navigation covers both boundaries and selection collapse" do
+    state = TextInput.init(value: "a界🙂z")
+    {home, []} = TextInput.update(Event.key(:home), state)
+    assert home.cursor == 0
+    {right, []} = TextInput.update(Event.key(:right), home)
+    assert right.cursor == 1
+    {finish, []} = TextInput.update(Event.key(:end), right)
+    assert finish.cursor == 4
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      assert length(cells) == 20
-    end
+    {selected, []} = TextInput.update(Event.key(:left, modifiers: [:shift]), finish)
+    {left, []} = TextInput.update(Event.key(:left), selected)
+    assert left.cursor == 3
+    {selected, []} = TextInput.update(Event.key(:right, modifiers: [:shift]), left)
+    {right, []} = TextInput.update(Event.key(:right), selected)
+    assert right.cursor == 4
+  end
 
-    test "scrolls when cursor exceeds visible area" do
-      props = %{value: "This is a very long text input value"}
-      {:ok, state} = TextInput.init(props)
-      # cursor at end (36), area width is 20
-      result = TextInput.render(state, @area)
+  test "delete handles the cursor, the end, and an active selection" do
+    start = %{TextInput.init(value: "abc") | cursor: 0}
+    assert {deleted, [{:changed, "bc"}]} = TextInput.update(Event.key(:delete), start)
+    assert deleted.cursor == 0
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      # Should show end of string
-      char_list = Enum.map(cells, & &1.cell.char)
-      chars = char_list |> Enum.join() |> String.trim()
-      assert String.ends_with?(chars, "value")
-    end
+    finish = TextInput.init(value: "abc")
+    assert {^finish, []} = TextInput.update(Event.key(:delete), finish)
 
-    test "scrolls left when cursor moves before visible area" do
-      props = %{value: "Long text that was scrolled"}
-      {:ok, state} = TextInput.init(props)
-      state = %{state | cursor: 0, scroll_offset: 10}
-      result = TextInput.render(state, @area)
+    {selected, []} = TextInput.update(Event.key(:left, modifiers: [:shift]), finish)
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      # Should show beginning
-      char_list = Enum.map(cells, & &1.cell.char)
-      chars = char_list |> Enum.join() |> String.trim()
-      assert String.starts_with?(chars, "Long")
-    end
+    assert {selected_deleted, [{:changed, "ab"}]} =
+             TextInput.update(Event.key(:delete), selected)
 
-    test "no cursor shown on placeholder" do
-      props = %{placeholder: "Type here..."}
-      {:ok, state} = TextInput.init(props)
-      result = TextInput.render(state, @area)
+    refute Selection.active?(selected_deleted.selection)
+  end
 
-      assert %RenderNode{type: :cells, cells: cells} = result
-      # All cells should have placeholder style (gray), no inverted cursor
-      assert Enum.all?(cells, fn c -> c.cell.fg == :bright_black end)
-    end
+  test "non-control keys and fallback mouse events do not edit" do
+    state = TextInput.init(value: "abc")
+
+    assert {^state, []} = TextInput.update(Event.key("a"), state)
+    assert {^state, []} = TextInput.update(Event.key("c"), state)
+    assert {^state, []} = TextInput.update(Event.key("x"), state)
+    assert {^state, []} = TextInput.update(Event.focus(:gained), state)
+    assert {^state, []} = TextInput.mouse(Event.focus(:lost), state, {5, 1})
+  end
+
+  test "mouse shift, drag without a prior press, and wide-cell halves choose positions" do
+    state = TextInput.init(value: "a界b")
+    {state, []} = TextInput.mouse(Event.mouse(:press, :left, 0, 0), state, {6, 1})
+
+    {shifted, []} =
+      TextInput.mouse(
+        Event.mouse(:press, :left, 3, 0, modifiers: [:shift]),
+        state,
+        {6, 1}
+      )
+
+    assert Selection.extract(shifted.selection, shifted.value) == "a界"
+
+    fresh = TextInput.init(value: "a界b")
+    {dragged, []} = TextInput.mouse(Event.mouse(:drag, :left, 2, 0), fresh, {6, 1})
+    assert dragged.cursor == 2
+    assert Selection.active?(dragged.selection)
   end
 end

@@ -1,52 +1,170 @@
 defmodule TermUI.Terminal.SignalHandlerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+
+  alias TermUI.Backend.Manager
+  alias TermUI.{Event, Frame}
   alias TermUI.Terminal.SignalHandler
 
-  test "forwards SIGWINCH to the terminal process" do
-    terminal = self()
-    assert {:ok, ^terminal} = SignalHandler.handle_event(:sigwinch, terminal)
-    assert_receive :sigwinch
+  test "forwards resume and ignores unrelated signals" do
+    owner = self()
+    assert {:ok, ^owner} = SignalHandler.handle_event(:sigcont, owner)
+    assert_receive :terminal_resume
+    assert {:ok, ^owner} = SignalHandler.handle_event(:sigusr2, owner)
+    refute_receive :terminal_resume
   end
 
-  test "restores the terminal before SIGTERM shutdown continues" do
-    test_process = self()
+  test "the OTP barrier preserves the existing driver and input group" do
+    driver = Process.whereis(:user_drv)
+    user = Process.whereis(:user)
+    owner = self()
 
-    terminal =
-      spawn(fn ->
+    assert {:ok, :ok, ^owner} = SignalHandler.handle_call(:sync, owner)
+    assert Process.whereis(:user_drv) == driver
+    assert Process.whereis(:user) == user
+  end
+
+  test "a local backend removes its supervised signal handler on shutdown" do
+    capture_io(fn ->
+      {:ok, manager} =
+        Manager.start_link(self(), :tty, size: {3, 8}, size_poll_interval: :disabled)
+
+      handler = {SignalHandler, manager}
+
+      if match?({:unix, _}, :os.type()) do
+        assert handler in :gen_event.which_handlers(:erl_signal_server)
+      end
+
+      assert :ok = Manager.close(manager, :normal)
+
+      if match?({:unix, _}, :os.type()) do
+        refute handler in :gen_event.which_handlers(:erl_signal_server)
+      end
+    end)
+  end
+
+  test "the Unix signal subscriber restores a local backend while its input read is pending" do
+    if match?({:unix, _}, :os.type()) do
+      {:ok, output} = StringIO.open("")
+      test_process = self()
+      device = spawn(fn -> hold_input(output, test_process) end)
+      previous = Process.group_leader()
+      Process.group_leader(self(), device)
+
+      try do
+        {:ok, manager} =
+          Manager.start_link(self(), :tty,
+            size: {3, 8},
+            alternate_screen: true,
+            size_poll_interval: :disabled
+          )
+
+        frame = Frame.from_rows(["LEFT", "RIGHT", "END"], 8, 3)
+        assert :ok = Manager.draw(manager, frame)
+        snapshot = output |> StringIO.contents() |> elem(1)
+        assert :ok = Manager.activate(manager)
+        assert_receive {:input_waiting, worker}, 1_000
+        reader = :sys.get_state(manager).backend_state.input_reader
+
+        :gen_event.notify(:erl_signal_server, :sigcont)
+        assert_receive :backend_resumed, 1_000
+        assert Process.alive?(reader)
+        assert Process.alive?(worker)
+        assert :ok = Manager.draw(manager, frame)
+        repaired = output |> StringIO.contents() |> elem(1) |> String.replace_prefix(snapshot, "")
+        assert repaired =~ "\e[?1049h"
+        assert repaired =~ "LEFT"
+        assert repaired =~ "RIGHT"
+        assert repaired =~ "END"
+
+        send(device, {:release_input, "q"})
+        assert_receive {:backend_event, %Event.Text{text: "q"}}, 1_000
+        assert_receive {:input_waiting, ^worker}, 1_000
+        assert :sys.get_state(manager).backend_state.input_reader == reader
+        assert :ok = Manager.close(manager, :normal)
+      after
+        Process.group_leader(self(), previous)
+        send(device, :stop)
+        StringIO.close(output)
+      end
+    end
+  end
+
+  test "a local backend removes its signal handler before waiting for cleanup output" do
+    if match?({:unix, _}, :os.type()) do
+      {:ok, output} = StringIO.open("")
+      device = spawn(fn -> forward_output(output) end)
+      previous = Process.group_leader()
+      Process.group_leader(self(), device)
+
+      try do
+        {:ok, manager} =
+          Manager.start_link(self(), :tty, size: {3, 8}, size_poll_interval: :disabled)
+
+        handler = {SignalHandler, manager}
+        assert handler in :gen_event.which_handlers(:erl_signal_server)
+        send(device, {:hold_next_output, self()})
+        assert_receive :output_hold_ready, 1_000
+
+        close = Task.async(fn -> Manager.close(manager, :normal) end)
+        assert_receive :output_waiting, 1_000
+        refute handler in :gen_event.which_handlers(:erl_signal_server)
+        send(device, :release_output)
+        assert :ok = Task.await(close, 1_000)
+      after
+        send(device, :release_output)
+        Process.group_leader(self(), previous)
+        send(device, :stop)
+        StringIO.close(output)
+      end
+    end
+  end
+
+  defp forward_output(output, hold \\ nil) do
+    receive do
+      {:hold_next_output, owner} ->
+        send(owner, :output_hold_ready)
+        forward_output(output, owner)
+
+      {:io_request, _from, _tag, _request} = request when is_pid(hold) ->
+        send(hold, :output_waiting)
+
         receive do
-          {:"$gen_call", from, :restore} ->
-            send(test_process, :restored)
-            GenServer.reply(from, :ok)
+          :release_output -> send(output, request)
         end
-      end)
 
-    assert {:ok, ^terminal} = SignalHandler.handle_event(:sigterm, terminal)
-    assert_receive :restored
+        forward_output(output)
+
+      {:io_request, _from, _tag, _request} = request ->
+        send(output, request)
+        forward_output(output, hold)
+
+      :release_output ->
+        forward_output(output, hold)
+
+      :stop ->
+        :ok
+    end
   end
 
-  test "supports a custom restore request and no resize target" do
-    test_process = self()
+  defp hold_input(output, owner, pending \\ nil) do
+    receive do
+      {:io_request, reader, tag, {:get_chars, _encoding, _prompt, _count}} ->
+        send(owner, {:input_waiting, reader})
+        hold_input(output, owner, {reader, tag})
 
-    terminal =
-      spawn(fn ->
-        receive do
-          {:"$gen_call", from, :restore_terminal} ->
-            send(test_process, :restored)
-            GenServer.reply(from, :ok)
-        end
-      end)
+      {:release_input, text} when not is_nil(pending) ->
+        {reader, tag} = pending
+        send(reader, {:io_reply, tag, text})
+        hold_input(output, owner)
 
-    state = {terminal, :restore_terminal, nil}
-    assert {:ok, ^state} = SignalHandler.handle_event(:sigwinch, state)
-    refute_receive :sigwinch
-    assert {:ok, ^state} = SignalHandler.handle_event(:sigterm, state)
-    assert_receive :restored
-  end
+      {:io_request, _from, _tag, _request} = request ->
+        send(output, request)
+        hold_input(output, owner, pending)
 
-  test "ignores unrelated signals" do
-    terminal = self()
-    assert {:ok, ^terminal} = SignalHandler.handle_event(:sigusr2, terminal)
-    refute_receive _message
+      :stop ->
+        :ok
+    end
   end
 end

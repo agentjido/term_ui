@@ -1,0 +1,258 @@
+# Backend contract
+
+A backend implements `TermUI.Backend`.
+
+## Browser sessions
+
+`TermUI.WebBackend` starts a normal Elm application for one browser connection.
+It accepts normalized input and sends complete frames or complete changed rows.
+It does not require a web framework or a local terminal.
+
+```elixir
+{:ok, session} =
+  TermUI.WebBackend.start_session(MyApp,
+    owner: self(),
+    output: self(),
+    size: {24, 80},
+    runtime_options: [my_application_option: "value"]
+  )
+
+# Send this map as JSON through the connection.
+receive do
+  {:term_ui_web_output, ^session, payload} -> Jason.encode!(payload)
+end
+
+# Pass decoded client maps to the session. Confirm a frame only after applying it.
+:ok = TermUI.WebBackend.input(session, %{"v" => 1, "type" => "ack", "seq" => 1})
+:ok = TermUI.WebBackend.input(session, %{"v" => 1, "type" => "text", "text" => "é"})
+```
+
+The host provides JSON encoding and the connection. It must check authentication,
+origin, message size, and input rate. Select the application module on the server.
+Never accept a module name from the browser. `Jason` is an example host dependency;
+the TermUI backend does not require it.
+
+The default limits are 300 columns, 120 rows, 4,096 bytes per text event, and
+65,536 bytes per paste. Set `limits: %{width: 200, height: 100}` to change selected
+limits. Terminal dimensions cannot exceed the public Frame bounds. The input
+queue accepts at most 1,024 events. A full queue returns `{:error, :input_queue_full}`.
+Invalid input returns an error without changing application state or dimensions.
+
+There is one frame in flight and one waiting frame. New output replaces the
+waiting frame. The session uses only the last confirmed frame as the delta base.
+A missing base requires a client `resync` message and a new complete frame.
+See `TermUI.WebBackend.Protocol` for cells, colors, coordinates, and input maps.
+
+The default output acknowledgement timeout is five seconds. An expired timeout
+stops the runtime and sends a `closed` message with an error reason. Set
+`output_timeout: milliseconds` for the connection. `stop_session/1` sends the
+final application frame and waits for its acknowledgement. `disconnect/2`
+releases the runtime without waiting for output. Connection-owner exit also
+releases the runtime. A reconnect starts a new session with a complete frame.
+
+## Callback contract
+
+```elixir
+@callback init(keyword()) :: {:ok, state()} | {:error, term()}
+@callback size(state()) :: {:ok, {rows, columns}} | {:error, term()}
+@callback capabilities(state()) :: map()
+@callback draw(state(), TermUI.Frame.t()) :: {:ok, state()} | {:error, term()}
+@callback flush(state()) :: {:ok, state()} | {:error, term()}
+@callback invalidate(state()) :: {:ok, state()} | {:error, term()}
+@callback clipboard(state(), TermUI.Clipboard.Operation.t()) ::
+            {:ok, state()} | {:error, term()}
+@callback poll_event(state(), non_neg_integer()) ::
+            {:ok, TermUI.Event.t(), state()} | {:timeout, state()} | {:error, term(), state()}
+@callback resize(state(), {rows, columns}) :: {:ok, state()} | {:error, term()}
+@callback shutdown(state(), term()) :: :ok
+```
+
+`clipboard/2` is optional. The runtime returns a structured unsupported error
+when a custom backend does not implement it. The callback must return the next
+backend state so clipboard output stays in sequence with draw and cleanup.
+
+The size at the backend boundary is `{rows, columns}`. The runtime converts it
+to application dimensions `{columns, rows}`.
+
+`init/1` must not leave partial terminal state after an error. `shutdown/2`
+must be safe during error cleanup. `draw/2` must retain the last successful
+frame or equivalent backend state so that a later frame can clear old cells.
+
+`TermUI.Test.DeterministicBackend` is the public v2 test boundary. It uses a
+fixed size, reports explicit capabilities, accepts normalized event and resize
+injection, and captures every complete frame. It does not open a terminal or
+call the TTY NIF.
+
+```elixir
+alias TermUI.Test.DeterministicBackend
+
+{:ok, runtime} =
+  TermUI.start_link(MyApp,
+    backend: {
+      DeterministicBackend,
+      owner: self(),
+      size: {12, 40},
+      capabilities: %{colors: :ansi_16, unicode: true}
+    },
+    backend_opts: [size_poll_interval: :disabled]
+  )
+
+assert_receive {:backend, :draw, %TermUI.Frame{} = initial}
+
+:ok = DeterministicBackend.send_event(runtime, TermUI.Event.key(:enter))
+:ok = DeterministicBackend.resize(runtime, 60, 20)
+
+assert_receive {:backend, :resize, {20, 60}}
+assert_receive {:backend, :draw, %TermUI.Frame{width: 60, height: 20}}
+
+TermUI.Runtime.shutdown(runtime)
+assert_receive {:backend, :shutdown_snapshot, snapshot}
+```
+
+The snapshot contains `:frames` in draw order, the final `:size`, the explicit
+`:capabilities`, pending queued events, clipboard operations, flush count, and
+`:shutdown_reason`. This test path needs no native terminal state. Use normal
+ExUnit message assertions. No v1 component harness or test renderer is used.
+
+Use a SexySpex acceptance specification for a small number of user-visible
+workflows that benefit from Given-When-Then documentation across input, state,
+and rendered output. Put them in `test/spex/*_spex.exs` and run `mix spex`.
+Use normal ExUnit tests for focused units, edge cases, internal contracts, and
+most regressions; they are faster to write and keep the main suite cohesive.
+
+The runtime puts each backend behind one serialized owner. State returned by
+input, size, draw, flush, and resize callbacks becomes the state for the next
+callback and for final cleanup.
+
+## Restore the screen
+
+Call `TermUI.Runtime.force_render(runtime)` when external output damages the
+screen. This call invalidates previous output through the backend owner and
+draws the complete current frame. It repairs the screen even when application
+state is unchanged. A terminal focus-gained event also requests this repair,
+including when the application ignores that event.
+
+The optional `invalidate/1` callback makes the next draw a complete output
+update. Raw, incremental TTY, and SSH implement it. A custom backend without
+this callback receives `resize/2` with its current size. That call must also
+invalidate cached output. Complete updates must clear stale cells and reset
+external ANSI style state. Ordinary changed-frame updates still use diffs.
+
+An SSH session retains the full-redraw request while output is in flight.
+The next waiting frame receives the repair, even when a newer frame replaces
+the waiting frame before the previous output is confirmed.
+
+On Unix, local Raw and TTY owners receive `SIGCONT` through a supervised
+signal handler. The owner waits for OTP's earlier signal handling, restores
+owned terminal modes, and requests a complete frame from the runtime. Raw
+disables signal and flow-control flags again without replacing the original
+flags saved for shutdown. TTY keeps its current input mode. Resume does not
+replace the input reader or application state.
+
+The optional `resume/1` callback restores a backend's owned modes. A backend
+without it uses its invalidation contract. Custom and SSH backends do not
+register for local process signals. The host owns recovery of a remote session.
+On a mode-restoration failure, the runtime stops with a structured backend
+reason and runs normal cleanup.
+
+## Native build policy
+
+Only the local raw backend can need the TTY NIF. OTP 28 and OTP 29 need this
+small native helper to stop the terminal driver from consuming Ctrl+O,
+Ctrl+C, Ctrl+S, and Ctrl+Q. The `:tty` backend is the pure BEAM local fallback.
+The SSH and deterministic backends also use only BEAM code.
+
+The `TERM_UI_TTY_NIF` build setting has these values:
+
+| Value | Build and runtime behavior |
+| --- | --- |
+| `auto` | Build from source when `make` and a C compiler exist. Otherwise, do not build the NIF. |
+| `source` | Require a source build. Stop with a clear list of missing tools when the toolchain is incomplete. |
+| `disabled` | Do not build the NIF. Keep TTY, SSH, deterministic, and custom backends available. |
+
+`auto` is the default. TermUI does not ship precompiled artifacts. The local
+raw path loads the NIF on demand. Backend selection falls back to `:tty` when
+the NIF is absent and OTP cannot manage control signals. An explicit `:raw`
+selection returns a structured `:raw_mode_unavailable` error. It does not
+leave the terminal in raw mode.
+
+On Windows, the source build needs `cl` and `nmake` in the active shell.
+Build in a native tools shell that matches the BEAM architecture. The
+Windows CI uses the x64 MSVC tools shell. Run `mix deps.get` and
+`mix compile` there, then run the application in its normal terminal
+profile. The package includes `Makefile.win` and C source; it does not
+include a compiled DLL. If the tools are absent, `auto` skips the native
+build and automatic backend selection uses TTY. An explicit Raw selection
+still reports that raw mode is unavailable.
+
+Size polling uses a 200 ms interval when direct terminal or environment size
+checks are available. It uses a 1 second interval when detection must start
+`stty`. Set `backend_opts: [size_poll_interval: milliseconds]` to use an
+interval of at least 50 ms. Use `:disabled` when the application supplies all
+resize events through its backend input stream.
+
+## SSH sessions
+
+`TermUI.Backend.SSH` owns one remote terminal session and one v2 runtime. It
+does not start an SSH daemon. Thus, the host application keeps control of
+authentication, host keys, network policy, and connection limits.
+
+An application that already owns an SSH server can use the direct session API:
+
+```elixir
+{:ok, session} =
+  TermUI.Backend.SSH.start_session(MyApp,
+    size: {24, 80},
+    output: fn data -> MySSHTransport.send(data) end
+  )
+
+:ok = TermUI.Backend.SSH.input(session, remote_bytes)
+:ok = TermUI.Backend.SSH.resize(session, 40, 120)
+:ok = TermUI.Backend.SSH.stop_session(session)
+```
+
+Some SSH libraries require output from the channel process. Set `:output` to
+that process. It receives this message:
+
+```elixir
+{:term_ui_ssh_output, session, token, data}
+```
+
+After it sends the data, it must call
+`TermUI.Backend.SSH.ack_output(session, token, result)`. Only one output is in
+flight. One newer frame can wait, and each later frame replaces the stale
+waiting frame. Frame diffs use the last confirmed frame, so a slow client does
+not receive an invalid diff.
+
+OTP SSH daemons can use the supplied channel callback:
+
+```elixir
+:ssh.daemon(port,
+  system_dir: system_dir,
+  pwdfun: password_fun,
+  ssh_cli: {TermUI.Backend.SSH.Channel, [MyApp, runtime_options: []]}
+)
+```
+
+The callback accepts PTY input and window changes. It sends Unicode text,
+bracketed paste, mouse, focus, and resize values through the normal v2 event
+contract. The SSH path does not select raw mode or call the local terminal NIF.
+
+The application view owns the background. Include styled blank cells in its
+complete frame when the background must cover the whole screen:
+
+```elixir
+style = TermUI.Style.new(bg: :blue)
+blank_row = [{String.duplicate(" ", width), style}]
+
+frame =
+  TermUI.Frame.from_rows(List.duplicate(blank_row, height), width, height)
+
+TermUI.Frame.put_row(frame, 1, [{String.pad_trailing("Remote session", width), style}])
+```
+
+Use the same background style when padding a shorter row. Default blank
+cells use the default terminal background. A style-only change is a frame
+change and reaches the remote screen through the normal draw path.
+
+See [Linux releases](linux-releases.md) for older Linux targets and native library checks.

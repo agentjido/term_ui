@@ -1,1 +1,0 @@
-Tabs.App.run()

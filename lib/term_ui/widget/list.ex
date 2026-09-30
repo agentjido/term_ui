@@ -1,254 +1,189 @@
 defmodule TermUI.Widget.List do
-  @moduledoc """
-  A scrollable list widget with selection support.
+  @moduledoc "A pure, scrollable item list with single or multiple selection."
 
-  List displays items and allows navigation with arrow keys.
-  Supports single and multi-select modes.
+  @behaviour TermUI.Widget
 
-  This module uses the earlier `TermUI.Widget` namespace, accepts a props map
-  directly, and must be embedded as an explicit state machine in the Elm root.
+  alias TermUI.{Event, Frame, Style}
+  alias TermUI.Widget.Helpers
 
-  ## Usage
+  # Dialyzer loses the MapSet opaque type when the selection becomes empty.
+  @dialyzer {:nowarn_function, set_items: 2}
 
-      List.render(%{
-        items: ["Apple", "Banana", "Cherry"],
-        on_select: fn item -> IO.puts("Selected: \#{item}") end
-      }, state, area)
+  @type item :: term()
+  @type t :: %__MODULE__{
+          items: [item()],
+          cursor: non_neg_integer(),
+          offset: non_neg_integer(),
+          selected: MapSet.t(non_neg_integer()),
+          mode: :single | :multiple,
+          page_size: pos_integer(),
+          marker: String.t(),
+          style: Style.t(),
+          cursor_style: Style.t(),
+          selected_style: Style.t()
+        }
 
-  ## Props
+  defstruct items: [],
+            cursor: 0,
+            offset: 0,
+            selected: MapSet.new(),
+            mode: :single,
+            page_size: 10,
+            marker: "> ",
+            style: %Style{},
+            cursor_style: %Style{fg: :cyan, attrs: MapSet.new([:bold])},
+            selected_style: %Style{fg: :green}
 
-  - `:items` - List of items to display (required)
-  - `:on_select` - Callback when selection changes
-  - `:multi_select` - Enable multi-select mode (default: `false`)
-  - `:highlight_style` - Style for selected items
-  - `:style` - Default item style
-  """
-
-  use TermUI.StatefulComponent
-
-  alias TermUI.Component.RenderNode
-  alias TermUI.Event
-  alias TermUI.Renderer.Style
-
-  # Dialyzer: Suppress opaque type warnings for Style helpers
-  # no_opaque: Style contains MapSet which triggers false positive call_without_opaque warnings
-  @dialyzer [:no_opaque, nowarn_function: [build_style: 1, positioned_cell_safe: 4]]
-
-  @doc """
-  Initializes the list state.
-  """
   @impl true
-  def init(props) do
-    items = Map.get(props, :items, [])
-
-    state = %{
-      selected_index: 0,
-      selected_indices: MapSet.new(),
-      scroll_offset: 0,
-      item_count: length(items),
-      props: props
+  def init(opts) do
+    %__MODULE__{
+      items: Keyword.get(opts, :items, []),
+      cursor: max(Keyword.get(opts, :cursor, 0), 0),
+      mode: Keyword.get(opts, :mode, :single),
+      page_size: max(Keyword.get(opts, :page_size, 10), 1),
+      marker: Keyword.get(opts, :marker, "> "),
+      style: Keyword.get(opts, :style, Style.new()),
+      cursor_style: Keyword.get(opts, :cursor_style, Style.new(fg: :cyan, attrs: [:bold])),
+      selected_style: Keyword.get(opts, :selected_style, Style.new(fg: :green))
     }
-
-    {:ok, state}
+    |> normalize_cursor()
   end
 
-  @doc """
-  Handles events for the list.
-  """
   @impl true
-  def handle_event(%Event.Key{key: :up}, state) do
-    new_index = max(0, state.selected_index - 1)
-    {:ok, %{state | selected_index: new_index}}
-  end
+  def update(%Event.Key{key: :up}, state), do: move(state, -1)
+  def update(%Event.Key{key: :down}, state), do: move(state, 1)
+  def update(%Event.Key{key: :home}, state), do: move_to(state, 0)
+  def update(%Event.Key{key: :end}, state), do: move_to(state, length(state.items) - 1)
+  def update(%Event.Key{key: :page_up}, state), do: move(state, -state.page_size)
+  def update(%Event.Key{key: :page_down}, state), do: move(state, state.page_size)
+  def update(%Event.Key{key: :space}, %{mode: :multiple} = state), do: toggle(state)
+  def update(%Event.Text{text: " "}, %{mode: :multiple} = state), do: toggle(state)
+  def update(%Event.Key{key: :enter}, state), do: select(state)
+  def update(_event, state), do: {state, []}
 
-  def handle_event(%Event.Key{key: :down}, state) do
-    new_index = min(state.item_count - 1, state.selected_index + 1)
-    {:ok, %{state | selected_index: max(0, new_index)}}
-  end
-
-  def handle_event(%Event.Key{key: :home}, state) do
-    {:ok, %{state | selected_index: 0}}
-  end
-
-  def handle_event(%Event.Key{key: :end}, state) do
-    {:ok, %{state | selected_index: max(0, state.item_count - 1)}}
-  end
-
-  def handle_event(%Event.Key{key: :page_up}, state) do
-    new_index = max(0, state.selected_index - 10)
-    {:ok, %{state | selected_index: new_index}}
-  end
-
-  def handle_event(%Event.Key{key: :page_down}, state) do
-    new_index = min(state.item_count - 1, state.selected_index + 10)
-    {:ok, %{state | selected_index: max(0, new_index)}}
-  end
-
-  def handle_event(%Event.Key{key: :enter}, state) do
-    # Trigger selection callback
-    {:ok, state, [{:send, self(), {:select, state.selected_index}}]}
-  end
-
-  def handle_event(%Event.Key{key: :space}, state) do
-    # Toggle selection in multi-select mode
-    {:ok, state, [{:send, self(), {:toggle, state.selected_index}}]}
-  end
-
-  def handle_event(_event, state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Handles messages to the list.
-  """
   @impl true
-  def handle_info({:select, index}, state) do
-    props = state.props
-    items = Map.get(props, :items, [])
-    on_select = Map.get(props, :on_select)
+  def mouse(%Event.Mouse{action: action, button: :left, y: y}, state, {_width, height})
+      when action in [:press, :release] do
+    offset = visible_offset(state.cursor, state.offset, height)
+    index = offset + y
 
-    if is_function(on_select, 1) && index < length(items) do
-      item = Enum.at(items, index)
-      on_select.(item)
-    end
+    if y >= 0 and y < height and index < length(state.items) do
+      state = %{state | cursor: index, offset: offset}
 
-    {:ok, state}
-  end
-
-  def handle_info({:toggle, index}, state) do
-    props = state.props
-    multi_select = Map.get(props, :multi_select, false)
-
-    if multi_select do
-      selected =
-        if MapSet.member?(state.selected_indices, index) do
-          MapSet.delete(state.selected_indices, index)
-        else
-          MapSet.put(state.selected_indices, index)
-        end
-
-      {:ok, %{state | selected_indices: selected}}
-    else
-      {:ok, state}
-    end
-  end
-
-  def handle_info({:set_items, items}, state) do
-    count = length(items)
-    new_index = min(state.selected_index, max(0, count - 1))
-
-    {:ok, %{state | item_count: count, selected_index: new_index}}
-  end
-
-  def handle_info(_msg, state) do
-    {:ok, state}
-  end
-
-  @doc """
-  Renders the list.
-  """
-  @impl true
-  def render(state, area) do
-    props = state.props
-    items = Map.get(props, :items, [])
-    multi_select = Map.get(props, :multi_select, false)
-    style_opts = Map.get(props, :style, %{})
-    highlight_opts = Map.get(props, :highlight_style, %{fg: :black, bg: :white})
-
-    style = build_style(style_opts)
-    highlight_style = build_style(highlight_opts)
-
-    # Calculate scroll offset to keep selection visible
-    scroll_offset = calculate_scroll(state.selected_index, state.scroll_offset, area.height)
-
-    # Render visible items
-    cells =
-      items
-      |> Enum.with_index()
-      |> Enum.drop(scroll_offset)
-      |> Enum.take(area.height)
-      |> Enum.with_index()
-      |> Enum.flat_map(fn {{item, item_index}, display_y} ->
-        is_selected = item_index == state.selected_index
-        is_multi_selected = MapSet.member?(state.selected_indices, item_index)
-
-        item_style = get_item_style(is_selected, is_multi_selected, highlight_style, style)
-        text = format_item_text(item, multi_select, is_multi_selected)
-
-        render_item(text, display_y, area.width, item_style)
-      end)
-
-    RenderNode.cells(cells)
-  end
-
-  # Private Functions
-
-  defp get_item_style(true, _is_multi_selected, highlight_style, _style), do: highlight_style
-  defp get_item_style(_is_selected, true, highlight_style, _style), do: highlight_style
-  defp get_item_style(_is_selected, _is_multi_selected, _highlight_style, style), do: style
-
-  defp format_item_text(item, true, true), do: "[x] " <> to_string(item)
-  defp format_item_text(item, true, false), do: "[ ] " <> to_string(item)
-  defp format_item_text(item, false, _is_multi_selected), do: to_string(item)
-
-  defp render_item(text, y, width, style) do
-    display_text =
-      if String.length(text) > width do
-        String.slice(text, 0, width - 1) <> "…"
-      else
-        String.pad_trailing(text, width)
+      cond do
+        action == :press -> {state, []}
+        state.mode == :multiple -> toggle(state)
+        true -> select(state)
       end
-
-    display_text
-    |> String.graphemes()
-    |> Enum.with_index()
-    |> Enum.filter(fn {_char, x} -> x < width end)
-    |> Enum.map(fn {char, x} ->
-      positioned_cell_safe(x, y, char, style)
-    end)
-  end
-
-  # ----------------------------------------------------------------------------
-  # Style Helper Functions
-  # ----------------------------------------------------------------------------
-
-  @spec positioned_cell_safe(integer(), integer(), String.t(), Style.t()) :: RenderNode.t()
-  defp positioned_cell_safe(x, y, char, style),
-    do: positioned_cell(x, y, char, style)
-
-  # ----------------------------------------------------------------------------
-  # Utility Functions
-  # ----------------------------------------------------------------------------
-
-  defp calculate_scroll(selected, current_scroll, visible_height) do
-    cond do
-      # Selection above visible area
-      selected < current_scroll ->
-        selected
-
-      # Selection below visible area
-      selected >= current_scroll + visible_height ->
-        selected - visible_height + 1
-
-      # Selection visible
-      true ->
-        current_scroll
+    else
+      {state, []}
     end
   end
 
-  defp build_style(opts) when is_map(opts) do
-    style_list =
-      opts
-      |> Enum.map(fn
-        {:fg, color} -> {:fg, color}
-        {:bg, color} -> {:bg, color}
-        {:bold, true} -> {:attrs, [:bold]}
-        _ -> nil
-      end)
-      |> Enum.reject(&is_nil/1)
+  def mouse(event, state, _dimensions), do: update(event, state)
 
-    Style.new(style_list)
+  @impl true
+  def view(state, {width, height} = dimensions) do
+    offset = visible_offset(state.cursor, state.offset, height)
+
+    rows =
+      state.items
+      |> Enum.slice(offset, height)
+      |> Enum.with_index(offset)
+      |> Enum.map(&render_item(&1, state, width))
+
+    Helpers.frame(rows, dimensions)
   end
 
-  defp build_style(_), do: Style.new()
+  @doc "Replaces all items and keeps the cursor in range."
+  @spec set_items(t(), [item()]) :: t()
+  def set_items(state, items),
+    do: normalize_cursor(%{state | items: items, selected: MapSet.new()})
+
+  @doc "Returns the item under the cursor."
+  @spec current(t()) :: item() | nil
+  def current(state), do: Enum.at(state.items, state.cursor)
+
+  defp render_item({item, index}, state, width) do
+    cursor? = index == state.cursor
+    selected? = MapSet.member?(state.selected, index)
+
+    prefix =
+      if cursor?, do: state.marker, else: String.duplicate(" ", Helpers.text_width(state.marker))
+
+    check = selection_mark(state.mode, selected?)
+    style = item_style(state, cursor?, selected?)
+    {label, icon, shortcut} = item_display(item)
+    icon = if icon == "", do: "", else: icon <> " "
+    text = prefix <> check <> icon <> label
+    [{with_shortcut(text, shortcut, width), style}]
+  end
+
+  defp selection_mark(:multiple, true), do: "[x] "
+  defp selection_mark(:multiple, false), do: "[ ] "
+  defp selection_mark(_mode, _selected?), do: ""
+
+  defp item_style(state, true, _selected?), do: state.cursor_style
+  defp item_style(state, false, true), do: state.selected_style
+  defp item_style(state, false, false), do: state.style
+
+  defp move(state, delta), do: move_to(state, state.cursor + delta)
+
+  defp move_to(state, cursor) do
+    state = %{state | cursor: Helpers.clamp(cursor, 0, max(length(state.items) - 1, 0))}
+    offset = visible_offset(state.cursor, state.offset, state.page_size)
+    {%{state | offset: offset}, []}
+  end
+
+  defp select(state) do
+    case current(state) do
+      nil -> {state, []}
+      item -> {%{state | selected: MapSet.new([state.cursor])}, [{:selected, item}]}
+    end
+  end
+
+  defp toggle(state) do
+    case current(state) do
+      nil ->
+        {state, []}
+
+      item ->
+        selected =
+          if MapSet.member?(state.selected, state.cursor),
+            do: MapSet.delete(state.selected, state.cursor),
+            else: MapSet.put(state.selected, state.cursor)
+
+        {%{state | selected: selected}, [{:toggled, item}]}
+    end
+  end
+
+  defp normalize_cursor(state),
+    do: %{state | cursor: min(state.cursor, max(length(state.items) - 1, 0))}
+
+  defp visible_offset(cursor, offset, _height) when cursor < offset, do: cursor
+
+  defp visible_offset(cursor, offset, height) when cursor >= offset + height,
+    do: cursor - height + 1
+
+  defp visible_offset(_cursor, offset, _height), do: offset
+
+  defp item_display(%{label: label} = item) do
+    icon = item |> Map.get(:icon, "") |> to_string()
+    shortcut = Map.get(item, :shortcut, Map.get(item, :hotkey))
+    {to_string(label), icon, shortcut && to_string(shortcut)}
+  end
+
+  defp item_display({_id, label}), do: {to_string(label), "", nil}
+  defp item_display(item), do: {to_string(item), "", nil}
+
+  defp with_shortcut(text, nil, _width), do: text
+
+  defp with_shortcut(text, shortcut, width) do
+    shortcut_width = Helpers.text_width(shortcut)
+    label_width = max(width - shortcut_width - 1, 0)
+
+    if label_width == 0,
+      do: Frame.fit(shortcut, width),
+      else: Frame.fit(text, label_width) <> " " <> shortcut
+  end
 end

@@ -1,253 +1,185 @@
 defmodule TermUI.Config do
   @moduledoc """
-  Configuration reading and defaults for TermUI applications.
+  Adapts known v1 application environment values to v2 runtime options.
 
-  This module provides application-level configuration for TermUI.
-  Configuration is read from the application environment and can be
-  overridden by runtime options.
-
-  ## Configuration
-
-  Add to your `config/config.exs`:
-
-      import Config
-
-      config :term_ui,
-        backend: :auto,
-        color_mode: :auto,
-        character_set: :auto,
-        render_interval: 16,
-        iex_compatible: :auto
-
-  ## Options
-
-  ### `:backend`
-
-  Controls which terminal backend to use.
-
-  - `:auto` - (default) Automatically detect and use the best available backend
-  - `:raw` - Force raw mode (requires OTP 28+, error if unavailable)
-  - `:tty` - Force TTY mode (line-based input, no raw mode attempt)
-
-  Example:
-      config :term_ui, backend: :tty
-
-  ### `:color_mode`
-
-  Stores a color-depth preference for application code. In the 1.0 integrated
-  runtime, the TTY backend derives its actual color mode from detected
-  capabilities and Raw emits the requested styles; this value is not applied
-  as a backend override.
-
-  - `:auto` - (default) Detect terminal color support
-  - `:true_color` - Prefer 24-bit RGB color
-  - `:color_256` - Prefer the 256-color palette
-  - `:color_16` - Prefer the 16-color palette
-  - `:monochrome` - Prefer monochrome output
-
-  Example:
-      config :term_ui, color_mode: :color_256
-
-  ### `:character_set`
-
-  Stores a character-set preference. Before a runtime starts it is the fallback
-  used by `TermUI.CharacterSet.current/0`. Once a local runtime stores terminal
-  capabilities, the current character set is derived from detected Unicode
-  support, so this is not a force override in 1.0.
-
-  - `:auto` - (default) Detect Unicode support
-  - `:unicode` - Prefer the Unicode character set
-  - `:ascii` - Prefer the ASCII character set
-
-  Example:
-      config :term_ui, character_set: :ascii
-
-  ### `:render_interval`
-
-  Milliseconds between renders.
-
-  - Default: `16` (~60 FPS)
-  - Lower values = smoother animations but more CPU usage
-  - Higher values = less CPU but choppier animations
-
-  Example:
-      config :term_ui, render_interval: 33  # ~30 FPS
-
-  ### `:iex_compatible`
-
-  Controls IEx compatibility mode detection.
-
-  - `:auto` - (default) Automatically detect if running in IEx
-  - `true` - Force IEx-compatible mode
-  - `false` - Force standalone mode
-
-  This can also be controlled via the `TERM_UI_IEX_MODE` environment variable.
-
-  Example:
-      config :term_ui, iex_compatible: true
-
-  To override via environment variable:
-      export TERM_UI_IEX_MODE=true
-
-  See `TermUI.iex_mode?/0` for more details on IEx detection.
-
-  ## Runtime Options Override
-
-  Runtime options passed to `TermUI.Runtime.start_link/1` or
-  `TermUI.Runtime.run/1` take precedence over configuration. `TermUI.App`
-  forwards its documented runtime options (`:backend`, `:name`,
-  `:render_interval`, `:skip_terminal`, and `:use_input_handler`).
-
-      # Config says :tty, but runtime option says :raw
-      {:ok, _pid} = TermUI.App.start(MyApp, backend: :raw)
-
-  ## Per-Environment Configuration
-
-  You can configure different settings per environment:
-
-      # config/dev.exs
-      config :term_ui, backend: :raw
-
-      # config/test.exs
-      config :term_ui, backend: :tty
-
-      # config/prod.exs
-      config :term_ui, backend: :auto
-
+  Explicit runtime and backend options always take precedence. Each v1 key
+  emits one deprecation warning for the life of the VM when TermUI uses it.
   """
 
-  @type option_key ::
-          :backend
-          | :color_mode
-          | :character_set
-          | :render_interval
-          | :iex_compatible
-          | :skip_terminal
-          | :use_input_handler
-          | :name
+  require Logger
 
-  @type option :: {option_key(), term()}
+  @warning_key {__MODULE__, :deprecated_warnings}
+  @backend_values [:auto, :raw, :tty]
+  @color_values [:auto, :true_color, :color_256, :color_16, :monochrome]
+  @character_values [:auto, :unicode, :ascii]
+  @iex_values [:auto, true, false]
 
-  @default_backend :auto
-  @default_color_mode :auto
-  @default_character_set :auto
-  @default_render_interval 16
+  @type error :: {:invalid_legacy_config, atom(), term(), String.t()}
 
-  @doc """
-  Gets a configuration value by key with an optional default.
-
-  ## Examples
-
-      iex> TermUI.Config.get(:backend)
-      :auto
-
-      iex> TermUI.Config.get(:render_interval)
-      16
-
-      iex> Application.put_env(:term_ui, :backend, :tty)
-      iex> TermUI.Config.get(:backend)
-      :tty
-
-  """
-  @spec get(option_key(), term()) :: term()
-  def get(key, default \\ nil)
-
-  def get(:backend, default) do
-    Application.get_env(:term_ui, :backend, default || @default_backend)
+  @doc "Merges supported v1 application environment values into v2 runtime options."
+  @spec merge_runtime_options(keyword()) :: {:ok, keyword()} | {:error, error()}
+  def merge_runtime_options(opts) when is_list(opts) do
+    with {:ok, opts} <- merge_backend(opts),
+         {:ok, opts} <- merge_color_mode(opts),
+         {:ok, opts} <- merge_character_set(opts),
+         {:ok, opts} <- merge_render_interval(opts) do
+      merge_iex_mode(opts)
+    end
   end
 
-  def get(:color_mode, default) do
-    Application.get_env(:term_ui, :color_mode, default || @default_color_mode)
+  @doc false
+  @spec reset_deprecation_warnings() :: :ok
+  def reset_deprecation_warnings do
+    :persistent_term.erase(@warning_key)
+    :ok
   end
 
-  def get(:character_set, default) do
-    Application.get_env(:term_ui, :character_set, default || @default_character_set)
+  defp merge_backend(opts) do
+    merge_runtime_option(opts, :backend, :backend, @backend_values, & &1)
   end
 
-  def get(:render_interval, default) do
-    Application.get_env(:term_ui, :render_interval, default || @default_render_interval)
+  defp merge_color_mode(opts) do
+    merge_backend_option(opts, :color_mode, :color_mode, @color_values)
   end
 
-  def get(key, default) do
-    Application.get_env(:term_ui, key, default)
+  defp merge_character_set(opts) do
+    merge_backend_option(opts, :character_set, :character_set, @character_values)
   end
 
-  @doc """
-  Gets the four values merged into normal runtime startup as a keyword list.
+  defp merge_render_interval(opts) do
+    if Keyword.has_key?(opts, :render_interval) do
+      {:ok, opts}
+    else
+      case Application.fetch_env(:term_ui, :render_interval) do
+        {:ok, interval} when is_integer(interval) and interval > 0 ->
+          warn_once(:render_interval, ":render_interval runtime option")
+          {:ok, Keyword.put(opts, :render_interval, interval)}
 
-  Returns backend, color-mode, character-set, and render-interval application
-  configuration merged with defaults. IEx compatibility is read separately by
-  `TermUI.iex_mode?/0`.
+        {:ok, invalid} ->
+          invalid(:render_interval, invalid, "expected a positive integer")
 
-  ## Examples
-
-      iex> Keyword.keys(TermUI.Config.all())
-      [:backend, :color_mode, :character_set, :render_interval]
-
-  """
-  @spec all() :: keyword()
-  def all do
-    [
-      backend: get(:backend),
-      color_mode: get(:color_mode),
-      character_set: get(:character_set),
-      render_interval: get(:render_interval)
-    ]
+        :error ->
+          {:ok, opts}
+      end
+    end
   end
 
-  @doc """
-  Merges application configuration with runtime options.
+  defp merge_iex_mode(opts) do
+    if Keyword.has_key?(opts, :backend) do
+      {:ok, opts}
+    else
+      case Application.fetch_env(:term_ui, :iex_compatible) do
+        {:ok, value} ->
+          merge_iex_value(opts, value)
 
-  Runtime options take precedence over application configuration.
-  This allows users to override config for specific cases.
-
-  ## Priority
-
-  1. Runtime options (highest)
-  2. Application configuration
-  3. Module defaults (lowest)
-
-  ## Examples
-
-      iex> TermUI.Config.merge_options([backend: :auto])
-      [backend: :auto, render_interval: 16, ...]
-
-      iex> TermUI.Config.merge_options(backend: :raw, render_interval: 33)
-      [backend: :raw, render_interval: 33, ...]
-
-      # Runtime option overrides config
-      iex> Application.put_env(:term_ui, :backend, :tty)
-      iex> opts = TermUI.Config.merge_options(backend: :raw)
-      iex> opts[:backend]
-      :raw
-
-  """
-  @spec merge_options(keyword()) :: keyword()
-  def merge_options(runtime_opts \\ []) do
-    config_opts = all()
-
-    # Runtime options take precedence
-    Keyword.merge(config_opts, runtime_opts)
+        :error ->
+          {:ok, opts}
+      end
+    end
   end
 
-  @doc """
-  Returns the default options without reading from application config.
+  defp merge_runtime_option(opts, new_key, old_key, valid_values, mapper) do
+    if Keyword.has_key?(opts, new_key) do
+      {:ok, opts}
+    else
+      case Application.fetch_env(:term_ui, old_key) do
+        {:ok, value} ->
+          merge_validated_runtime_option(opts, new_key, old_key, value, valid_values, mapper)
 
-  This is useful for testing or when you want to ignore application config.
+        :error ->
+          {:ok, opts}
+      end
+    end
+  end
 
-  ## Examples
+  defp merge_backend_option(opts, old_key, new_key, valid_values) do
+    if backend_option_present?(opts, new_key) do
+      {:ok, opts}
+    else
+      case Application.fetch_env(:term_ui, old_key) do
+        {:ok, value} ->
+          merge_validated_backend_option(opts, old_key, new_key, value, valid_values)
 
-      iex> TermUI.Config.defaults()
-      [backend: :auto, color_mode: :auto, character_set: :auto, render_interval: 16]
+        :error ->
+          {:ok, opts}
+      end
+    end
+  end
 
-  """
-  @spec defaults() :: keyword()
-  def defaults do
-    [
-      backend: @default_backend,
-      color_mode: @default_color_mode,
-      character_set: @default_character_set,
-      render_interval: @default_render_interval
-    ]
+  defp merge_iex_value(opts, value) when value in @iex_values do
+    warn_once(:iex_compatible, ":backend runtime option")
+    backend = if value == true, do: :tty, else: :auto
+    {:ok, Keyword.put(opts, :backend, backend)}
+  end
+
+  defp merge_iex_value(_opts, invalid) do
+    invalid(:iex_compatible, invalid, "expected :auto, true, or false")
+  end
+
+  defp merge_validated_runtime_option(opts, new_key, old_key, value, valid_values, mapper) do
+    if value in valid_values do
+      warn_once(old_key, ":#{new_key} runtime option")
+      {:ok, Keyword.put(opts, new_key, mapper.(value))}
+    else
+      invalid_value(old_key, value, valid_values)
+    end
+  end
+
+  defp merge_validated_backend_option(opts, old_key, new_key, value, valid_values) do
+    if value in valid_values do
+      warn_once(old_key, ":backend_opts option :#{new_key}")
+      {:ok, put_backend_option(opts, new_key, value)}
+    else
+      invalid_value(old_key, value, valid_values)
+    end
+  end
+
+  defp invalid_value(key, value, valid_values) do
+    expected = Enum.map_join(valid_values, ", ", &inspect/1)
+    invalid(key, value, "expected one of #{expected}")
+  end
+
+  defp backend_option_present?(opts, key) do
+    explicit_backend_opts?(Keyword.fetch(opts, :backend_opts), key) or
+      explicit_backend_spec_opts?(Keyword.get(opts, :backend), key)
+  end
+
+  defp explicit_backend_opts?({:ok, opts}, key) when is_list(opts),
+    do: Keyword.has_key?(opts, key)
+
+  defp explicit_backend_opts?({:ok, _invalid}, _key), do: true
+  defp explicit_backend_opts?(:error, _key), do: false
+
+  defp explicit_backend_spec_opts?({_module, opts}, key) when is_list(opts),
+    do: Keyword.has_key?(opts, key)
+
+  defp explicit_backend_spec_opts?(_backend, _key), do: false
+
+  defp put_backend_option(opts, key, value) do
+    Keyword.update(opts, :backend_opts, [{key, value}], &Keyword.put_new(&1, key, value))
+  end
+
+  defp invalid(key, value, expectation) do
+    warn_once(key, "the matching v2 runtime or backend option")
+    {:error, {:invalid_legacy_config, key, value, expectation}}
+  end
+
+  defp warn_once(key, replacement) do
+    lock = {{__MODULE__, key}, self()}
+
+    _result =
+      :global.trans(lock, fn ->
+        warned = :persistent_term.get(@warning_key, MapSet.new())
+
+        unless MapSet.member?(warned, key) do
+          Logger.warning(
+            "config :term_ui, #{inspect(key)} is deprecated; use the #{replacement} instead"
+          )
+
+          :persistent_term.put(@warning_key, MapSet.put(warned, key))
+        end
+      end)
+
+    :ok
   end
 end

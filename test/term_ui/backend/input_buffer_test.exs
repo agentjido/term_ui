@@ -2,6 +2,7 @@ defmodule TermUI.Backend.InputBufferTest do
   use ExUnit.Case, async: false
 
   alias TermUI.Backend.InputBuffer
+  alias TermUI.Terminal.EscapeParser
 
   setup do
     # Clear rate limits between tests
@@ -195,6 +196,73 @@ defmodule TermUI.Backend.InputBufferTest do
         end)
 
       assert log =~ "Input buffer overflow"
+    end
+  end
+
+  describe "append_with_limit/4 with bracketed paste" do
+    @paste_start "\e[200~"
+    @paste_end "\e[201~"
+    @max_paste_size 8 * 1024 * 1024
+
+    test "collects a normal paste one byte at a time and keeps trailing input" do
+      state = %{input_buffer: "", paste_state: nil}
+
+      state =
+        Enum.reduce(
+          String.to_charlist(@paste_start <> "hello" <> @paste_end <> "x"),
+          state,
+          fn byte, state ->
+            InputBuffer.append_with_limit(state, <<byte>>, :input_buffer,
+              paste_aware: true,
+              log: false
+            )
+          end
+        )
+
+      assert state.paste_state == nil
+      assert state.input_buffer == @paste_start <> "hello" <> @paste_end <> "x"
+
+      {events, remaining} = EscapeParser.parse(state.input_buffer)
+      assert [%TermUI.Event.Paste{content: "hello"}, %TermUI.Event.Text{text: "x"}] = events
+      assert remaining == ""
+    end
+
+    test "keeps a paste body at the exact maximum size" do
+      body = :binary.copy("x", @max_paste_size)
+      state = %{input_buffer: "", paste_state: nil}
+
+      state =
+        InputBuffer.append_with_limit(state, @paste_start <> body <> @paste_end, :input_buffer,
+          paste_aware: true,
+          log: false
+        )
+
+      assert state.paste_state == nil
+      assert state.input_buffer == @paste_start <> body <> @paste_end
+    end
+
+    test "discards a one-byte oversized paste and recovers when the end marker is fragmented" do
+      state = %{input_buffer: "", paste_state: nil}
+      oversized = :binary.copy("x", @max_paste_size + 1)
+
+      state =
+        InputBuffer.append_with_limit(state, @paste_start <> oversized, :input_buffer,
+          paste_aware: true,
+          log: false
+        )
+
+      assert %{mode: :discarding} = state.paste_state
+
+      state =
+        Enum.reduce(String.to_charlist(@paste_end <> "z"), state, fn byte, state ->
+          InputBuffer.append_with_limit(state, <<byte>>, :input_buffer,
+            paste_aware: true,
+            log: false
+          )
+        end)
+
+      assert state.paste_state == nil
+      assert state.input_buffer == "z"
     end
   end
 

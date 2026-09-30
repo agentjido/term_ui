@@ -105,7 +105,7 @@ defmodule TermUI.Backend.SelectorTestHelpers do
   @doc """
   Asserts that a raw state map has the expected structure.
 
-  Validates that the map contains `:raw_mode_started` set to `true`.
+  Validates that the map contains the active raw-mode session.
 
   ## Examples
 
@@ -119,6 +119,9 @@ defmodule TermUI.Backend.SelectorTestHelpers do
 
     assert state.raw_mode_started == true,
            "raw_mode_started should be true"
+
+    assert Map.has_key?(state, :raw_mode_session),
+           "raw state should have :raw_mode_session key"
 
     :ok
   end

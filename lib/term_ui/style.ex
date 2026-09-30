@@ -5,12 +5,6 @@ defmodule TermUI.Style do
   Styles define colors, text attributes, and visual properties for components.
   Styles are immutable—modifications return new styles.
 
-  This is an older standalone style vocabulary retained for compatibility. The
-  integrated 1.0 render tree, themes, and backends use
-  `TermUI.Renderer.Style`. The two structs are not interchangeable: this module
-  uses tagged `{:indexed, n}` and `{:rgb, r, g, b}` colors, while the renderer
-  style uses integer palette indexes and untagged `{r, g, b}` tuples.
-
   ## Color Types
 
   - Named colors: `:black`, `:red`, `:green`, `:yellow`, `:blue`, `:magenta`, `:cyan`, `:white`
@@ -40,6 +34,10 @@ defmodule TermUI.Style do
       }
       style = Style.get_variant(variants, :focused)
   """
+
+  # Dialyzer does not preserve MapSet's opaque type through generated struct
+  # defaults or empty MapSet replacements.
+  @dialyzer {:nowarn_function, new: 0, clear_attrs: 1, reset: 1}
 
   @type named_color ::
           :black
@@ -81,9 +79,8 @@ defmodule TermUI.Style do
           attrs: MapSet.t(attr())
         }
 
-  defstruct fg: nil, bg: nil, attrs: MapSet.new()
+  @valid_attributes [:bold, :dim, :italic, :underline, :blink, :reverse, :hidden, :strikethrough]
 
-  # Named color mappings for conversion
   @named_colors [
     :black,
     :red,
@@ -102,6 +99,27 @@ defmodule TermUI.Style do
     :bright_cyan,
     :bright_white
   ]
+
+  @color_channel Zoi.integer() |> Zoi.gte(0) |> Zoi.lte(255)
+  @color_schema Zoi.union([
+                  Zoi.enum([:default | @named_colors]),
+                  Zoi.tuple({Zoi.literal(:indexed), @color_channel}),
+                  Zoi.tuple({Zoi.literal(:rgb), @color_channel, @color_channel, @color_channel}),
+                  Zoi.literal(nil)
+                ])
+
+  @schema Zoi.struct(__MODULE__, %{
+            fg: @color_schema |> Zoi.default(nil),
+            bg: @color_schema |> Zoi.default(nil),
+            attrs: Zoi.map_set(Zoi.enum(@valid_attributes)) |> Zoi.default(MapSet.new())
+          })
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc "Returns the Zoi schema for terminal styles."
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   # RGB values for 16 named colors (standard terminal colors)
   @color_rgb %{
@@ -128,11 +146,14 @@ defmodule TermUI.Style do
   @doc """
   Creates a new style with default values.
   """
-  @dialyzer {:nowarn_function, new: 0, clear_attrs: 1, reset: 1}
   @spec new() :: t()
   def new do
-    %__MODULE__{}
+    %__MODULE__{attrs: MapSet.new()}
   end
+
+  @doc "Creates a style from options."
+  @spec new(keyword() | map()) :: t()
+  def new(opts), do: from(opts)
 
   @doc """
   Creates a style from a keyword list or map.
@@ -146,18 +167,41 @@ defmodule TermUI.Style do
     opts = if is_map(opts), do: Map.to_list(opts), else: opts
 
     Enum.reduce(opts, new(), fn
-      {:fg, color}, style -> fg(style, color)
-      {:bg, color}, style -> bg(style, color)
-      {:bold, true}, style -> bold(style)
-      {:dim, true}, style -> dim(style)
-      {:italic, true}, style -> italic(style)
-      {:underline, true}, style -> underline(style)
-      {:blink, true}, style -> blink(style)
-      {:reverse, true}, style -> reverse(style)
-      {:hidden, true}, style -> hidden(style)
-      {:strikethrough, true}, style -> strikethrough(style)
-      {:attrs, attrs}, style -> %{style | attrs: MapSet.new(attrs)}
-      _, style -> style
+      {:fg, color}, style ->
+        fg(style, color)
+
+      {:bg, color}, style ->
+        bg(style, color)
+
+      {:bold, true}, style ->
+        bold(style)
+
+      {:dim, true}, style ->
+        dim(style)
+
+      {:italic, true}, style ->
+        italic(style)
+
+      {:underline, true}, style ->
+        underline(style)
+
+      {:blink, true}, style ->
+        blink(style)
+
+      {:reverse, true}, style ->
+        reverse(style)
+
+      {:hidden, true}, style ->
+        hidden(style)
+
+      {:strikethrough, true}, style ->
+        strikethrough(style)
+
+      {:attrs, attrs}, style ->
+        %{style | attrs: attrs |> Enum.map(&validate_attr!/1) |> MapSet.new()}
+
+      _, style ->
+        style
     end)
   end
 
@@ -166,17 +210,17 @@ defmodule TermUI.Style do
   @doc """
   Sets the foreground color.
   """
-  @spec fg(t(), color()) :: t()
+  @spec fg(t(), color() | nil) :: t()
   def fg(style, color) do
-    %{style | fg: color}
+    %{style | fg: validate_color!(color)}
   end
 
   @doc """
   Sets the background color.
   """
-  @spec bg(t(), color()) :: t()
+  @spec bg(t(), color() | nil) :: t()
   def bg(style, color) do
-    %{style | bg: color}
+    %{style | bg: validate_color!(color)}
   end
 
   # Public API - Attribute setters
@@ -213,6 +257,12 @@ defmodule TermUI.Style do
   @spec strikethrough(t()) :: t()
   def strikethrough(style), do: add_attr(style, :strikethrough)
 
+  @doc "Adds one text attribute."
+  @spec add_attr(t(), attr()) :: t()
+  def add_attr(style, attr) when attr in @valid_attributes do
+    %{style | attrs: MapSet.put(style.attrs, attr)}
+  end
+
   @doc """
   Removes an attribute from the style.
   """
@@ -235,6 +285,28 @@ defmodule TermUI.Style do
   @spec has_attr?(t(), attr()) :: boolean()
   def has_attr?(style, attr) do
     MapSet.member?(style.attrs, attr)
+  end
+
+  @doc "Returns true when two styles have the same visible values."
+  @spec equal?(t(), t()) :: boolean()
+  def equal?(%__MODULE__{} = left, %__MODULE__{} = right) do
+    left.fg == right.fg and left.bg == right.bg and MapSet.equal?(left.attrs, right.attrs)
+  end
+
+  @doc "Returns true when a style has no color or attribute."
+  @spec empty?(t()) :: boolean()
+  def empty?(%__MODULE__{} = style) do
+    is_nil(style.fg) and is_nil(style.bg) and MapSet.size(style.attrs) == 0
+  end
+
+  @doc "Creates a cell with this style."
+  @spec to_cell(t(), String.t()) :: TermUI.Cell.t()
+  def to_cell(%__MODULE__{} = style, grapheme) do
+    TermUI.Cell.new(grapheme,
+      fg: normalize_cell_color(style.fg),
+      bg: normalize_cell_color(style.bg),
+      attrs: MapSet.to_list(style.attrs)
+    )
   end
 
   # Public API - Merging and Inheritance
@@ -412,9 +484,26 @@ defmodule TermUI.Style do
 
   # Private helpers
 
-  defp add_attr(style, attr) do
-    %{style | attrs: MapSet.put(style.attrs, attr)}
-  end
+  defp validate_color!(nil), do: nil
+  defp validate_color!(color) when color in [:default | @named_colors], do: color
+  defp validate_color!({:indexed, index} = color) when index in 0..255, do: color
+
+  defp validate_color!({:rgb, red, green, blue} = color)
+       when red in 0..255 and green in 0..255 and blue in 0..255,
+       do: color
+
+  defp validate_color!(color),
+    do: raise(ArgumentError, "invalid terminal style color: #{inspect(color)}")
+
+  defp validate_attr!(attr) when attr in @valid_attributes, do: attr
+
+  defp validate_attr!(attr),
+    do: raise(ArgumentError, "invalid terminal style attribute: #{inspect(attr)}")
+
+  defp normalize_cell_color(nil), do: :default
+  defp normalize_cell_color({:rgb, red, green, blue}), do: {red, green, blue}
+  defp normalize_cell_color({:indexed, index}), do: index
+  defp normalize_cell_color(color), do: color
 
   defp color_cube_index(value) do
     # Map 0-255 to 0-5

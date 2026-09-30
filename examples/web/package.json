@@ -1,0 +1,7 @@
+{
+  "name": "term-ui-web-checks",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "playwright test", "benchmark": "node test/browser/benchmark.mjs"},
+  "devDependencies": {"@playwright/test": "1.63.0"}
+}
