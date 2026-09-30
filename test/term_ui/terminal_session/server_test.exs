@@ -179,6 +179,14 @@ defmodule TermUI.TerminalSession.ServerTest do
     other = start()
     %{terminal: terminal, pty: pty} = TerminalSession.info(other)
     monitors = Enum.map([terminal, pty], &{&1, Process.monitor(&1)})
+
+    for {pid, _ref} <- monitors do
+      assert self() in Agent.get(pid, fn _state ->
+               {:monitored_by, owners} = Process.info(self(), :monitored_by)
+               owners
+             end)
+    end
+
     Process.exit(other, :kill)
     for {pid, ref} <- monitors, do: assert_receive({:DOWN, ^ref, :process, ^pid, :killed}, 1_000)
   end

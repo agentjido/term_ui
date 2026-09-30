@@ -218,6 +218,7 @@ pure BEAM TTY backend when a source build is not available.
 - [Markdown and diff viewers](guides/markdown-and-diffs.md)
 - [Advanced feature parity](guides/feature-parity.md)
 - [Package quality](guides/package-quality.md)
+- [Publishing](guides/publishing.md)
 - [Repository layout](guides/repository-layout.md)
 - [Physical terminal checks](guides/terminal-checks.md)
 - [Removed and deferred features](guides/removed-and-deferred.md)
