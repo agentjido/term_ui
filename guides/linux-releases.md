@@ -128,4 +128,5 @@ exit successfully, and restore the exact original `stty -g` settings.
 
 The image is a compatibility fixture. Production host permissions, SSH
 configuration, and terminal profiles still need the application checks above.
-The v2 test code is on `main`; it is not a published TermUI 2.0 release.
+The v2 fixture code is on `main`. TermUI `2.0.0-rc.1` is the published release
+candidate; the final 2.0 release is still pending.
