@@ -31,4 +31,4 @@ GHOSTTY_SOURCE_DIR="$source_root" mix run --no-start --no-compile -e '
 '
 
 GHOSTTY_BUILD=1 mix deps.compile ghostty --force
-MIX_ENV=test GHOSTTY_BUILD=1 mix deps.compile ghostty --force
+MIX_ENV=test GHOSTTY_BUILD=1 mix deps.compile
