@@ -1,8 +1,8 @@
 # Run your first TermUI application
 
-Use Elixir 1.18.4 or later and OTP 28 or later. The current source version is
-`2.0.0-rc.1`. It has not been published by this preparation work. Start with
-the counter from a source checkout:
+Use Elixir 1.18.4 or later and OTP 28 or later. TermUI `2.0.0-rc.1` is
+available on [Hex](https://hex.pm/packages/term_ui/2.0.0-rc.1). To run the
+counter example, start from a source checkout:
 
 ```sh
 git clone https://github.com/agentjido/term_ui.git
