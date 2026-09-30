@@ -10,7 +10,7 @@ starts a runtime does not establish that input or shutdown works.
 | --- | --- | --- |
 | `test/term_ui` | Focused public API, widget, parser, frame, and backend tests | `mix test test/term_ui` |
 | `test/integration` | Runtime ordering, effects, failure, redraw, color, and SSH contracts | `mix test test/integration` |
-| `test/spex` | Readable user acceptance workflow against the real counter | `mix spex` |
+| `test/spex` | Readable user acceptance workflows against the real counter and widget recipes | `mix spex` |
 | `test/platform` | Real Unix PTY checks and native-policy or Windows console tools | `mix test test/platform` for the Unix PTY case |
 | `test/mix` | Consumer Mix command behavior | `mix test test/mix` |
 | `test/support` | Compiled private helpers such as the ANSI screen reader | Loaded by the test build |
@@ -32,16 +32,24 @@ SexySpex supplies Given-When-Then steps on top of ExUnit. Its original TermUI
 scenario exercised one Up key in a test-only counter. That was a valid check
 of input, state, and frame output, but a narrow specification of TermUI.
 
-The RC1 scenario loads the real `IExCounter.App` source and checks startup,
+The counter scenario loads the real `IExCounter.App` source and checks startup,
 increment, output, quit, backend cleanup, and normal process exit. It uses an
 ExUnit test supervisor to stop the runtime after a failed assertion. The
 standalone counter tests add decrement, reset, uppercase quit, and resize.
 
+Five additional specifications load the shipped widget recipe applications.
+They check text/paste routing, terminal focus and cursor state, a real clipboard
+command and its result, resize, required form errors and successful validation,
+row identity through refresh/sort/filter, bounded stream loss, pause, async
+failure and retry, and quit during a pending command. Each waits for a drawn
+frame and verifies normal runtime and backend-owner exit. The pending-load
+case also verifies that the worker exits. These six specifications run in the
+existing acceptance CI job.
+
 Keep SexySpex for a few readable user workflows. Use ordinary ExUnit for edge
 cases and internal contracts. Neither framework can turn simulated events
-into proof of physical keyboard or terminal mode behavior. The next acceptance
-work is recorded in the RC1 plan under `docs/plans`; property and fuzz tests
-come after this folder and guide cleanup.
+into proof of physical keyboard or terminal mode behavior. The RC1 plan under
+`docs/plans` records the separate property and fuzz test work.
 
 ## Reliable completion checks
 
