@@ -76,7 +76,7 @@ jobs:
               'unless TermUI.Terminal.TtyNif.ensure_loaded() == :ok and TermUI.Terminal.TtyNif.loaded?(), do: raise("TTY NIF did not load")'
           else
             test ! -e _build/dev/lib/term_ui/priv/term_ui_tty_nif.so
-            mix run --no-start --no-compile test/support/no_nif_backend_probe.exs
+            mix run --no-start --no-compile test/platform/support/no_nif_backend_probe.exs
           fi
       - name: Test selected native policy
         run: mix test --warnings-as-errors
@@ -239,7 +239,7 @@ jobs:
           python -m pip install --only-binary=:all: pywinpty==3.0.5 pyte==0.8.2
       - name: Test real Windows console input, output, and cleanup
         if: runner.os == 'Windows'
-        run: python test/support/windows_console_check.py
+        run: python test/platform/support/windows_console_check.py
 
   required-checks:
     name: Required checks

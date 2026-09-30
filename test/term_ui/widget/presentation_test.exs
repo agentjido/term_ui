@@ -1,4 +1,4 @@
-defmodule TermUI.Widget.TUIStudioRefinementsTest do
+defmodule TermUI.Widget.PresentationTest do
   use ExUnit.Case, async: true
 
   alias TermUI.{Event, Frame, Style}
@@ -140,7 +140,7 @@ defmodule TermUI.Widget.TUIStudioRefinementsTest do
              Tabs.mouse(Event.mouse(:release, :left, 16, 0), tabs, {30, 2})
   end
 
-  test "tabs map TUIStudio status and hotkey metadata" do
+  test "tabs map status and hotkey metadata" do
     tabs =
       Tabs.init(
         tabs: [

@@ -1,4 +1,8 @@
-# TermUI 2.0.0 source release record
+# TermUI v2 source transition record
+
+This is historical evidence for the source transition recorded below. The
+source then used `2.0.0`; the maintainer later selected `2.0.0-rc.1` as the
+current candidate. This record is not a final 2.0 publication announcement.
 
 On 30 September 2026, the maintainer approved merging PR #67 into `main`
 and keeping a separate clean v1 branch. The maintainer will handle Hex

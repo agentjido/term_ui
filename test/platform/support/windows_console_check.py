@@ -75,7 +75,8 @@ def run_child(shell, probe):
     restore_console_modes(before)
     assert console_modes() == before
 
-    result = subprocess.run(command([f"test/support/{probe}.exs"]), timeout=90, check=False)
+    probe_path = Path(__file__).with_name(f"{probe}.exs").resolve()
+    result = subprocess.run(command([str(probe_path)]), timeout=90, check=False)
     after = console_modes()
     record = {"exit_code": result.returncode, "before": before, "vm_baseline": baseline_after, "after": after}
     Path(os.environ["TERM_UI_CONSOLE_PROGRESS"] + ".console").write_text(json.dumps(record), encoding="utf-8")
@@ -108,7 +109,7 @@ class Console:
         os.environ["PYWINPTY_BACKEND"] = str(Backend.ConPTY)
         self.process = PtyProcess.spawn(
             [sys.executable, str(Path(__file__).resolve()), "--child", shell, probe],
-            cwd=str(Path(__file__).resolve().parents[2]),
+            cwd=str(Path(__file__).resolve().parents[3]),
             env=environment,
             dimensions=(10, 40),
             backend=Backend.ConPTY,

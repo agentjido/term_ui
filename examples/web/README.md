@@ -27,6 +27,11 @@ callbacks. Keep authentication and origin checks before the WebSocket upgrade.
 
 ## Checks
 
+Read [App](lib/app.ex) for state and frames, [Socket](lib/socket.ex) for the
+session boundary, and [Router](lib/router.ex) for origin checks and packaged
+asset paths. [Application tests](test/app_test.exs) and
+[Chromium tests](test/browser/web.spec.js) show the expected behavior.
+
 ```sh
 mix hex.audit
 mix test --warnings-as-errors
@@ -45,3 +50,5 @@ The benchmark uses a real Chromium browser. It reports DOM update and synchronou
 layout time, plus encoded message sizes. It excludes the server, network, and
 paint. It is a measurement, with no device-dependent speed assertion in CI.
 See [the web guide](../../guides/web.md) for the protocol and measured limits.
+
+Next: [add an optional real shell](../ghostty/README.md).

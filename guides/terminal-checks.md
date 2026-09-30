@@ -22,7 +22,7 @@ Run `mix deps.get` and `mix compile` before the input check. Windows Raw
 needs the C build tools described in the backend guide. Build in the native
 tools shell, then run in the terminal profile under test.
 
-The existing console probe is `test/support/windows_console_probe.exs` on
+The existing console probe is `test/platform/support/windows_console_probe.exs` on
 both branches. It shows a colored screen, `READY`, Unicode text, and a final
 `!` cell. It records normalized input and normal owner cleanup. The probe
 does not edit a text widget; the widget word-deletion tests are separate.
@@ -60,7 +60,7 @@ In the normal terminal profile, save the settings and run the Raw probe:
 stty -g > /tmp/term-ui-manual-before.txt
 TERM_UI_CONSOLE_BACKEND=raw \
 TERM_UI_CONSOLE_PROGRESS=/tmp/term-ui-manual-input.json \
-mix run test/support/windows_console_probe.exs
+mix run test/platform/support/windows_console_probe.exs
 ```
 
 Type `one two`. Press the physical Option+Delete key. Type `X`. Repeat with
@@ -94,7 +94,7 @@ In PowerShell, run:
 ```powershell
 $env:TERM_UI_CONSOLE_BACKEND = "raw"
 $env:TERM_UI_CONSOLE_PROGRESS = "$env:TEMP\term-ui-manual-input.json"
-mix run test/support/windows_console_probe.exs
+mix run test/platform/support/windows_console_probe.exs
 ```
 
 In Git Bash, run:
@@ -102,7 +102,7 @@ In Git Bash, run:
 ```sh
 TERM_UI_CONSOLE_BACKEND=raw \
 TERM_UI_CONSOLE_PROGRESS="$(cygpath -w /tmp/term-ui-manual-input.json)" \
-mix run test/support/windows_console_probe.exs
+mix run test/platform/support/windows_console_probe.exs
 ```
 
 Type Unicode text and a space. Press Up, Ctrl+O, Ctrl+C, Ctrl+S, and Ctrl+Q.

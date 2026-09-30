@@ -5,6 +5,11 @@ stores each complete terminal frame and overlays it below two application rows.
 It returns commands for input and frame confirmations. It uses the same browser
 renderer as `examples/web`. There is no second terminal renderer.
 
+This is lesson 4 in [the example catalog](../README.md). Read
+[App](lib/app.ex) for terminal-session command data and frame composition, then
+[Application](lib/application.ex) for the browser host. Ghostty supplies a real
+PTY and terminal emulator; it is independent of the local TTY input NIF.
+
 Run on GNU Linux (x86_64 or ARM64) or macOS ARM64:
 
 ```sh

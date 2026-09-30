@@ -49,9 +49,9 @@ against the builder's libc. This variable alone is not sufficient: the
 application must also include Rustler. A downloaded MDExNative 0.2.9 GNU NIF
 requires glibc 2.29 and fails on the tested glibc 2.28 target.
 
-Copy the [Dockerfile](https://github.com/agentjido/term_ui/blob/main/examples/linux_release/Dockerfile)
-and [dockerignore](https://github.com/agentjido/term_ui/blob/main/examples/linux_release/dockerignore)
-from `examples/linux_release` into the application as `Dockerfile` and
+Copy the [Dockerfile](https://github.com/agentjido/term_ui/blob/main/docs/recipes/linux-release/Dockerfile)
+and [dockerignore](https://github.com/agentjido/term_ui/blob/main/docs/recipes/linux-release/dockerignore)
+from `docs/recipes/linux-release` into the application as `Dockerfile` and
 `.dockerignore`. Keep any application-specific exclusions too. Exclude
 `_build` and downloaded `deps`, so host build products do not enter the Linux
 build. A local path dependency must be inside the build context.

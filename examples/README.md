@@ -1,22 +1,34 @@
-# Examples
+# Example lessons
 
-These examples are separate consumer projects. They keep host dependencies and
-application code outside the library. Use Elixir 1.18.4 or later with OTP 28 or
-later. Start from the repository root and follow each README.
+Read these four consumer projects in order. Each teaches a public contract
+through runnable source, expected behavior, and tests. Use Elixir 1.18.4 or
+later with OTP 28 or later. Run the commands from a source checkout.
 
-| Directory | Purpose | Start |
-| --- | --- | --- |
-| [iex_counter](iex_counter/README.md) | Small Elm application: state, typed events, commands, and a complete frame | `cd examples/iex_counter`, then `mix deps.get` and `mix run run.exs` |
-| [showcase](showcase/README.md) | Widget composition, responsive views, and application-owned effects | `cd examples/showcase`, then `mix deps.get` and `mix run run.exs` |
-| [web](web/README.md) | Browser host with separate sessions and the packaged web renderer | `cd examples/web`, then `mix deps.get` and `mix run --no-halt`; open `http://127.0.0.1:4040` |
-| [ghostty](ghostty/README.md) | Optional native shell session in the browser | Follow the platform-specific commands in its README; open `http://127.0.0.1:4040` |
-| [linux_release](../guides/linux-releases.md) | Docker build inputs for a release that must run on older Linux | Follow the Linux release guide; this is not a Mix application |
+| Order | Example | Learn | Source | Checks |
+| --- | --- | --- | --- | --- |
+| 1 | [Counter](iex_counter/README.md) | Input, application state, complete frames, resize, and quit | [App](iex_counter/lib/iex_counter/app.ex) | [Application tests](iex_counter/test/app_test.exs), [acceptance workflow](../test/spex/counter_spex.exs) |
+| 2 | [Showcase](showcase/README.md) | Pure widgets, parent composition, data snapshots, and command effects | [App](showcase/lib/showcase/app.ex), [pages](showcase/lib/showcase/pages) | [Application tests](showcase/test/showcase/app_test.exs) |
+| 3 | [Browser host](web/README.md) | Host-owned transport and isolated application sessions | [App](web/lib/app.ex), [socket](web/lib/socket.ex), [router](web/lib/router.ex) | [Application tests](web/test/app_test.exs), [Chromium tests](web/test/browser/web.spec.js) |
+| 4 | [Ghostty shell host](ghostty/README.md) | Optional real shell frames, command-owned input, and child cleanup | [App](ghostty/lib/app.ex), [host](ghostty/lib/application.ex) | [Native sessions](ghostty/test/session_test.exs), [Chromium shell](ghostty/test/browser/session.spec.js) |
 
-Web host libraries and Ghostty are example dependencies. They are not required
-core dependencies. The Ghostty example needs its supported native SDK. Its
-Linux ARM64 build has additional steps.
+The existing project names stay stable. `iex_counter` runs through both Mix
+and IEx. `ghostty` uses a native terminal emulator and PTY; it is separate from
+TermUI's local TTY input NIF. Its README lists supported systems and native
+build requirements.
 
-CI runs the existing application, browser, and native checks. See
-[CONTRIBUTING.md](../CONTRIBUTING.md) for the core checks. New examples need a
-clear user task, local fixtures where possible, and tests for their actual
-application.
+Each project has its own Mix dependencies. Web hosts and Ghostty remain
+optional consumers, outside the core Hex package. CI runs their current
+application, browser, and native checks.
+
+The Linux Docker files moved to
+[docs/recipes/linux-release](../docs/recipes/linux-release/README.md). They are
+build inputs for an older glibc target, not an interactive application. Use
+[the Linux release guide](../guides/linux-releases.md) when that target is needed.
+
+## Add or refine a lesson
+
+State the user's task, required tools, run command, expected screen or output,
+and exit command. Point to the source that owns each behavior and its test.
+Keep data fixtures local where possible. Add a consumer test and its CI check
+with a new example. Keep package API detail in module docs and link the relevant
+[guide](../guides/README.md).

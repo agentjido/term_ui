@@ -15,8 +15,9 @@ Jido, so it also remains useful as a general Elixir terminal package.
 TermUI requires Elixir 1.18.4 or later and Erlang/OTP 28 or later. CI tests
 Elixir 1.18.4, 1.19, and 1.20 on OTP 28, and Elixir 1.20 on OTP 29.
 
-This branch contains TermUI `2.0.0`. Hex publication is managed separately
-by the maintainer. Until 2.0 is published on Hex, use `main` in `mix.exs`:
+This branch contains TermUI `2.0.0-rc.1`, the first release candidate. This is
+not the final 2.0 release. Hex publication is managed separately by the
+maintainer. Until the candidate is published on Hex, use `main` in `mix.exs`:
 
 ```elixir
 def deps do
@@ -208,6 +209,10 @@ pure BEAM TTY backend when a source build is not available.
 
 ## Documents
 
+- [Guide index](guides/README.md)
+- [Getting started](guides/getting-started.md)
+- [Ordered example lessons](guides/examples.md)
+- [Testing](guides/testing.md)
 - [Share examples and ask for help](guides/community.md)
 - [Architecture](guides/architecture.md)
 - [UI context decision](guides/ui-context.md)
