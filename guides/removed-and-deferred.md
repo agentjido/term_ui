@@ -1,6 +1,6 @@
 # Removed and deferred features
 
-The 1.0 release candidate has one runtime, one input path, one frame type, and
+The 2.0 release candidate has one runtime, one input path, one frame type, and
 one widget namespace. Some old features did not fit this design.
 
 ## Intentional architecture removals
@@ -31,8 +31,8 @@ These features are not in the new package:
 - The component test harness and mutable test renderer. Use
   `TermUI.Test.DeterministicBackend` for v2 runtime tests.
 - Dedicated Unix and Windows platform adapter modules.
-- The old set of one application for each widget. The counter is the retained
-  general example.
+- The old set of one application for each widget. The counter and showcase are the current
+  general examples.
 
 SSH has returned as a normal backend that owns one complete remote session.
 `TermUI.Backend.SSH.Channel` connects OTP SSH channel data and PTY changes to

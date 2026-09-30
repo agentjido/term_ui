@@ -35,7 +35,7 @@ still contains some older v4 examples.
 - `develop` remains the default stable integration branch. The v2 work stays
   on `next/v2`, so CI push and review filters include both branches.
 
-Review these exceptions before a stable 1.0 release. Do not remove them by
+Review these exceptions before the stable 2.0 release. Do not remove them by
 changing the runtime or public namespace in a quality-only change.
 
 ## Supported runtime matrix
