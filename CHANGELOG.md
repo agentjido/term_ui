@@ -33,6 +33,10 @@ Hex publication is managed separately by the maintainer.
 - Pure input, table, tree, layout, stream, system-data, and feedback widgets.
 - A migration guide, widget parity tables, runnable showcase, source NIF
   policy, and Oracle Linux release build instructions.
+- Four runnable widget recipes for input/focus, forms, tables, and async
+  stream updates, with guide snippets checked in the consumer tests.
+- Six user acceptance specifications and bounded parser, frame, and browser
+  protocol properties with replayable fuzz regression inputs.
 
 ### Fixed
 
@@ -43,6 +47,10 @@ Hex publication is managed separately by the maintainer.
   open follow-up work.
 - Live showcase process table identities use PIDs, so equal displayed
   process values do not stop the application.
+- Malformed UTF-8 in bracketed paste is discarded without losing valid text
+  or raising an input error.
+- Joined emoji, skin tones, and composed characters use consistent grapheme
+  widths in text layout and complete frames.
 
 ### Migration
 

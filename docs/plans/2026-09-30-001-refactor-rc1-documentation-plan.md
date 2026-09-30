@@ -2,7 +2,7 @@
 title: RC1 documentation and test cleanup
 type: refactor
 date: 2026-09-30
-status: active
+status: complete
 ---
 
 # RC1 documentation and test cleanup
@@ -10,9 +10,9 @@ status: active
 ## Intended result
 
 Prepare a clear package tree for `2.0.0-rc.1`. This is a release candidate,
-not the final 2.0 release. Start from `main` at
-`7aa844da56d51559a17bc7c9b2465032c334d626`. Use branch `release/2.0.0-rc.1`
-and target `main`. V1 stays on `maint/1.x`.
+not the final 2.0 release. Work started from `main` at
+`7aa844da56d51559a17bc7c9b2465032c334d626`. Phase 1 used
+`release/2.0.0-rc.1`; all v2 phases target `main`. V1 stays on `maint/1.x`.
 
 ## Scope and decisions
 
@@ -36,17 +36,18 @@ and target `main`. V1 stays on `maint/1.x`.
 
 ## Work order
 
-| Phase | Work | Completion condition |
+| Phase | Work | Completion evidence |
 | --- | --- | --- |
 | 1, complete in PR #102 | RC1 version, folder cleanup, guide index and first tutorial, example lessons, counter behavior tests, specification review | Links, quality, coverage, acceptance, affected examples, and required CI passed |
-| 2, `docs/rc1-widget-recipes` | Small recipes for input/focus, forms, tables, and stream updates | Each recipe points to real source and a behavior test; copyable code uses the current API |
-| 3, `test/rc1-acceptance-flows` | Add core user scenarios for text/paste, focus, row identity, resize, async failure, and normal cleanup | Scenarios assert visible frames and effects; they run without a physical terminal |
-| 4, `test/rc1-property-boundaries` | Bounded parser, frame, and protocol properties, then regression fuzz inputs | Failures include a seed and a small replayable input; short checks run in PR CI |
-| 5, `release/2.0.0-rc-validation` | Fresh package consumer and remaining terminal evidence | Record exact commits, toolchains, terminal profiles, known gaps, and maintainer release decision |
+| 2, complete on `docs/rc1-widget-recipes` | Small recipes for input/focus, forms, tables, and stream updates | PR #103; each recipe links source/tests; four guide code blocks and nine consumer tests pass |
+| 3, complete on `test/rc1-acceptance-flows` | Core user scenarios for text/paste, focus, row identity, resize, async failure, and normal cleanup | PR #104; six runtime workflows check visible frames, effects, and process exit |
+| 4, complete on `test/rc1-property-boundaries` | Bounded parser, frame, and protocol properties, then regression fuzz inputs | PR #105; 2,400 generated cases, fixed regressions, seed/case/input replay, all required CI passed |
+| 5, complete on `release/2.0.0-rc-validation` | Fresh package consumer and remaining terminal evidence | Two fresh production consumers; exact source/toolchains/package checksum and deferred terminal checks in the readiness record |
 
-Finish the documentation and folder cleanup before phases 3 and 4. Do not add
-a generator dependency or new demonstration applications in phase 1. Hex
-publication and release tags require a separate maintainer instruction.
+The documentation and folder cleanup finished before phases 3 and 4. The
+four widget recipes use an existing consumer project. Generated tests use
+the BEAM random generator without a new dependency. Hex publication and
+release tags require a separate maintainer instruction.
 
 ## Guide refinement
 
@@ -102,7 +103,7 @@ is `0eb939abcc3ff113bb8973150be738ce2a22f0d2ea7c6895dc7604fe6ef8ff2b`.
 Phase 1 merged through [PR #102](https://github.com/agentjido/term_ui/pull/102)
 at `72e9deae9994fb7886ef1172b917472451024712`. All required PR checks passed;
 the [main CI run](https://github.com/agentjido/term_ui/actions/runs/36748762208)
-also passed. Later phases remain active. This record does not authorize
+also passed. Later phases are now complete as recorded below. This record does not authorize
 publication.
 
 The full suite also passed locally on Elixir 1.20.4 / OTP 29.1 with a fresh
@@ -131,3 +132,27 @@ bytes that raised an error and joined-grapheme width that disagreed with cells.
 Both now have fixes and small permanent regressions. The
 [solution record](../solutions/2026-09-30-generated-terminal-boundaries.md)
 states their causes and scope.
+
+Phases 2, 3, and 4 merged through PRs
+[#103](https://github.com/agentjido/term_ui/pull/103),
+[#104](https://github.com/agentjido/term_ui/pull/104), and
+[#105](https://github.com/agentjido/term_ui/pull/105). Each passed all 27 required
+checks before merge. The boundary source head was
+`82fff1dd968f7a5bd7b82b08e55cf3cb0a6740b7`; its
+[CI run](https://github.com/agentjido/term_ui/actions/runs/36754395597) passed.
+It merged at `30793875cea4bd505eb7ffd82995394ec3c3ce69`.
+
+Phase 5 built the 150-file RC1 package and ran all four recipes in two fresh
+production consumers, with source and disabled NIF policies. Quality,
+coverage, six acceptance specifications, strict docs, dependency audit,
+unused locks, and consumer checks passed. The full suite passed on
+Elixir 1.19.3 / OTP 28.1.1 and Elixir 1.20.4 / OTP 29.1: 1,052 tests,
+zero failures, one excluded; coverage is 90.4% on the coverage toolchain.
+
+The [RC1 readiness record](../releases/2026-09-30-2.0.0-rc.1-readiness.md)
+holds the package checksum, source commits, toolchains, terminal evidence,
+and maintainer decision. All plan work is complete. The final release-record
+PR must pass the required checks before merge. Physical Windows Terminal
+and Mintty results remain deferred in #5 and #6 under the maintainer's earlier
+decision; they do not block RC1. V1 is unchanged. This work does not publish
+to Hex or create a release tag.
