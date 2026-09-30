@@ -35,7 +35,8 @@ This release-record update needs its own CI result.
 - [x] Raw, TTY, SSH, deterministic, browser, and optional Ghostty checks pass.
 - [x] Real macOS, Linux, and Windows input, resize, and cleanup checks pass
       in the tested PTY and ConPTY profiles.
-- [ ] Physical Option+Delete and Windows frontend profiles are verified.
+- [ ] Physical macOS Option+Delete is verified.
+- [x] Missing physical Windows frontend checks are accepted as follow-up work.
 - [x] The copied Oracle Linux 8.5 release works without host build tools.
 - [x] Counter, showcase, browser, and Ghostty examples pass their checks.
 - [x] The package contains the guides, browser assets, and required source.
@@ -99,11 +100,24 @@ Normal backends do not need Ghostty or Zigler.
 Issues [#5](https://github.com/agentjido/term_ui/issues/5),
 [#6](https://github.com/agentjido/term_ui/issues/6), and
 [#35](https://github.com/agentjido/term_ui/issues/35) remain open. Physical
-Windows Terminal and Mintty profiles, and the physical macOS Option+Delete
-key, need results. Injected key bytes and ConPTY results do not establish
-those frontend settings. Keep the issues open until those results are known.
+macOS Option+Delete still needs a result. On 30 September 2026, the
+maintainer confirmed that no Windows machine is available and chose to
+proceed with the committed fixes. Physical Windows Terminal and Mintty
+profiles are deferred follow-up work and do not block release. Injected key
+bytes and ConPTY results do not establish those frontend settings. Keep the
+issues open for the missing physical results.
 Use the exact commands and result fields in
 `notes/planning/physical-terminal-checks.md` for both version branches.
+
+The first physical macOS attempt stopped before the key test. The live
+Overview table dropped PIDs and used formatted display values as row IDs.
+Different processes can have equal display values. The repair retains the
+PID and uses it as the row ID. A regression test checks equal display values
+and selection through changed and reordered snapshots. All 11 showcase
+tests pass. A real macOS Raw PTY passes three live refreshes, Inputs page
+navigation, ESC+DEL and ESC+Backspace word deletion, continued Unicode
+input, resize, normal shutdown, and exact saved settings. That PTY result
+uses injected bytes; the physical key remains unverified.
 
 The existing Jido Console lock has Ash and Mint advisories. Its selected
 tests pass with the approved Jidoka reference. The TermUI audit passes.

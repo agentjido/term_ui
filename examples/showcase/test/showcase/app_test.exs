@@ -3,6 +3,7 @@ defmodule Showcase.AppTest do
 
   alias Showcase.{App, LiveData, SnapshotData}
   alias TermUI.{Command, Event, Frame}
+  alias TermUI.Widget.Table
 
   test "live mode initializes one state owner, one collection, and a recurring timer" do
     {state, commands} = App.init(dimensions: {100, 30})
@@ -74,6 +75,37 @@ defmodule Showcase.AppTest do
     assert state.page_states.beam.processes.snapshots == snapshot.processes
     assert state.page_states.beam.cluster.nodes == snapshot.cluster
     assert state.page_states.controls.spinner.phase == 1
+  end
+
+  test "process rows with equal displayed values retain selection across live updates" do
+    {state, _commands} = App.init(dimensions: {90, 26})
+    snapshot = SnapshotData.snapshot()
+
+    first = %{
+      hd(snapshot.processes)
+      | pid: "#PID<0.101.0>",
+        name: ":gen",
+        memory: 2_048,
+        message_queue_len: 0,
+        status: :waiting
+    }
+
+    second = %{first | pid: "#PID<0.102.0>", memory: 2_049}
+    snapshot = %{snapshot | processes: [first, second]}
+    state = App.update({:live_snapshot, {:ok, snapshot}}, state)
+
+    state = {:page_event, Event.key(:down)} |> App.update(state) |> state_from()
+    state = {:page_event, Event.key(:enter)} |> App.update(state) |> state_from()
+    assert Table.selected_ids(state.page_states.overview.table) == MapSet.new([second.pid])
+
+    snapshot = %{snapshot | processes: [%{second | memory: 8_192}, first]}
+    state = App.update({:live_snapshot, {:ok, snapshot}}, state)
+    table = state.page_states.overview.table
+
+    assert length(table.rows) == 2
+    assert Table.selected_ids(table) == MapSet.new([second.pid])
+    assert Enum.at(Table.display_rows(table), table.cursor).pid == second.pid
+    assert %Frame{width: 90, height: 26} = App.view(state)
   end
 
   test "the refresh timer starts collection without overlapping work" do

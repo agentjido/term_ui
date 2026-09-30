@@ -33,7 +33,7 @@ defmodule Showcase.Pages.Overview do
           min: 0,
           max: 100
         ),
-      table: Table.init(columns: columns(), rows: [], page_size: 8)
+      table: Table.init(columns: columns(), rows: [], row_id: :pid, page_size: 8)
     }
   end
 
@@ -161,6 +161,7 @@ defmodule Showcase.Pages.Overview do
   defp process_rows(processes) do
     Enum.map(processes, fn process ->
       %{
+        pid: process.pid,
         name: process.name,
         memory: format_bytes(process.memory),
         queue: process.message_queue_len,

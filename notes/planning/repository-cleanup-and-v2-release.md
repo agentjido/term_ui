@@ -18,6 +18,14 @@ An issue is addressed only when its acceptance checks pass, or when evidence
 supports another clear resolution. Age and lack of recent comments are not
 closure reasons. Preserve published tags and release history.
 
+On 30 September 2026, the maintainer confirmed that no Windows machine is
+available and chose to proceed with the committed fixes. Physical Windows
+Terminal and Mintty checks for #5 and #6 are deferred follow-up work. They do
+not block the v2 release. Keep both issues open with the existing passing
+Windows ConPTY evidence and the unverified frontend limits. Do not record a
+physical pass. The macOS Option+Delete check is still requested. The separate
+release decision, required review, and publication checks remain required.
+
 ## Checked starting state
 
 | Item | State |
@@ -60,7 +68,7 @@ code findings. Closure still needs verification.
 | `fix/v2-*`, `test/v2-*`, `feat/v2-*`, `docs/v2-*`, `chore/v2-*` | Small v2 PRs into `next/v2`. |
 | `test/sexy-spex-acceptance-spec` | Existing head for PR #69. Update and verify it against the repaired v2 base. |
 | `develop` | Keep its current release role until the separate v2 release decision. PR #67 is the only planned v2 entry. |
-| `release/2.0.0` | Create after the release decision, from the verified v2 code on `develop`. Release changes only. |
+| `release/2.0.0` | Create after the release decision, based on `main`. Apply the exact reviewed v2 tree from `develop`, then add final release metadata and docs. This avoids old v1 merge conflicts. |
 | `main` | Stable release history. Merge the reviewed release branch here and tag its exact approved commit. |
 
 Use `agentjido` explicitly for fetches, pushes, and repository checks. Do not
@@ -244,10 +252,13 @@ Record the commit SHA, toolchain, platform, command, and result for each check.
   Verify commands, events, streaming output, resize, and shutdown.
 - Run browser and Ghostty integration checks from #70.
 - Review PR #67 at the final candidate SHA. Confirm that each open issue and
-  PR has a final result or is the current release review itself.
+  PR has a final result, an explicit deferred result accepted by the
+  maintainer, or is the current release review itself.
 
 Exit check: a complete release record with no known unresolved release defects.
 An inaccessible terminal or consumer is an unverified check, not a pass.
+The maintainer has accepted the missing physical Windows frontend checks as
+follow-up work. These two checks do not block release.
 
 ### 7. Make the release decision and ship
 
@@ -256,7 +267,8 @@ the candidate and test record first. Obtain that decision at this stage.
 
 - Mark #67 ready and satisfy its review requirements. Merge the approved v2
   code into `develop` after the release decision.
-- Create `release/2.0.0` from the verified v2 code on `develop`.
+- Create `release/2.0.0` from current `main` in a clean worktree. Apply the
+  exact reviewed v2 file tree from `develop`. Recheck both heads first.
 - Use the existing release tooling for version and changelog preparation.
   Use an explicit 2.0 version. Inspect the dry run and the final package.
 - Merge the reviewed release PR into `main`. Run required checks on the final
@@ -279,9 +291,10 @@ request, link the completed replacement. For an information request, link the
 answer or published guide. Prepare a short evidence comment when closing an
 item; the cleanup request authorizes these repository updates.
 
-The goal is complete when all original issues and PRs have final resolutions,
-needed v1 changes are on `maint/1.x`, v2 passes the release checks, TermUI 2.0.0
-is published from its approved tag, and a clean consumer can use that release.
+The goal is complete when all original issues and PRs have final resolutions
+or follow-up work explicitly accepted by the maintainer, needed v1 changes
+are on `maint/1.x`, v2 passes the release checks, TermUI 2.0.0 is published
+from its approved tag, and a clean consumer can use that release.
 If release access or a required check is unavailable, keep the remaining work
 explicit. Do not mark the release complete.
 
@@ -299,14 +312,14 @@ explicit. Do not mark the release complete.
 
 ## Execution state
 
-The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candidate test repairs are merged. Physical terminal checks, the release decision, required review, and publication remain open. The original issue and PR scope is unchanged.
+The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candidate test repairs are merged. The macOS physical check, release decision, required review, and publication remain open. Physical Windows Terminal and Mintty checks are deferred by the maintainer. The fixes for #5 and #6 are merged; their physical frontend results remain unverified follow-up work.
 
 | Work | Branch or PR | Evidence and remaining work |
 | --- | --- | --- |
 | V1 maintenance baseline | [PR #71](https://github.com/agentjido/term_ui/pull/71), merged into `maint/1.x` at `4ecc460` | Includes the three v1 commits from `main`. Adds maintenance CI and `mix quality`. Replaces a fixed sleep with a completion message and uses the existing one-second async command timeout. Local quality and audit pass. Elixir 1.19.3 / OTP 28.1.1: 5,311 tests, 0 failures, 78.2% coverage. Elixir 1.15.8 / OTP 26.2.1: 5,324 tests, 0 failures, 78.1% coverage. All six remote CI jobs pass. `maint/1.x` now requires those six jobs with an up-to-date branch. |
 | V2 CI and audit baseline | [PR #72](https://github.com/agentjido/term_ui/pull/72), merged into `next/v2` at `e195dfa` | Updates vulnerable development dependencies, adds platform and NIF checks, a final required-check job, and correct contribution targets. Verified setup-beam 1.24.1 supports the current Windows runner. Fixes the Windows linker `LIB` macro, CRLF diff parsing, and unused Unix test helpers. Local quality passes; 967 passed, 1 excluded, 90.2% coverage on Elixir 1.20.4 / OTP 28.5.0.5. All remote checks pass at `9cdb2fa` in run `36622829881`. `next/v2` now requires 22 current checks, including the final gate and explicit compile, matrix, quality, platform, NIF, and example jobs. |
 | PR #69 and issue #68 | [PR #69](https://github.com/agentjido/term_ui/pull/69), merged into `next/v2` at `6c563db`; [resolution comment](https://github.com/agentjido/term_ui/issues/68#issuecomment-5897855739) | Adopted SexySpex for a small number of public acceptance workflows. Normal ExUnit remains the main suite. The spec requires normal runtime and backend shutdown. Discovery filters keep specs out of the normal suite. A Windows test now allows five seconds for external command startup while retaining the task-stop assertion. Local quality, 967 normal tests at 90.2% coverage, and one acceptance test pass. All remote checks pass at `7b25eac` in run `36623965332`. #68 is closed, with all seven acceptance items checked. `next/v2` now also requires the acceptance job: 23 required checks in total. |
-| Issue #35 v2 input repair | [PR #73](https://github.com/agentjido/term_ui/pull/73), merged into `next/v2` at `a688700` | Restores ESC DEL and ESC BS parsing and word deletion in pure text widgets. Tests cover all chunk boundaries, continued input, Unicode, whitespace, selection, and multiline boundaries. Local quality passes; 975 passed, 1 excluded, 90.2% coverage. All remote checks pass at `9409f1e` in run `36624868117`. A macOS PTY with the real Raw backend receives both sequences, continues typing, and exits with restored terminal mode. Existing v1 tests pass (121); fix `d1104b3` is in published `v1.0.0`. The computer-use tool refused Terminal access for safety reasons. Physical Option+Delete input remains unverified; #35 remains open. |
+| Issue #35 v2 input repair | [PR #73](https://github.com/agentjido/term_ui/pull/73), merged into `next/v2` at `a688700` | Restores ESC DEL and ESC BS parsing and word deletion in pure text widgets. Tests cover all chunk boundaries, continued input, Unicode, whitespace, selection, and multiline boundaries. Local quality passes; 975 passed, 1 excluded, 90.2% coverage. All remote checks pass at `9409f1e` in run `36624868117`. A macOS PTY with the real Raw backend receives both sequences, continues typing, and exits with restored terminal mode. Existing v1 tests pass (121); fix `d1104b3` is in published `v1.0.0`. The computer-use tool refused Terminal access for safety reasons. Physical Option+Delete input remains unverified; #35 remains open. A [current evidence comment](https://github.com/agentjido/term_ui/issues/35#issuecomment-5902517244) now identifies the published v1 fix, merged v2 fix, current passing checks, and exact physical test steps. |
 | Issue #11 v1 regression | [PR #74](https://github.com/agentjido/term_ui/pull/74), merged into `maint/1.x` at `83fe794` | The exact nested constrained-stack example is already fixed in published `v1.0.0`, in commit `d1104b3`. Adds a regression check for all three rendered rows through public component helpers. Corrects two unstable async test fixtures while retaining their assertions. Local quality passes. Full v1 suite: 5,312 tests, 0 failures, 2 skipped, 13 excluded; 78.2% coverage. Focused renderer suite: 14 tests pass. All six remote checks pass at `f0fc233` in run `36625324989`. |
 | Issue #11 v2 equivalent | [PR #75](https://github.com/agentjido/term_ui/pull/75), merged into `next/v2` at `09b0267`; [resolution comment](https://github.com/agentjido/term_ui/issues/11#issuecomment-5898296600) | Adds the nested-row migration example and checks complete frame output, small terminal sizes, clipping, and restoration after resize. Uses public Layout, Frame, and schema APIs. Local quality and 977 tests at 90.2% coverage pass. A macOS CI failure exposed a 100 ms logger-cleanup wait. The positive startup and normal-shutdown assertions now allow one second and still require logger restoration. All remote checks pass at final head `62f374c` in run `36626723748`. #11 is closed after both version checks merged. |
 | Issues #19 and #36 | [PR #76](https://github.com/agentjido/term_ui/pull/76) merged into `maint/1.x` at `9632f8a`; [PR #77](https://github.com/agentjido/term_ui/pull/77) merged into `next/v2` at `ade4117`; [PR #78](https://github.com/agentjido/term_ui/pull/78) merged into `maint/1.x` at `b400c02` | Complete redraw now repairs both versions. Issue #19 is closed with evidence. V1 resume restores owned modes through its terminal owner and fixes parent-terminal access for child stty on macOS/BSD. Quality, 5,322 tests at 78.4% coverage, and all six required CI checks pass. The v2 resume branch restores modes through its backend owner and retains original native flags for shutdown. Real macOS Raw and TTY PTYs on each version pass SIGSTOP/SIGCONT, complete unchanged output, continued input, normal cleanup, and exact saved settings, including nondefault settings. Raw receives Ctrl+C/S/Q. [PR #79](https://github.com/agentjido/term_ui/pull/79) merged into `next/v2` at `b01c010`. V2 quality, 1,000 warning-strict tests at 90.3% coverage, one acceptance specification, and all 23 required CI checks pass. Issue #36 is closed with evidence. The fixes are not yet published on Hex. |
@@ -324,7 +337,7 @@ The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candid
 | V2 release candidate | [PR #93](https://github.com/agentjido/term_ui/pull/93), merged into `next/v2` at `063ed50` | Sets the unpublished version to 2.0.0-rc.1, corrects migration from 1.x to 2.0, updates current package and parity text, and adds a release record. The old 1.0 record remains as history. Local quality and 1,040 warning-strict tests at 90.3% pass. All 27 required CI checks pass at `0d7bcdd`. The built package has 156 files, current guides and browser assets, native source, and no native binaries. Archive SHA256 is `c89766cf5410b22202654feea1470a85c4859f6a41487eb1fae9e2fb284b8476`. The extracted package passes all 135 selected Jido Console tests. The package works in the real Raw/TTY Console consumer and a fresh Oracle Linux 8.5 consumer release. The copied release uses glibc 2.28, has no host Mix/Elixir/Erlang commands, loads native Markdown and the TTY NIF, accepts raw controls and normal quit, and restores exact flags in both Raw and TTY. The release preparation simulation selects 2.0.0 without a commit or tag. Its generated comparison base is the unpublished v2.0.0-rc.1 tag; the reviewed release changelog must use a verified published tag or exact commit and explain the breaking 2.0 changes. Hex package and docs simulation passes with a dry-run-only key; the public Hex list still has no 2.x release. Remote release dispatch is unavailable because release.yml is absent from the default branch. All 27 checks pass in the latest merged-SHA run `36651550758`; the parallel run `36651546599` exposed the blocked-window SSH test timeout. The fixture repair and explicit short-timeout test pass local quality, 13 focused SSH tests, and 1,041 warning-strict tests at 90.5%. In a temporary copy, a 120 ms delay per render makes the old fixture fail after 10.4 seconds; the new fixture passes all 100 renders in 12.5 seconds. Production timeouts remain unchanged. The fixture repair is merged in PR #94; the worker monitor repair is merged in PR #95. Physical frontend checks, issue resolutions, the release decision, and publication remain pending. |
 | V2 SSH fixture timeout | [PR #94](https://github.com/agentjido/term_ui/pull/94), merged into `next/v2` at `2807625` | Allows 30 seconds for the blocked receive-window storage fixture. A separate one-second timeout test requires runtime failure and normal session cleanup. Queue capacity and latest-frame assertions remain exact. Production defaults remain unchanged. Local quality, all 13 focused SSH checks, and 1,041 warning-strict tests at 90.5% pass. The old fixture fails under controlled delay after 10.4 seconds; the new fixture passes all 100 delayed renders in 12.5 seconds. All 27 required checks pass at `c165d2c`. All 156 candidate package files match merged head `2807625`. A merged-SHA Windows run exposed a separate asynchronous worker monitor race, repaired in merged PR #95. |
 | V2 async worker monitor | [PR #95](https://github.com/agentjido/term_ui/pull/95), merged into `next/v2` at `56c1d69` | The worker now acknowledges a message sent after monitor creation before the test triggers normal shutdown or forced runtime exit. Monitor and acknowledgment signals come from the same process, so the monitor is active first. Exact killed-reason assertions remain. Production code is unchanged. All 37 runtime contract tests, local quality, and 1,041 warning-strict tests at 90.6% pass. All 27 required checks pass at `2efba0e` in run `36654272959`. All 156 candidate archive files match merged code head `56c1d69`. Both merged-head runs pass: `36654920854` and `36654924669`. |
-| V2 release record and migration review | [PR #96](https://github.com/agentjido/term_ui/pull/96), open into `next/v2` | Records the candidate, package, Console, Oracle Linux, Windows, browser, and Ghostty evidence. Adds final release CI triggers and separate v1/v2 dependency update targets for the approved default-branch transition. PR #67 now has the final scope and current tests. All 19 closed migration sub-issues are rechecked against current code, tests, docs, and ancestor commits; their checklists and parent #47 now state implementation results and pending release gates. No generic UI context is added. Its guide now uses the correct 2.0 version. A generated-doc link failure is repaired with a source URL. Strict docs, quality, and 1,041 tests at 90.6% pass locally. The rebuilt package also passes all 135 selected Console tests. Exact physical frontend commands are recorded. Required checks remain pending for the final updated head. |
+| V2 release record and migration review | [PR #96](https://github.com/agentjido/term_ui/pull/96), merged into `next/v2` at `f49db37` | Records the candidate, package, Console, Oracle Linux, Windows, browser, and Ghostty evidence. Adds final release CI triggers and separate v1/v2 dependency update targets for the approved default-branch transition. PR #67 now has the final scope and current tests. All 19 closed migration sub-issues are rechecked against current code, tests, docs, and ancestor commits; their checklists and parent #47 now state implementation results and pending release gates. No generic UI context is added. Its guide now uses the correct 2.0 version. A generated-doc link failure is repaired with a source URL. Strict docs, quality, and 1,041 tests at 90.6% pass locally. The rebuilt package also passes all 135 selected Console tests. Exact physical frontend commands are recorded. Final head `476cf99` builds a 156-file candidate archive with SHA256 `a21e1f4d2abbeb66a38010269db6218d63a8149b2acb6771be55816c6726400c`. All archive files match that head. Only CONTRIBUTING.md, guides/backend.md, and guides/ui-context.md differ from the first tested archive; all runtime, native, build, and browser inputs stay identical. The final archive passes all 135 selected Console tests and both real Raw/TTY Console checks, including exact saved settings. All 27 required checks pass at `476cf99` in run `36656234850`. The full tested source tree and all 156 package files also match merged head `f49db37`. All required jobs also pass at merged head `f49db37` in PR #67 run `36656602612`. The parallel push run `36656597851` also passes. Both merged-SHA CI runs are complete with no failed jobs. |
 | V2 signal-handler cleanup | [PR #83](https://github.com/agentjido/term_ui/pull/83), merged into `next/v2` at `9d59f03` | A close call could return before the supervised signal handler was removed. The backend owner now removes it synchronously before terminal cleanup. A delayed-output regression fails on the old implementation and passes after the fix. Real macOS Raw/TTY resume, continued input, and exact nondefault settings pass. Quality, 1,003 warning-strict tests at 90.3% coverage, one acceptance specification, and all 23 required CI checks pass at `f658d67`. |
 | Issue #7 resolution | Published tag `v1.0.0`; [resolution comment](https://github.com/agentjido/term_ui/issues/7#issuecomment-5897486537) | Closed as fixed in 1.0.0. Commit `3b665ff` is an ancestor of the tag. The tag contains private `level_patterns/0` and `timestamp_pattern/0` functions. Clean Elixir 1.19 compilation and tests pass locally and in Linux CI. FreeBSD terminal behavior is not verified. |
 
@@ -336,3 +349,42 @@ The release workflow has no `HEX_API_KEY` in this repository or its shared
 organization secrets. Hex currently lists `pcharbon70` as the package owner.
 Final publication needs a key with package publish permission. The user has
 been asked to configure the key in GitHub, without sending its value in chat.
+
+
+### Historical release integration preview
+
+PR #67 merge preview `e0bd5fb839402ced501a4d92fc1247ccc6b83153` has parents `4c704860382a65b33ecfb7448d83a245e182dfe0` and `f49db37f15431d24b3abda83fddbd25f9375e4e5`. Its full file tree matches the verified candidate. No v2 code has entered develop.
+
+A read-only merge of that preview with current main `0e0e8e43542d53f113dc13a5ed2c99fbdbe7e4dd` reports 281 conflict paths. These include removed v1 widgets, examples, test and documentation files, plus current CI and source guides. Ordinary merging would require many modify/delete decisions.
+
+After the separate release decision and the required PR #67 review, create release/2.0.0 from the current main history in a new clean worktree. Apply the exact approved develop file tree, then prepare the final 2.0.0 version, changelog, installation text, and branch guidance. Verify the resulting tree and required tests before the release PR to main. Preserve main history and published tags. The v1 fixes remain on maint/1.x. Recheck main and develop heads before applying this method; review any new main change first. No release branch or merge was created for this preview.
+
+
+### Physical macOS attempt and showcase repair
+
+On 30 September 2026, the maintainer ran the Raw showcase at `476cf99`.
+It stopped before the key test because two live processes had equal
+formatted table values. This is not a physical Option+Delete result.
+
+The repair on `fix/v2-showcase-process-identities` keeps each PID in the
+Overview row and uses it as the row identity. The regression fails on the
+old code with the reported error. It passes with equal display values and
+keeps selection after rows change order and memory values. All 11 showcase
+tests, `mix quality`, and 1,041 core tests pass; core coverage is 90.5%.
+A real macOS Raw PTY passes three live refreshes, page navigation, both
+word-deletion sequences, continued Unicode input, resize, normal owner and
+reader shutdown, and exact saved flags. The key bytes were injected.
+The physical macOS key remains unverified.
+
+### Required external input
+
+All available implementation, package, consumer, and CI checks are complete. Issue #35 still needs the physical macOS Option+Delete result. The exact commands are in notes/planning/physical-terminal-checks.md on next/v2. The maintainer has no Windows machine and has accepted #5 and #6 physical frontend checks as follow-up work. Those checks no longer block release. A Hex package publish key is also absent and has been requested through GitHub secrets. Keep the separate release decision and required review after verification. No branch promotion, release tag, or v2 publication has occurred.
+
+
+### Historical goal blocked audit
+
+The same external input remains missing across three consecutive goal turns. PR #67 is still draft at f49db37 with review required and no approving review. All CI checks are complete with no pending or failed jobs. No physical frontend results have been supplied for #5, #6, or #35. HEX_API_KEY is absent from repository and shared Actions secrets. Hex has no 2.x version. Further release work requires those results and publish access, then the separate release decision and review. Preserve the full release goal and all evidence while it is blocked.
+
+The 30 September decision above replaces the physical Windows requirement in
+this historical audit. It does not supply a physical test result, publish
+access, release approval, or a required PR review.
