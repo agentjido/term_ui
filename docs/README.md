@@ -20,12 +20,14 @@ solution under `solutions`; link it from the plan rather than copy its evidence.
 
 ## Current work
 
-- [RC1 documentation and test cleanup](plans/2026-09-30-001-refactor-rc1-documentation-plan.md)
+- [Completed RC1 documentation and test work](plans/2026-09-30-001-refactor-rc1-documentation-plan.md)
 - [Later quality and examples](plans/archive/2026-09-30-post-v2-quality-and-examples.md), retained
   as an earlier proposal; the RC1 plan controls the current work.
 - [Completed repository cleanup](plans/archive/2026-09-30-repository-cleanup.md)
 
 ## Source transition evidence
+
+- [RC1 readiness](releases/2026-09-30-2.0.0-rc.1-readiness.md)
 
 - [V2 source transition](releases/2026-09-30-v2-source-transition.md)
 - [Migration checks](releases/v2-migration-checks.md)
