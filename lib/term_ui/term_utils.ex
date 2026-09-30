@@ -67,6 +67,10 @@ defmodule TermUI.TermUtils do
   @doc """
   Executes stty command with safety protections.
 
+  Windows native consoles do not have a POSIX controlling terminal. This
+  function returns `{:error, :not_tty}` there. Native console modes use the
+  Windows control-flag NIF instead of an MSYS stty process.
+
   ## Arguments
 
   - `args` - List of string arguments to pass to stty
@@ -92,7 +96,11 @@ defmodule TermUI.TermUtils do
   def safe_stty(args, opts \\ []) do
     case validate_stty_args(args) do
       :ok ->
-        safe_stty_command(args, opts)
+        if match?({:win32, _}, :os.type()) do
+          {:error, :not_tty}
+        else
+          safe_stty_command(args, opts)
+        end
 
       {:error, _} = error ->
         error
