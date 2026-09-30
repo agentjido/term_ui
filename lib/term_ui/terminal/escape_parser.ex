@@ -114,6 +114,26 @@ defmodule TermUI.Terminal.EscapeParser do
   end
 
   # Parse escape sequences
+  # Match normal input handling: discard malformed bytes and keep valid text.
+  # Do this only after paste collection so a UTF-8 character may span reads.
+  defp valid_paste_text(bytes) do
+    bytes |> valid_paste_chunks([]) |> Enum.reverse() |> IO.iodata_to_binary()
+  end
+
+  defp valid_paste_chunks(bytes, chunks) do
+    case :unicode.characters_to_binary(bytes) do
+      text when is_binary(text) ->
+        [text | chunks]
+
+      {:incomplete, text, _remaining} ->
+        [text | chunks]
+
+      {:error, text, <<_invalid, rest::binary>>} ->
+        chunks = if text == "", do: chunks, else: [text | chunks]
+        valid_paste_chunks(rest, chunks)
+    end
+  end
+
   defp parse_escape_sequence(<<>>) do
     :incomplete
   end
@@ -196,10 +216,10 @@ defmodule TermUI.Terminal.EscapeParser do
       {pos, _len} ->
         content = binary_part(rest, 0, pos)
         tail = binary_part(rest, pos + 6, byte_size(rest) - pos - 6)
-        {:ok, Input.paste(content), tail}
+        {:ok, Input.paste(valid_paste_text(content)), tail}
 
       :nomatch when byte_size(rest) > @max_paste_buffer ->
-        {:ok, Input.paste(rest), <<>>}
+        {:ok, Input.paste(valid_paste_text(rest)), <<>>}
 
       :nomatch ->
         :incomplete

@@ -5,3 +5,4 @@ symptom, affected version, cause, change, checks, and limits. Link the source
 pull request and the plan. Do not record an untested proposal as a solution.
 
 - [Register a process monitor before forced exit](2026-09-30-terminal-session-monitor.md)
+- [Discard invalid paste bytes and align joined grapheme width](2026-09-30-generated-terminal-boundaries.md)

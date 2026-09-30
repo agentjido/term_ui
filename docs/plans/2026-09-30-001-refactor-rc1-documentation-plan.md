@@ -122,3 +122,12 @@ stream scenarios verify real async failure and recovery, bounded data loss,
 pause rejection, and cancellation of a pending worker. The input scenario
 checks a real backend clipboard command and its result. Local acceptance
 checks passed; the required PR checks remain the merge condition.
+
+Phase 4 adds eight generated boundary checks with 300 cases each and a fixed
+regression corpus. Normal core CI jobs execute them on the supported toolchain
+and native-policy matrices. Failures report a seed, case number, and bounded
+input; the guide gives replay commands. Generation found malformed paste
+bytes that raised an error and joined-grapheme width that disagreed with cells.
+Both now have fixes and small permanent regressions. The
+[solution record](../solutions/2026-09-30-generated-terminal-boundaries.md)
+states their causes and scope.
