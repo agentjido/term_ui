@@ -32,8 +32,9 @@ that secret. Otherwise, create a repository secret.
 
 To create a separate key, sign in to the owning account and open the
 [Hex keys page](https://hex.pm/dashboard/keys). Name the key
-`term-ui-release`, choose an expiry, and enable API write permission. Hex shows
-the value once. Add it with the GitHub CLI's interactive prompt:
+`term-ui-release`, choose an expiry, and select the package permission for
+`term_ui`. This permits package and documentation publication for that package.
+Hex shows the value once. Add it with the GitHub CLI's interactive prompt:
 
 ```sh
 gh secret set HEX_API_KEY --repo agentjido/term_ui
@@ -119,7 +120,7 @@ on 30 September 2026:
 - [x] Strict quality checks and package checks pass. No retired workflow inputs remain.
 - [x] `git_ops` has the repository URL and `v` tag prefix.
 - [x] Local Hex publish dry run passes with a placeholder key.
-- [ ] Give Actions access to `HEX_API_KEY`.
+- [x] Give Actions access to `HEX_API_KEY`.
 - [ ] Run the remote release and Hex dry runs after a reviewed v2 tag exists.
 
 TermUI uses its supported OTP 28/29 matrix. OTP 27 does not meet the raw
@@ -131,7 +132,12 @@ enabled by `staged_prepare: true`. It does not use automated prepare staging.
 ## Setup record
 
 On 30 September 2026, Hex listed `mikehostetler` as a full owner. The local CLI
-confirmed that account and listed `term_ui` among its packages. TermUI had no
-repository or inherited Actions secret named `HEX_API_KEY`. The maintainer
-must provide that secret before publication.
-This setup change does not create a tag or run the publisher.
+confirmed that account and listed `term_ui` among its packages.
+
+The repository now has an Actions secret named `HEX_API_KEY`. Its Hex key is
+`term-ui-github-actions-2026-09-30`, owned by `mikehostetler`, with permission
+`package:hexpm/term_ui`. It expires on 30 September 2027. A read-only Hex
+account request verified the new key before the secret was stored in GitHub.
+Rotate the key before expiry, then replace the same Actions secret.
+
+No release tag was created and no package was published during this setup.
