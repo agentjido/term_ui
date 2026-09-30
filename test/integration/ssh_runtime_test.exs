@@ -213,7 +213,14 @@ defmodule TermUI.Integration.SSHRuntimeTest do
   end
 
   test "a blocked OTP SSH receive window retains only the latest waiting frame", context do
-    {_daemon, port} = start_daemon(context.system_dir, "A", self(), MatrixApp)
+    # Keep the receive window blocked through all 100 renders. Timeout behavior
+    # has separate session tests; this check verifies bounded frame storage.
+    {_daemon, port} =
+      start_daemon(context.system_dir, "A", self(), MatrixApp, [],
+        send_timeout: 30_000,
+        output_timeout: 30_000
+      )
+
     connection = connect(port)
 
     # The first eight bytes enter the alternate screen. The remaining setup
@@ -266,7 +273,14 @@ defmodule TermUI.Integration.SSHRuntimeTest do
     assert receive_closed(connection, channel) =~ "\e[0m"
   end
 
-  defp start_daemon(system_dir, label, owner, root \\ SSHApp, runtime_options \\ []) do
+  defp start_daemon(
+         system_dir,
+         label,
+         owner,
+         root \\ SSHApp,
+         runtime_options \\ [],
+         channel_options \\ []
+       ) do
     password_fun = fn user, password -> user == ~c"termui" and password == ~c"secret" end
 
     options = [
@@ -277,10 +291,13 @@ defmodule TermUI.Integration.SSHRuntimeTest do
         {Channel,
          [
            root,
-           [
-             runtime_options: [test_owner: owner, label: label] ++ runtime_options,
-             output_timeout: 10_000
-           ]
+           Keyword.merge(
+             [
+               runtime_options: [test_owner: owner, label: label] ++ runtime_options,
+               output_timeout: 10_000
+             ],
+             channel_options
+           )
          ]}
     ]
 

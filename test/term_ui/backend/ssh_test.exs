@@ -195,6 +195,21 @@ defmodule TermUI.Backend.SSHTest do
     assert_receive {:DOWN, ^session_reference, :process, ^session, :normal}, 1_000
   end
 
+  @tag capture_log: true
+  test "unconfirmed output stops the runtime and session at the configured timeout" do
+    session = start_session(output_timeout: 1_000)
+    runtime = SSH.session_info(session).runtime
+    session_reference = Process.monitor(session)
+    runtime_reference = Process.monitor(runtime)
+    {_token, _setup} = receive_output(session)
+
+    assert_receive {:DOWN, ^runtime_reference, :process, ^runtime,
+                    {:backend, SSH, :input, {:output_failed, :output_timeout}}},
+                   2_500
+
+    assert_receive {:DOWN, ^session_reference, :process, ^session, :normal}, 1_000
+  end
+
   test "SSH backend state never selects the local raw terminal backend" do
     session = start_session()
     state = Runtime.get_state(SSH.session_info(session).runtime)
