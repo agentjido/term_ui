@@ -6,8 +6,6 @@ on:
   push:
     branches:
       - main
-      - develop
-      - next/v2
       - "release/**"
 
 concurrency:
@@ -21,7 +19,7 @@ permissions:
 jobs:
   ci:
     name: CI
-    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v5
+    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@fa16d77ff51210b52c1c283e96875eb9d5ca668c # v5
     secrets: inherit
     with:
       test_matrix: '[{"otp":"28","elixir":"1.18.4"},{"otp":"28","elixir":"1.19"},{"otp":"28","elixir":"1.20"},{"otp":"29","elixir":"1.20"}]'

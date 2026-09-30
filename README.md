@@ -218,11 +218,14 @@ pure BEAM TTY backend when a source build is not available.
 - [Markdown and diff viewers](guides/markdown-and-diffs.md)
 - [Advanced feature parity](guides/feature-parity.md)
 - [Package quality](guides/package-quality.md)
+- [Repository layout](guides/repository-layout.md)
+- [Physical terminal checks](guides/terminal-checks.md)
 - [Removed and deferred features](guides/removed-and-deferred.md)
 - [Migration from 1.x to 2.0](guides/migration-2.0.md)
 - [Interactive showcase](guides/showcase.md)
-- [Runnable showcase application](examples/showcase/README.md)
+- [Runnable showcase application](https://github.com/agentjido/term_ui/blob/main/examples/showcase/README.md)
 - [Counter example](https://github.com/agentjido/term_ui/tree/main/examples/iex_counter)
+- [All examples](https://github.com/agentjido/term_ui/blob/main/examples/README.md)
 
 ## License
 

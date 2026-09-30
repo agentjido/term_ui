@@ -1,0 +1,23 @@
+name: Feature request
+description: Describe a user task that TermUI should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: User task
+      description: Describe the task and the current limit.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include an API or example when useful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing options
+      description: Describe what you tried with the current runtime, widgets, or backends.

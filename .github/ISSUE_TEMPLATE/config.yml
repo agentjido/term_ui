@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/agentjido/term_ui/blob/main/README.md
+    about: Read the API guides and runnable examples.
+  - name: Community questions
+    url: https://elixirforum.com/t/termui-a-direct-mode-terminal-user-interface-framework-with-components/73464
+    about: Ask usage questions and share applications on Elixir Forum.
