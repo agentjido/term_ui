@@ -147,3 +147,14 @@ TTY/stty cleanup. Custom backends perform their own device cleanup. A root Elm
 `terminate/2` callback is not invoked by the runtime.
 
 Next: [Commands](09-commands.md).
+
+## Windows native control input
+
+Raw mode on Windows also disables the console's processed-input flag. The
+terminal owner keeps the flag token and restores it after cooked mode. This
+allows Ctrl+C to reach the application on OTP 28.
+
+Build this small NIF in a Microsoft C/C++ developer shell with `cl` and
+`nmake` on PATH. The package includes its source and `Makefile.win`. Automatic
+selection uses TTY if native control setup is unavailable. TTY input and Unix
+raw input do not require this Windows build.

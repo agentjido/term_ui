@@ -74,6 +74,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        if: runner.os == 'Windows'
+
       - name: Setup Elixir
         uses: erlef/setup-beam@v1
         with:
@@ -98,6 +101,24 @@ jobs:
 
       - name: Run tests
         run: mix test
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.12"
+
+      - name: Install Windows console check tools
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install --only-binary=:all: pywinpty==3.0.5 pyte==0.8.2
+
+      - name: Check real Windows console input, output, and cleanup
+        if: runner.os == 'Windows'
+        env:
+          MIX_ENV: dev
+        run: |
+          mix compile --warnings-as-errors
+          python test/support/windows_console_check.py
 
   quality:
     name: Quality and package

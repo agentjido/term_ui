@@ -2,7 +2,7 @@ defmodule TermUI.MixProject do
   use Mix.Project
 
   @version "1.0.0"
-  @source_url "https://github.com/pcharbon70/term_ui"
+  @source_url "https://github.com/agentjido/term_ui"
 
   def project do
     [
@@ -12,6 +12,9 @@ defmodule TermUI.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: windows_console_compilers(),
+      make_targets: ["all"],
+      make_clean: ["clean"],
 
       # Hex package
       name: "TermUI",
@@ -49,6 +52,15 @@ defmodule TermUI.MixProject do
     ]
   end
 
+  defp windows_console_compilers do
+    if match?({:win32, _}, :os.type()) and not is_nil(System.find_executable("nmake")) and
+         not is_nil(System.find_executable("cl")) do
+      [:elixir_make | Mix.compilers()]
+    else
+      Mix.compilers()
+    end
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support", "mix/tasks"]
   defp elixirc_paths(_), do: ["lib", "mix/tasks"]
 
@@ -72,6 +84,8 @@ defmodule TermUI.MixProject do
 
   defp deps do
     [
+      {:elixir_make, "~> 0.9", runtime: false},
+
       # Documentation
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
 
@@ -108,6 +122,9 @@ defmodule TermUI.MixProject do
         lib
         mix/tasks
         guides
+        c_src
+        Makefile
+        Makefile.win
         docs/widget-compatibility.md
         mix.exs
         README.md

@@ -265,6 +265,19 @@ defmodule TermUI.Command.Executor do
 
   # --- Private Functions ---
 
+  @impl true
+  def terminate(_reason, state) do
+    Enum.each(state.intervals, fn {_id, interval} ->
+      Process.cancel_timer(interval.timer_ref)
+    end)
+
+    if Process.alive?(state.task_supervisor) do
+      Supervisor.stop(state.task_supervisor, :normal)
+    end
+
+    :ok
+  end
+
   defp execute_command(%Command{type: :none}, _runtime_pid, _component_id, state) do
     {:ok, state}
   end

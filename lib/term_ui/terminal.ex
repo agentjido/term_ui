@@ -12,6 +12,7 @@ defmodule TermUI.Terminal do
 
   alias TermUI.ANSI
   alias TermUI.Platform
+  alias TermUI.Terminal.NativeMode
   alias TermUI.Terminal.SignalHandler
   alias TermUI.Terminal.SizeDetector
   alias TermUI.Terminal.State
@@ -19,18 +20,20 @@ defmodule TermUI.Terminal do
   alias TermUI.TermUtils
 
   # Dialyzer: unmatched_return, pattern_match_cov, guard_fail warnings
-  @dialyzer {:nowarn_function,
-             init: 1,
-             handle_call: 3,
-             handle_cast: 2,
-             handle_info: 2,
-             terminate: 2,
-             do_restore: 1,
-             io_has_terminal?: 0,
-             check_tty: 0,
-             apply_stty_raw_settings: 0,
-             terminal?: 0,
-             do_enable_raw_mode: 0}
+  @dialyzer {
+    :nowarn_function,
+    init: 1,
+    handle_call: 3,
+    handle_cast: 2,
+    handle_info: 2,
+    terminate: 2,
+    do_restore: 1,
+    io_has_terminal?: 0,
+    check_tty: 0,
+    apply_stty_raw_settings: 0,
+    terminal?: 0,
+    do_enable_raw_mode: 0
+  }
 
   @ets_table :term_ui_terminal_state
 
@@ -73,6 +76,12 @@ defmodule TermUI.Terminal do
   @spec enable_raw_mode() :: {:ok, State.t()} | {:error, term()}
   def enable_raw_mode do
     GenServer.call(__MODULE__, :enable_raw_mode)
+  end
+
+  @doc false
+  @spec adopt_native_raw_mode(term()) :: {:ok, State.t()}
+  def adopt_native_raw_mode(original_settings) do
+    GenServer.call(__MODULE__, {:adopt_native_raw_mode, original_settings})
   end
 
   @doc """
@@ -242,6 +251,13 @@ defmodule TermUI.Terminal do
           {:reply, error, state}
       end
     end
+  end
+
+  @impl true
+  def handle_call({:adopt_native_raw_mode, original_settings}, _from, state) do
+    :ets.insert(@ets_table, {:raw_mode_active, true})
+    new_state = %{state | raw_mode_active: true, original_settings: original_settings}
+    {:reply, {:ok, new_state}, new_state}
   end
 
   @impl true
@@ -511,11 +527,13 @@ defmodule TermUI.Terminal do
   # Pre-OTP 28 versions expose :shell.start_interactive/1 but do not implement
   # the native raw/cooked contract, so they must remain on the TTY path.
   defp detect_prestarted_raw_mode do
-    if Platform.native_raw_mode_supported?() do
+    # A Windows probe would acquire raw mode and then replace it with cooked
+    # mode. Keep the first acquisition for enable_raw_mode or the selector.
+    if Platform.native_raw_mode_supported?() and not match?({:win32, _}, :os.type()) do
       original_settings = save_terminal_settings()
 
       try do
-        case :shell.start_interactive({:noshell, :raw}) do
+        case start_native_raw_mode() do
           :ok ->
             do_disable_raw_mode(original_settings)
             :ets.insert(@ets_table, {:raw_mode_active, false})
@@ -547,16 +565,12 @@ defmodule TermUI.Terminal do
       try do
         if Platform.native_raw_mode_supported?() do
           # OTP 28 raw mode activation sets character-at-a-time mode with no echo.
-          case :shell.start_interactive({:noshell, :raw}) do
-            :ok ->
-              apply_stty_raw_settings()
-              {:ok, original_settings}
+          case NativeMode.acquire() do
+            {:ok, console_settings} ->
+              finish_native_raw_mode(console_settings, original_settings)
 
             {:error, reason} ->
-              case apply_stty_raw_settings() do
-                :ok -> {:ok, original_settings}
-                {:error, _stty_reason} -> {:error, reason}
-              end
+              native_raw_fallback(reason, original_settings)
           end
         else
           enable_raw_mode_with_stty(original_settings)
@@ -576,6 +590,25 @@ defmodule TermUI.Terminal do
     end
   end
 
+  defp native_raw_fallback(reason, original_settings) do
+    if match?({:win32, _}, :os.type()) do
+      {:error, reason}
+    else
+      case apply_stty_raw_settings() do
+        :ok -> {:ok, original_settings}
+        {:error, _stty_reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp finish_native_raw_mode(nil, original_settings) do
+    _result = apply_stty_raw_settings()
+    {:ok, original_settings}
+  end
+
+  defp finish_native_raw_mode(console_settings, _original_settings),
+    do: {:ok, console_settings}
+
   defp enable_raw_mode_with_stty(original_settings) do
     case apply_stty_raw_settings() do
       :ok ->
@@ -585,6 +618,8 @@ defmodule TermUI.Terminal do
         {:error, {:otp_version, "OTP 28+ required and stty fallback failed: #{inspect(reason)}"}}
     end
   end
+
+  defp start_native_raw_mode, do: NativeMode.enter()
 
   defp save_terminal_settings do
     case TermUtils.safe_stty(["-g"]) do
@@ -617,6 +652,20 @@ defmodule TermUI.Terminal do
       {:error, reason} ->
         {:error, {:stty_failed, reason}}
     end
+  end
+
+  defp do_disable_raw_mode({:windows, flags}) do
+    _ = ensure_cooked_mode()
+
+    case NativeMode.restore_console(flags) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Unable to restore Windows console controls: #{inspect(reason)}")
+    end
+
+    :ok
   end
 
   defp do_disable_raw_mode(original_settings) do
@@ -743,6 +792,7 @@ defmodule TermUI.Terminal do
 
   defp io_has_terminal? do
     case :io.getopts(:standard_io) do
+      opts when is_list(opts) -> Keyword.get(opts, :terminal, false) == true
       {:ok, opts} -> Keyword.get(opts, :terminal, false) == true
       _ -> false
     end

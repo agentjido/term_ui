@@ -4,17 +4,46 @@ defmodule TermUI.Runtime.ResizeTest do
   alias TermUI.Event
   alias TermUI.Runtime
 
+  defmodule GeometryDevice do
+    def run(size) do
+      receive do
+        {:resize, size, owner} ->
+          send(owner, {:size_changed, self()})
+          run(size)
+
+        {:io_request, from, reference, {:get_geometry, axis}} ->
+          value = if axis == :rows, do: elem(size, 0), else: elem(size, 1)
+          send(from, {:io_reply, reference, value})
+          run(size)
+
+        {:io_request, _from, _reference, {:get_chars, _, _, _}} ->
+          run(size)
+
+        {:io_request, from, reference, request} ->
+          reply =
+            if request == :getopts, do: [echo: true, binary: true, terminal: true], else: :ok
+
+          send(from, {:io_reply, reference, reply})
+          run(size)
+
+        :stop ->
+          :ok
+      end
+    end
+  end
+
   # Simple test component
   defmodule TestComponent do
     use TermUI.Elm
 
-    def init(_opts), do: %{resizes: []}
+    def init(opts), do: %{resizes: [], owner: Keyword.get(opts, :owner)}
 
     def update({:resize, width, height}, state) do
-      %{state | resizes: [{width, height} | state.resizes]}
+      commands = if state.owner, do: [{:send, state.owner, {:resized, width, height}}], else: []
+      {%{state | resizes: [{width, height} | state.resizes]}, commands}
     end
 
-    def update(_msg, state), do: state
+    def update(_msg, state), do: {state, []}
 
     def view(_state), do: text("test")
 
@@ -26,6 +55,45 @@ defmodule TermUI.Runtime.ResizeTest do
   end
 
   describe "resize handling" do
+    test "TTY detects size changes without a Terminal process or resize signal" do
+      owner = self()
+      device = spawn_link(fn -> GeometryDevice.run({24, 80}) end)
+
+      host =
+        spawn_link(fn ->
+          Process.group_leader(self(), device)
+          {:ok, runtime} = Runtime.start_link(root: TestComponent, backend: :tty, owner: owner)
+          send(owner, {:runtime_started, runtime})
+
+          receive do
+            :stop -> :ok
+          end
+        end)
+
+      on_exit(fn ->
+        send(host, :stop)
+        send(device, :stop)
+      end)
+
+      assert_receive {:runtime_started, runtime}, 1000
+      reference = Process.monitor(runtime)
+      state = Runtime.get_state(runtime)
+      assert state.dimensions == {80, 24}
+      refute state.terminal_started
+
+      send(device, {:resize, {30, 100}, self()})
+      assert_receive {:size_changed, ^device}
+      assert_receive {:resized, 100, 30}, 1000
+      state = Runtime.get_state(runtime)
+      assert state.dimensions == {100, 30}
+      assert state.backend_state.size == {30, 100}
+      assert state.root_state.resizes == [{100, 30}]
+      refute_receive {:resized, _, _}, 300
+
+      Runtime.shutdown(runtime)
+      assert_receive {:DOWN, ^reference, :process, ^runtime, :normal}, 1000
+    end
+
     test "Runtime handles terminal_resize message" do
       {:ok, runtime} = Runtime.start_link(root: TestComponent, skip_terminal: true)
 
