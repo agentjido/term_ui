@@ -5,8 +5,10 @@ on:
   merge_group:
   push:
     branches:
+      - main
       - develop
       - next/v2
+      - "release/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
