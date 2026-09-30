@@ -12,6 +12,7 @@ defmodule TermUI.Terminal do
 
   alias TermUI.ANSI
   alias TermUI.Platform
+  alias TermUI.Terminal.NativeMode
   alias TermUI.Terminal.SignalHandler
   alias TermUI.Terminal.SizeDetector
   alias TermUI.Terminal.State
@@ -21,7 +22,6 @@ defmodule TermUI.Terminal do
   # Dialyzer: unmatched_return, pattern_match_cov, guard_fail warnings
   @dialyzer {
     :nowarn_function,
-    # The signals option is newer than the minimum OTP 28 typespec.
     init: 1,
     handle_call: 3,
     handle_cast: 2,
@@ -32,7 +32,6 @@ defmodule TermUI.Terminal do
     check_tty: 0,
     apply_stty_raw_settings: 0,
     terminal?: 0,
-    start_native_raw_mode: 0,
     do_enable_raw_mode: 0
   }
 
@@ -77,6 +76,12 @@ defmodule TermUI.Terminal do
   @spec enable_raw_mode() :: {:ok, State.t()} | {:error, term()}
   def enable_raw_mode do
     GenServer.call(__MODULE__, :enable_raw_mode)
+  end
+
+  @doc false
+  @spec adopt_native_raw_mode() :: {:ok, State.t()}
+  def adopt_native_raw_mode do
+    GenServer.call(__MODULE__, :adopt_native_raw_mode)
   end
 
   @doc """
@@ -246,6 +251,13 @@ defmodule TermUI.Terminal do
           {:reply, error, state}
       end
     end
+  end
+
+  @impl true
+  def handle_call(:adopt_native_raw_mode, _from, state) do
+    :ets.insert(@ets_table, {:raw_mode_active, true})
+    new_state = %{state | raw_mode_active: true}
+    {:reply, {:ok, new_state}, new_state}
   end
 
   @impl true
@@ -515,7 +527,9 @@ defmodule TermUI.Terminal do
   # Pre-OTP 28 versions expose :shell.start_interactive/1 but do not implement
   # the native raw/cooked contract, so they must remain on the TTY path.
   defp detect_prestarted_raw_mode do
-    if Platform.native_raw_mode_supported?() do
+    # A Windows probe would acquire raw mode and then replace it with cooked
+    # mode. Keep the first acquisition for enable_raw_mode or the selector.
+    if Platform.native_raw_mode_supported?() and not match?({:win32, _}, :os.type()) do
       original_settings = save_terminal_settings()
 
       try do
@@ -590,36 +604,7 @@ defmodule TermUI.Terminal do
     end
   end
 
-  defp start_native_raw_mode do
-    # Current OTP 28 exposes control bytes on Windows through this option.
-    # Earlier OTP 28 uses the tuple API and the Unix stty fallback.
-    if native_signals_api?() do
-      :shell.start_interactive({:noshell, %{mode: :raw, signals: false}})
-    else
-      :shell.start_interactive({:noshell, :raw})
-    end
-  end
-
-  defp native_signals_api? do
-    with {:ok, specifications} <- Code.Typespec.fetch_specs(:shell),
-         {{:start_interactive, 1}, definitions} <-
-           List.keyfind(specifications, {:start_interactive, 1}, 0) do
-      Enum.any?(definitions, &signals_option?/1)
-    else
-      _unavailable -> false
-    end
-  end
-
-  defp signals_option?({:type, _line, field, [{:atom, _key_line, :signals} | _rest]})
-       when field in [:map_field_assoc, :map_field_exact],
-       do: true
-
-  defp signals_option?(tuple) when is_tuple(tuple) do
-    tuple |> Tuple.to_list() |> Enum.any?(&signals_option?/1)
-  end
-
-  defp signals_option?(list) when is_list(list), do: Enum.any?(list, &signals_option?/1)
-  defp signals_option?(_other), do: false
+  defp start_native_raw_mode, do: NativeMode.enter()
 
   defp save_terminal_settings do
     case TermUtils.safe_stty(["-g"]) do

@@ -536,8 +536,12 @@ defmodule TermUI.Runtime do
 
   defp select_backend(backend_opt, buffer_manager_name) do
     case Selector.select(backend_opt) do
-      {:raw, _raw_state} ->
-        attempt_raw_backend(fallback_to_tty: true, buffer_manager_name: buffer_manager_name)
+      {:raw, raw_state} ->
+        attempt_raw_backend(
+          fallback_to_tty: true,
+          buffer_manager_name: buffer_manager_name,
+          raw_mode_started: raw_state.raw_mode_started
+        )
 
       {:tty, capabilities} ->
         init_tty_backend(capabilities)
@@ -554,7 +558,7 @@ defmodule TermUI.Runtime do
   end
 
   defp attempt_raw_backend(opts) do
-    case setup_terminal_and_buffers(Keyword.fetch!(opts, :buffer_manager_name)) do
+    case setup_terminal_and_buffers(Keyword.fetch!(opts, :buffer_manager_name), opts) do
       {true, buffer_manager, dimensions} ->
         init_raw_backend(buffer_manager, dimensions)
 
@@ -616,7 +620,7 @@ defmodule TermUI.Runtime do
     {:custom, module, backend_state, nil, false, buffer_pid, {cols, rows}}
   end
 
-  defp setup_terminal_and_buffers(buffer_manager_name) do
+  defp setup_terminal_and_buffers(buffer_manager_name, opts) do
     # Start Terminal GenServer (or reuse if already running)
     case Terminal.start_link() do
       {:ok, _pid} -> :ok
@@ -624,7 +628,7 @@ defmodule TermUI.Runtime do
       {:error, reason} -> throw({:terminal_failed, reason})
     end
 
-    case Terminal.enable_raw_mode() do
+    case enable_runtime_raw_mode(opts) do
       {:ok, _state} -> :ok
       {:error, reason} -> throw({:terminal_failed, reason})
     end
@@ -648,6 +652,14 @@ defmodule TermUI.Runtime do
     _ -> {false, nil, nil}
   catch
     {:terminal_failed, _} -> {false, nil, nil}
+  end
+
+  defp enable_runtime_raw_mode(opts) do
+    if match?({:win32, _}, :os.type()) and Keyword.get(opts, :raw_mode_started, false) do
+      Terminal.adopt_native_raw_mode()
+    else
+      Terminal.enable_raw_mode()
+    end
   end
 
   @spec unique_buffer_manager_name() :: {:global, {:term_ui_buffer_manager, pid(), integer()}}

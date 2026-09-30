@@ -87,6 +87,7 @@ defmodule TermUI.Backend.Selector do
   require Logger
 
   alias TermUI.Platform
+  alias TermUI.Terminal.NativeMode
 
   @typedoc """
   Result of backend selection.
@@ -194,7 +195,7 @@ defmodule TermUI.Backend.Selector do
   @spec attempt_raw_mode() :: {:raw, raw_state()} | {:tty, capabilities()}
   def attempt_raw_mode do
     if Platform.native_raw_mode_supported?() do
-      case :shell.start_interactive({:noshell, :raw}) do
+      case NativeMode.enter() do
         :ok ->
           # Raw mode successfully activated
           {:raw, %{raw_mode_started: true}}

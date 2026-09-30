@@ -183,7 +183,7 @@ def check_application(shell, backend, directory):
     console = Console(shell, backend, directory)
     try:
         console.check_screen(0)
-        expected_backend = "TermUI.Backend.Raw" if backend == "raw" else "TermUI.Backend.TTY"
+        expected_backend = "TermUI.Backend.Raw" if backend in ("raw", "auto") else "TermUI.Backend.TTY"
         console.wait(lambda: console.state().get("backend") == expected_backend, "backend startup record")
         suffix = "\r" if backend == "tty" else ""
         console.send("é " + suffix)
@@ -193,7 +193,7 @@ def check_application(shell, backend, directory):
             "Unicode and space input",
         )
 
-        if backend == "raw":
+        if backend in ("raw", "auto"):
             console.send("\x1b[A\x0f\x03\x13\x11")
             expected = [
                 {"key": "up", "modifiers": []},
@@ -227,6 +227,7 @@ def main():
         for shell in ("cmd", "git-bash"):
             check_application(shell, "tty", directory)
             check_application(shell, "raw", directory)
+            check_application(shell, "auto", directory)
 
 
 if __name__ == "__main__":
