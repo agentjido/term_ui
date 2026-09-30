@@ -31,14 +31,13 @@ defmodule TermUI.MixProject do
 
       # Dialyzer
       dialyzer: [
-        ignore_warnings: ".dialyzer_ignore.exs",
         list_unused_filters: true,
         flags: [
           :error_handling,
           :underspecs,
           :unmatched_returns
         ],
-        plt_add_apps: [:mix, :ex_unit]
+        plt_add_apps: [:mix, :ex_unit, :lumis]
       ]
     ]
   end
@@ -54,8 +53,8 @@ defmodule TermUI.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support", "mix/tasks"]
-  defp elixirc_paths(_), do: ["lib", "mix/tasks"]
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [
@@ -140,6 +139,9 @@ defmodule TermUI.MixProject do
       # Code quality
       {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      # MDEx exposes Lumis types even when its optional highlighter is absent.
+      # Load those types for analysis without adding a runtime dependency.
+      {:lumis, "~> 0.10", only: :dev, runtime: false},
 
       # Testing
       {:excoveralls, "~> 0.18", only: :test},
@@ -185,15 +187,10 @@ defmodule TermUI.MixProject do
         c_src
         lib
         priv/web
-        mix/tasks
         guides
-        examples/showcase/README.md
-        examples/showcase/lib
-        examples/showcase/mix.exs
-        examples/showcase/mix.lock
-        examples/showcase/run.exs
         Makefile
         Makefile.win
+        .formatter.exs
         mix.exs
         README.md
         LICENSE
@@ -214,6 +211,8 @@ defmodule TermUI.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "guides/package-quality.md": [title: "Package Quality"],
+        "guides/repository-layout.md": [title: "Repository Layout"],
+        "guides/terminal-checks.md": [title: "Physical Terminal Checks"],
         "guides/terminal-session.md": [title: "Optional Terminal Sessions"],
         "guides/community.md": [title: "Community and Examples"],
         "guides/feature-parity.md": [title: "Feature Parity"],

@@ -12,7 +12,7 @@ still contains some older v4 examples.
 | Area | TermUI decision |
 | --- | --- |
 | Package identity | README, Hex metadata, guides, and module docs describe the Elm runtime and its use by Jido Console. |
-| Repository files | `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE`, `usage-rules.md`, examples, guides, and environment config files are present. |
+| Repository files | `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE`, `usage-rules.md`, examples, guides, and development release-tool config are present. See the repository layout guide. |
 | Public data | Public boundary values use Zoi schemas. Private runtime and widget state uses plain structs. |
 | Quality command | `mix quality` runs format, warning-free compile, xref cycle checks, strict Credo, Dialyzer, and Doctor. |
 | Tests and coverage | `mix coveralls` runs deterministic tests and enforces at least 90% line coverage without excluding production modules. |
@@ -20,7 +20,7 @@ still contains some older v4 examples.
 | Dependency updates | Dependabot checks Mix and GitHub Actions dependencies each week with Conventional Commit titles. |
 | Releases | The v5 shared release caller uses `git_ops` for release preparation and Hex publication. |
 | Review | The v5 shared advisory review caller checks v2 pull requests to `main`. |
-| Examples | The runnable counter and showcase examples are outside `lib/` and have their own Mix projects. |
+| Examples | Counter, showcase, web, and Ghostty applications are outside `lib/` and have their own Mix projects. Optional host dependencies stay in examples. |
 | Worktree safety | The package does not auto-install Git hooks and does not store local worktree paths. |
 
 ## Documented exceptions
@@ -28,15 +28,20 @@ still contains some older v4 examples.
 - The public namespace stays `TermUI`, not `Jido.TermUI`. This preserves the
   upstream API and the Jido Console contract.
 - TermUI keeps small tagged error tuples at backend and runtime boundaries. It
-  does not add Splode during the release candidate because that would change
+  does not add Splode because that would change
   the public failure contract.
 - TermUI has no installer. It needs no project files, configuration, database
   changes, or generated code, so an Igniter installer would have no work to do.
 - `main` is the v2 branch. `maint/1.x` keeps the v1 source and its own CI
   matrix. `develop` is a historical v1 integration branch.
 
-Review these exceptions before the stable 2.0 release. Do not remove them by
-changing the runtime or public namespace in a quality-only change.
+Keep these contracts during repository cleanup. Do not change the runtime or
+public namespace to remove a documented exception.
+
+The Dialyzer run has no warning ignore file. MDEx exposes types from its
+optional Lumis dependency. TermUI includes Lumis only in development so
+analysis can resolve those types. It is not a required runtime dependency or
+a new TermUI syntax-highlighter adapter.
 
 ## Supported runtime matrix
 

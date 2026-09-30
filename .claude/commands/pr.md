@@ -1,2 +1,0 @@
-- create a pr on github for this branch
-- Claude doesn't mention itsself in the PR description

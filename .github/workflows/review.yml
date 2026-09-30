@@ -4,8 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - develop
-      - next/v2
+      - maint/1.x
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -20,4 +19,4 @@ permissions:
 jobs:
   review:
     name: Jido Review
-    uses: agentjido/github-actions/.github/workflows/jido-review.yml@v5
+    uses: agentjido/github-actions/.github/workflows/jido-review.yml@fa16d77ff51210b52c1c283e96875eb9d5ca668c # v5

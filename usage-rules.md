@@ -19,7 +19,8 @@ Printable text is `TermUI.Event.Text`. Do not read printable characters from a
 legacy `Key.char` field. Use `TermUI.Event.Key` for named or modified keys.
 
 Use `TermUI.Style`, `TermUI.Cell`, and `TermUI.Frame`. The old renderer,
-component, input, and `TermUI.Widgets` namespaces do not exist in 1.0.
+component, and input namespaces do not exist in 2.0. Use `TermUI.Widget`.
+`TermUI.Widgets.Sparkline` remains only as a temporary compatibility facade.
 
 Use `TermUI.Widget.MarkdownViewer` for MDEx Markdown. Use
 `TermUI.Widget.DiffViewer` for unified or side-by-side text diffs. Supply

@@ -8,5 +8,3 @@ if config_env() == :dev do
     manage_mix_version?: true,
     version_tag_prefix: "v"
 end
-
-import_config "#{config_env()}.exs"

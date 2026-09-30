@@ -1,2 +1,0 @@
-- anaylze the changes in the worktree
-- commit the changes in logical chunks

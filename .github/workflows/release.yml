@@ -48,7 +48,7 @@ permissions:
 jobs:
   release:
     name: Release
-    uses: agentjido/github-actions/.github/workflows/jido-release.yml@v5
+    uses: agentjido/github-actions/.github/workflows/jido-release.yml@fa16d77ff51210b52c1c283e96875eb9d5ca668c # v5
     with:
       operation: ${{ inputs.operation || 'auto' }}
       tag_name: ${{ inputs.tag_name || '' }}

@@ -26,3 +26,10 @@ term_ui-*.tar
 /priv/*.so
 /priv/*.dll
 /priv/*.dylib
+
+# Local editor, assistant, and toolchain settings.
+/.claude/
+/CLAUDE.md
+/.tool-versions
+/.elixir_ls/
+.DS_Store

@@ -49,17 +49,7 @@ before you submit a pull request. A terminal example also needs an interactive
 check of input, resize, quit, and restored terminal settings. Record the
 terminal and result in the pull request.
 
-## Share a prompt or development plan
-
-The [prompt examples](https://github.com/agentjido/term_ui/tree/main/examples/prompts)
-contain a small v2 counter request. You can use it with Claude or another code
-tool. Adapt its namespace, version, and behavior to the application. Read the
-result and run its checks before use.
-
-A prompt contribution must name the target version and the expected behavior.
-Include a runnable example or a link to one, plus the checks used to verify the
-result. Keep prompts independent of a required editor or model. A prompt does
-not replace API documents or tests.
+## Community applications
 
 [andyl/zing](https://github.com/andyl/zing) is a community example shared in
 issue [#9](https://github.com/agentjido/term_ui/issues/9). Its
