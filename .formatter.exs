@@ -7,6 +7,8 @@
     "examples/iex_counter/{lib,test}/**/*.{ex,exs}",
     "examples/web/mix.exs",
     "examples/web/{lib,test}/**/*.{ex,exs}",
+    "examples/ghostty/mix.exs",
+    "examples/ghostty/{lib,test}/**/*.{ex,exs}",
     "examples/showcase/{mix,run,.formatter}.exs",
     "examples/showcase/{lib,test}/**/*.{ex,exs}"
   ]

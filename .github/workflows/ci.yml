@@ -135,6 +135,66 @@ jobs:
           npm test
           npm run benchmark
 
+  ghostty:
+    name: Ghostty (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            browser: true
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            browser: false
+          - name: macOS ARM64
+            os: macos-15
+            browser: false
+    env:
+      TERM_UI_TTY_NIF: disabled
+      TERM: xterm-256color
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: "28"
+          elixir-version: "1.19"
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        if: matrix.name == 'Linux ARM64'
+        with:
+          version: "0.15.2"
+      - name: Build Ghostty on native ARM64 from pinned sources
+        if: matrix.name == 'Linux ARM64'
+        working-directory: examples/ghostty
+        run: |
+          sh build_native.sh
+          echo 'GHOSTTY_BUILD=1' >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/deps/ghostty/priv/lib" >> "$GITHUB_ENV"
+      - name: Compile, audit, and test real native sessions
+        working-directory: examples/ghostty
+        run: |
+          mix deps.get
+          mix deps.unlock --check-unused
+          git diff --exit-code -- mix.lock
+          mix hex.audit
+          mix test --warnings-as-errors
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: matrix.browser
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: examples/web/package-lock.json
+      - name: Test the shared browser renderer with a real shell and Vim
+        if: matrix.browser
+        run: |
+          cd examples/web
+          npm ci --ignore-scripts
+          npm audit --audit-level=low
+          npx playwright install --with-deps chromium
+          cd ../ghostty
+          node ../web/node_modules/@playwright/test/cli.js test
+
   platform:
     name: Platform (${{ matrix.name }}, NIF ${{ matrix.mode }})
     runs-on: ${{ matrix.os }}
@@ -184,7 +244,7 @@ jobs:
   required-checks:
     name: Required checks
     if: always()
-    needs: [ci, tty-nif-policy, platform, examples, acceptance, web-browser]
+    needs: [ci, tty-nif-policy, platform, examples, acceptance, web-browser, ghostty]
     runs-on: ubuntu-latest
     steps:
       - name: Require all CI jobs to pass
@@ -195,8 +255,9 @@ jobs:
           EXAMPLES_RESULT: ${{ needs.examples.result }}
           ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
           WEB_BROWSER_RESULT: ${{ needs.web-browser.result }}
+          GHOSTTY_RESULT: ${{ needs.ghostty.result }}
         run: |
-          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT" "$WEB_BROWSER_RESULT"; do
+          for result in "$SHARED_CI_RESULT" "$TTY_POLICY_RESULT" "$PLATFORM_RESULT" "$EXAMPLES_RESULT" "$ACCEPTANCE_RESULT" "$WEB_BROWSER_RESULT" "$GHOSTTY_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A required CI job did not pass: $result"
               exit 1
