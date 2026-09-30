@@ -114,3 +114,11 @@ Phase 2 adds four small runnable widget applications to the existing counter
 consumer, with six behavior tests and a test that runs all four guide code
 blocks. The guide links each lesson to its source and tests. The terminal
 procedure now gives separate v1 and v2 probe paths.
+
+Phase 3 adds five runtime specifications against those same recipe sources.
+Together with the counter specification, `mix spex` runs six user workflows.
+Each verifies drawn frames and normal runtime/backend-owner cleanup. The
+stream scenarios verify real async failure and recovery, bounded data loss,
+pause rejection, and cancellation of a pending worker. The input scenario
+checks a real backend clipboard command and its result. Local acceptance
+checks passed; the required PR checks remain the merge condition.

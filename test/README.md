@@ -4,7 +4,8 @@ See [the testing guide](../guides/testing.md) for commands and limits.
 
 - `term_ui`: focused tests, with paths that match `lib/term_ui` where possible.
 - `integration`: runtime and host behavior across module boundaries.
-- `spex`: user acceptance workflows. SexySpex finds this path by default.
+- `spex`: six user acceptance workflows against the counter and widget recipe
+  sources. SexySpex finds this path by default.
 - `platform`: real PTY checks and platform probe scripts under `support`.
 - `mix`: tests for the consumer Mix task.
 - `support`: private compiled Elixir test helpers.
