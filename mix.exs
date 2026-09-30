@@ -1,7 +1,7 @@
 defmodule TermUI.MixProject do
   use Mix.Project
 
-  @version "1.0.0-rc.1"
+  @version "2.0.0-rc.1"
   @source_url "https://github.com/agentjido/term_ui"
 
   def project do
@@ -228,7 +228,7 @@ defmodule TermUI.MixProject do
         "guides/interaction.md": [title: "Clipboard, Selection, and Mouse"],
         "guides/markdown-and-diffs.md": [title: "Markdown and Diffs"],
         "guides/removed-and-deferred.md": [title: "Removed and Deferred Features"],
-        "guides/migration-1.0.md": [title: "Migration to 1.0"]
+        "guides/migration-2.0.md": [title: "Migration from 1.x to 2.0"]
       ],
       groups_for_modules: [
         Core: [

@@ -5,14 +5,14 @@ This comparison uses the source archive published to Hex as `term_ui
 feature was correct in a real terminal. The rewrite removed shared processes
 and global services that could break state ownership and terminal cleanup.
 
-The after state is `1.0.0-rc.1` on the rewrite branch. `Retained` means that the
+The after state is the `2.0.0-rc.1` candidate on `next/v2`. `Retained` means that the
 user capability remains. `Replaced` means that the capability has a new API.
 `Partial` means that useful behavior remains, but an advanced function is
 missing. `Deferred` means that the old form is not safe to restore.
 
 ## Before and after
 
-| Feature | Before: published `1.0.0-rc` | After: rewrite `1.0.0-rc.1` | Status and gap |
+| Feature | Before: published `1.0.0-rc` | After: TermUI 2.0 | Status and gap |
 | --- | --- | --- | --- |
 | Runtime and widget ownership | Component servers, registries, queues, routers, and process-owned widgets | One Elm runtime with parent-owned pure widgets and command data | Replaced. Do not restore the old ownership model. |
 | Streaming input | `StreamWidget` accepted messages through a GenStage consumer and tracked demand | `ProducerAdapter` bounds queued data and sends one acknowledged batch at a time; the parent applies it to the pure widget | Replaced. Slow consumers cannot receive an unbounded series of adapter batches. |
@@ -35,6 +35,8 @@ missing. `Deferred` means that the old form is not safe to restore.
 | Developer tools | Hot reload, UI and state inspectors, and a performance monitor | Deterministic backend tests and runtime instrumentation through normal application state | Partial. Add optional inspection data APIs before any live tool. |
 | Test toolkit | Component harness, event simulator, and test renderer shipped in `lib/` | Public deterministic v2 backend with event injection, complete frames, and shutdown snapshots | Replaced. Tests use the runtime, event, command, and frame contracts without component processes. |
 | Platform and SSH adapters | Unix and Windows adapter modules; the published Hex archive did not contain an SSH backend | Raw, TTY, and SSH backends own complete sessions | Replaced. SSH has a direct host API and an OTP SSH channel callback with isolated runtimes and bounded frame output. |
+| Browser delivery | No browser backend | A transport-neutral WebSocket session, complete or changed Frame rows, normalized events, and shared DOM assets | Added. Protocol and Chromium tests check input, Unicode, wide cells, styles, resize, confirmation, and cleanup. Dense full updates have a measured cost; see the web guide. |
+| Embedded terminal content | No owned embedded emulator and PTY | An optional Ghostty session emits complete Frames and accepts command-owned input | Added. Real shell and Vim tests pass on GNU Linux x86_64/ARM64 and macOS ARM64. Other platforms return an explicit error. Ghostty is a consumer dependency. |
 
 ## Recommended order
 

@@ -1,3 +1,7 @@
+> Historical v1 release record. TermUI 1.0.0 is published. Use
+> `release-2.0.0.md` at the repository root for the current release process.
+> The branch state and unchecked items below describe the earlier v1 work.
+
 # TermUI 1.0.0 release runbook
 
 ## Purpose

@@ -15,12 +15,13 @@ Jido, so it also remains useful as a general Elixir terminal package.
 TermUI requires Elixir 1.18.4 or later and Erlang/OTP 28 or later. CI tests
 Elixir 1.18.4, 1.19, and 1.20 on OTP 28, and Elixir 1.20 on OTP 29.
 
-Add the release candidate to `mix.exs`:
+This branch prepares TermUI `2.0.0-rc.1`. The 2.0 series is not yet published
+on Hex. Use the development branch in `mix.exs` until publication:
 
 ```elixir
 def deps do
   [
-    {:term_ui, "~> 1.0.0-rc.1"}
+    {:term_ui, github: "agentjido/term_ui", branch: "next/v2"}
   ]
 end
 ```
@@ -214,7 +215,7 @@ pure BEAM TTY backend when a source build is not available.
 - [Advanced feature parity](guides/feature-parity.md)
 - [Package quality](guides/package-quality.md)
 - [Removed and deferred features](guides/removed-and-deferred.md)
-- [Migration to 1.0](guides/migration-1.0.md)
+- [Migration from 1.x to 2.0](guides/migration-2.0.md)
 - [Interactive showcase](guides/showcase.md)
 - [Runnable showcase application](examples/showcase/README.md)
 - [Counter example](https://github.com/agentjido/term_ui/tree/next/v2/examples/iex_counter)

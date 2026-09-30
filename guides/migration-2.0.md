@@ -1,13 +1,19 @@
-# Migration to TermUI 1.0.0-rc.1
+# Migration from TermUI 1.x to 2.0
 
-TermUI 1.0.0-rc.1 is a breaking redesign of the published 1.0.0-rc package.
-It removes the earlier release candidate's component and render systems. It
-does not provide compatibility aliases for systems that no longer match the
-runtime design.
+TermUI 2.0 is a breaking change from published TermUI 1.0 and the `maint/1.x`
+line. One runtime owns application state and update order. Each application
+view returns one complete `TermUI.Frame`. The selected backend owns terminal
+input, output, size, capabilities, and cleanup. Widgets are pure values, and
+commands describe effects that the runtime executes.
+
+The current candidate is `2.0.0-rc.1`. It is not yet published on Hex. V1 fixes
+go to `maint/1.x`; v2 changes go to `next/v2` until the release decision.
+The public `TermUI` namespace remains. The v2 runtime contract used by Jido
+Console remains supported.
 
 ## Public replacements
 
-| 1.0.0-rc and earlier | 1.0.0-rc.1 |
+| TermUI 1.x | TermUI 2.0 |
 | --- | --- |
 | `TermUI.App` | `TermUI.run/2`, `TermUI.start_link/2`, or `TermUI.Runtime` |
 | `TermUI.Component` and `TermUI.StatefulComponent` | One `TermUI.Elm` application or a pure `TermUI.Widget` |
