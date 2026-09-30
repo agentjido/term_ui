@@ -19,18 +19,22 @@ defmodule TermUI.Terminal do
   alias TermUI.TermUtils
 
   # Dialyzer: unmatched_return, pattern_match_cov, guard_fail warnings
-  @dialyzer {:nowarn_function,
-             init: 1,
-             handle_call: 3,
-             handle_cast: 2,
-             handle_info: 2,
-             terminate: 2,
-             do_restore: 1,
-             io_has_terminal?: 0,
-             check_tty: 0,
-             apply_stty_raw_settings: 0,
-             terminal?: 0,
-             do_enable_raw_mode: 0}
+  @dialyzer {
+    :nowarn_function,
+    # The signals option is newer than the minimum OTP 28 typespec.
+    init: 1,
+    handle_call: 3,
+    handle_cast: 2,
+    handle_info: 2,
+    terminate: 2,
+    do_restore: 1,
+    io_has_terminal?: 0,
+    check_tty: 0,
+    apply_stty_raw_settings: 0,
+    terminal?: 0,
+    start_native_raw_mode: 0,
+    do_enable_raw_mode: 0
+  }
 
   @ets_table :term_ui_terminal_state
 
@@ -515,7 +519,7 @@ defmodule TermUI.Terminal do
       original_settings = save_terminal_settings()
 
       try do
-        case :shell.start_interactive({:noshell, :raw}) do
+        case start_native_raw_mode() do
           :ok ->
             do_disable_raw_mode(original_settings)
             :ets.insert(@ets_table, {:raw_mode_active, false})
@@ -547,7 +551,7 @@ defmodule TermUI.Terminal do
       try do
         if Platform.native_raw_mode_supported?() do
           # OTP 28 raw mode activation sets character-at-a-time mode with no echo.
-          case :shell.start_interactive({:noshell, :raw}) do
+          case start_native_raw_mode() do
             :ok ->
               apply_stty_raw_settings()
               {:ok, original_settings}
@@ -585,6 +589,37 @@ defmodule TermUI.Terminal do
         {:error, {:otp_version, "OTP 28+ required and stty fallback failed: #{inspect(reason)}"}}
     end
   end
+
+  defp start_native_raw_mode do
+    # Current OTP 28 exposes control bytes on Windows through this option.
+    # Earlier OTP 28 uses the tuple API and the Unix stty fallback.
+    if native_signals_api?() do
+      :shell.start_interactive({:noshell, %{mode: :raw, signals: false}})
+    else
+      :shell.start_interactive({:noshell, :raw})
+    end
+  end
+
+  defp native_signals_api? do
+    with {:ok, specifications} <- Code.Typespec.fetch_specs(:shell),
+         {{:start_interactive, 1}, definitions} <-
+           List.keyfind(specifications, {:start_interactive, 1}, 0) do
+      Enum.any?(definitions, &signals_option?/1)
+    else
+      _unavailable -> false
+    end
+  end
+
+  defp signals_option?({:type, _line, field, [{:atom, _key_line, :signals} | _rest]})
+       when field in [:map_field_assoc, :map_field_exact],
+       do: true
+
+  defp signals_option?(tuple) when is_tuple(tuple) do
+    tuple |> Tuple.to_list() |> Enum.any?(&signals_option?/1)
+  end
+
+  defp signals_option?(list) when is_list(list), do: Enum.any?(list, &signals_option?/1)
+  defp signals_option?(_other), do: false
 
   defp save_terminal_settings do
     case TermUtils.safe_stty(["-g"]) do
@@ -743,6 +778,7 @@ defmodule TermUI.Terminal do
 
   defp io_has_terminal? do
     case :io.getopts(:standard_io) do
+      opts when is_list(opts) -> Keyword.get(opts, :terminal, false) == true
       {:ok, opts} -> Keyword.get(opts, :terminal, false) == true
       _ -> false
     end
