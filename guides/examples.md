@@ -7,6 +7,10 @@ application does not have to install a web server or terminal emulator.
 Read them in this order. Each README has run commands, expected behavior,
 source guidance, and checks.
 
+After the counter, use the [widget recipes](widget-recipes.md). They run in
+the same consumer and show input/focus, forms, row identity, and bounded
+stream updates. Each lesson links to source and behavior tests.
+
 | Order | Lesson | Main result |
 | --- | --- | --- |
 | 1 | [Counter](https://github.com/agentjido/term_ui/blob/main/examples/iex_counter/README.md) | Input becomes a message, state becomes one complete frame, quit becomes command data |

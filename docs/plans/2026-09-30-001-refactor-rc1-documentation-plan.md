@@ -38,7 +38,7 @@ and target `main`. V1 stays on `maint/1.x`.
 
 | Phase | Work | Completion condition |
 | --- | --- | --- |
-| 1, current branch | RC1 version, folder cleanup, guide index and first tutorial, example lessons, counter behavior tests, specification review | Links, quality, coverage, acceptance, affected examples, and required CI pass |
+| 1, complete in PR #102 | RC1 version, folder cleanup, guide index and first tutorial, example lessons, counter behavior tests, specification review | Links, quality, coverage, acceptance, affected examples, and required CI passed |
 | 2, `docs/rc1-widget-recipes` | Small recipes for input/focus, forms, tables, and stream updates | Each recipe points to real source and a behavior test; copyable code uses the current API |
 | 3, `test/rc1-acceptance-flows` | Add core user scenarios for text/paste, focus, row identity, resize, async failure, and normal cleanup | Scenarios assert visible frames and effects; they run without a physical terminal |
 | 4, `test/rc1-property-boundaries` | Bounded parser, frame, and protocol properties, then regression fuzz inputs | Failures include a seed and a small replayable input; short checks run in PR CI |
@@ -99,11 +99,18 @@ inputs, browser assets, and consumer Mix task. It excludes maintainer `docs`,
 examples, tests, repository config, and compiled native libraries. Its SHA256
 is `0eb939abcc3ff113bb8973150be738ce2a22f0d2ea7c6895dc7604fe6ef8ff2b`.
 
-This source must also pass the required GitHub CI checks before merge. Keep the later guide
-recipes and generated tests as explicit follow-up work. This record does not
-authorize publication.
+Phase 1 merged through [PR #102](https://github.com/agentjido/term_ui/pull/102)
+at `72e9deae9994fb7886ef1172b917472451024712`. All required PR checks passed;
+the [main CI run](https://github.com/agentjido/term_ui/actions/runs/36748762208)
+also passed. Later phases remain active. This record does not authorize
+publication.
 
 The full suite also passed locally on Elixir 1.20.4 / OTP 29.1 with a fresh
 build directory: 1,041 tests passed and one was excluded. Platform probe
 filenames are explicitly excluded from test discovery and remain direct CI
 commands. This addresses Elixir 1.20 unmatched-file warnings.
+
+Phase 2 adds four small runnable widget applications to the existing counter
+consumer, with six behavior tests and a test that runs all four guide code
+blocks. The guide links each lesson to its source and tests. The terminal
+procedure now gives separate v1 and v2 probe paths.

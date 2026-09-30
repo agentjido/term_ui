@@ -22,8 +22,10 @@ Run `mix deps.get` and `mix compile` before the input check. Windows Raw
 needs the C build tools described in the backend guide. Build in the native
 tools shell, then run in the terminal profile under test.
 
-The existing console probe is `test/platform/support/windows_console_probe.exs` on
-both branches. It shows a colored screen, `READY`, Unicode text, and a final
+V2 (`main`) uses `test/platform/support/windows_console_probe.exs`. V1
+(`maint/1.x`) uses `test/support/windows_console_probe.exs`. The commands below
+use the v2 path; substitute the v1 path when you check that branch.
+The probe shows a colored screen, `READY`, Unicode text, and a final
 `!` cell. It records normalized input and normal owner cleanup. The probe
 does not edit a text widget; the widget word-deletion tests are separate.
 
