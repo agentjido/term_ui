@@ -7,22 +7,27 @@ publication separately. This decision replaces the earlier route through
 
 ## Branches and publication
 
-- PR #67 targets `main`. Its final source uses version `2.0.0`.
+- PR #67 is merged into `main` at
+  `d5484996e8cc5228ff8e31a0c7695495bcef8076`. The version is `2.0.0`.
+- `main` is the default branch for v2 work.
 - `maint/1.x` stays at `f8a363301830ab0bf5ed21088bd0b85680597874` and keeps
   the v1 runtime, fixes, and six required v1 CI checks.
-- `main` will receive the v2 runtime and its 27 required checks.
+- `main` has the v2 runtime and 27 required CI checks.
 - `develop` is a historical v1 integration branch. New work targets the two
   supported version branches.
 - Dependabot sends v1 changes to `maint/1.x` and v2 changes to `main`.
-- Keep the required approving review and conversation resolution on `main`.
+- The maintainer removed the required approval on 30 September 2026.
+  `main` requires zero approving reviews. Strict status checks, all 27
+  required CI checks, and conversation resolution remain. Force pushes
+  and branch deletion remain disabled.
 - Do not publish to Hex, push a release tag, or run a publication workflow
   during this cleanup. The maintainer owns the separate publication step.
 
 The preparation branch keeps the tested v2 source and joins the existing
 `main` history. The three later v1 changes on `main` were already reconciled
 on `maint/1.x`; their v2 replacements are in the tested runtime. Old v1
-runtime files are not copied into v2. PR #67 can then use a normal squash
-merge into `main` without the old modify/delete conflicts. Published tags
+runtime files are not copied into v2. PR #67 used a normal squash
+merge into `main` without the old modify/delete conflicts or an admin override. Published tags
 and the v1 branch stay unchanged.
 
 ## Verified source baseline
@@ -43,8 +48,15 @@ one excluded test and 90.6% coverage, strict docs, and all 11 showcase
 tests. Its rebuilt 156-file package passes all 135 selected Jido Console
 tests and both real macOS Raw and TTY Console PTY checks. Input, Unicode,
 resize, normal shutdown, and exact saved terminal settings pass. The full
-published v1 changelog entry and its original date are preserved. The final
-archive and exact-head CI results will be recorded on PR #67 before merge.
+published v1 changelog entry and its original date are preserved.
+
+The final tested source is `18f34867b1ab4403ff8c5ad270d8eef479558593`.
+All 27 required checks pass in source run `36716606061` and PR run
+`36717111791`. The merged source tree at
+`d5484996e8cc5228ff8e31a0c7695495bcef8076` is identical. All 156 files
+in the tested 2.0.0 package match that merged source. Its SHA256 is
+`7f56f612f2832651e2f41549f6da123cd3dea0c36e8041ba43c673526faeca10`.
+The final PR description records the CI results and branch settings.
 
 The copied Oracle Linux 8.5 release runs on glibc 2.28 without host build
 tools. Native Markdown, the TTY NIF, Raw and TTY input, and cleanup pass.
@@ -64,18 +76,24 @@ checks. Their v1 and v2 repairs are merged, and Windows Command Prompt and
 Git Bash ConPTY checks pass. The maintainer has accepted the missing physical
 Windows checks as follow-up work. They do not block this source release.
 
-## Final merge and cleanup
+## Completed source release and cleanup
 
-1. Run `mix quality`, warning-strict `mix coveralls`, docs, package, showcase,
-   and consumer checks on the final source.
-2. Run all 27 required CI checks on the exact final PR #67 head.
-3. Obtain the required approving GitHub review and resolve any findings.
-4. Squash merge PR #67 into `main` at its exact tested head.
-5. Make `main` the default branch after the merge.
-6. Remove only exact closed-PR branch heads after a fresh reference check and
-   a verified local Git backup. Keep active worktrees, unmatched work, v1
-   maintenance, release history, and all published tags.
-7. Leave package publication and release tags to the maintainer.
+PR #67 is merged, and `main` is the default v2 branch. The primary workspace
+is clean on `main`. The v1 worktree is clean on `maint/1.x` at its verified
+head. The maintainer authorized the review rule change before the merge.
+All other protection settings remain. Future changes use the CI checks
+required by their target branch.
+
+Thirty exact merged-PR branch heads were removed after a verified Git
+backup. The unused `release/2.0.0` preparation branch was also removed after
+its head was saved in a second verified bundle. Active worktrees, unmatched
+work, v1 maintenance, release history, and published tags remain. Local
+cleanup notes from the primary workspace are saved in the backup directory
+and a retained Git stash.
+
+Hex publication and release tags remain the maintainer's separate work.
+No package was published, no release tag was pushed, and no publication
+workflow was run during this cleanup.
 
 The full evidence and execution record are in
 `notes/planning/repository-cleanup-and-v2-release.md`.
