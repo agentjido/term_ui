@@ -176,6 +176,15 @@ the NIF is absent and OTP cannot manage control signals. An explicit `:raw`
 selection returns a structured `:raw_mode_unavailable` error. It does not
 leave the terminal in raw mode.
 
+On Windows, the source build needs `cl` and `nmake` in the active shell.
+Build in a native tools shell that matches the BEAM architecture. The
+Windows CI uses the x64 MSVC tools shell. Run `mix deps.get` and
+`mix compile` there, then run the application in its normal terminal
+profile. The package includes `Makefile.win` and C source; it does not
+include a compiled DLL. If the tools are absent, `auto` skips the native
+build and automatic backend selection uses TTY. An explicit Raw selection
+still reports that raw mode is unavailable.
+
 Size polling uses a 200 ms interval when direct terminal or environment size
 checks are available. It uses a 1 second interval when detection must start
 `stty`. Set `backend_opts: [size_poll_interval: milliseconds]` to use an

@@ -102,6 +102,8 @@ Issues [#5](https://github.com/agentjido/term_ui/issues/5),
 Windows Terminal and Mintty profiles, and the physical macOS Option+Delete
 key, need results. Injected key bytes and ConPTY results do not establish
 those frontend settings. Keep the issues open until those results are known.
+Use the exact commands and result fields in
+`notes/planning/physical-terminal-checks.md` for both version branches.
 
 The existing Jido Console lock has Ash and Mint advisories. Its selected
 tests pass with the approved Jidoka reference. The TermUI audit passes.

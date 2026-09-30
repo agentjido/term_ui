@@ -40,7 +40,8 @@ See [Package quality](guides/package-quality.md) for the Jido standard and the
 documented compatibility exceptions.
 
 The current release checks and branch transition are in
-[the 2.0 release record](release-2.0.0.md). Publish from the exact reviewed
+[the 2.0 release record](https://github.com/agentjido/term_ui/blob/next/v2/release-2.0.0.md).
+Publish from the exact reviewed
 `main` commit. The preparation workflow can write commits and tags when its
 dry-run option is false. Prepare the release on `release/2.0.0` and obtain the
 required review before it enters `main`.
