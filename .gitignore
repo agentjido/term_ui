@@ -21,3 +21,9 @@ term_ui-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Native Windows console build output.
+/priv/*.dll
+/priv/*.lib
+/priv/*.obj
+/priv/*.exp

@@ -1,6 +1,8 @@
 defmodule TermUI.Terminal.NativeMode do
   @moduledoc false
 
+  alias TermUI.Terminal.TtyNif
+
   # The signals option is newer than the minimum OTP 28 typespec.
   @dialyzer {:nowarn_function, enter: 0}
 
@@ -13,6 +15,38 @@ defmodule TermUI.Terminal.NativeMode do
       :shell.start_interactive({:noshell, :raw})
     end
   end
+
+  @doc false
+  @spec acquire() ::
+          {:ok, nil | {:windows, term()}}
+          | {:error, :already_started | {:console_controls, term()}}
+  def acquire do
+    case enter() do
+      :ok -> acquire_controls()
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp acquire_controls do
+    if match?({:win32, _}, :os.type()) do
+      with :ok <- TtyNif.ensure_loaded(),
+           {:ok, flags} <- call_console(:disable_control_flags, []) do
+        {:ok, {:windows, flags}}
+      else
+        {:error, reason} ->
+          _ = :shell.start_interactive({:noshell, :cooked})
+          {:error, {:console_controls, reason}}
+      end
+    else
+      {:ok, nil}
+    end
+  end
+
+  @doc false
+  @spec restore_console(TtyNif.control_flags()) :: :ok | {:error, term()}
+  def restore_console(flags), do: call_console(:restore_control_flags, [flags])
+
+  defp call_console(function, args), do: apply(TtyNif, function, args)
 
   defp signals_api? do
     with {:ok, specifications} <- Code.Typespec.fetch_specs(:shell),

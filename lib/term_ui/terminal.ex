@@ -79,9 +79,9 @@ defmodule TermUI.Terminal do
   end
 
   @doc false
-  @spec adopt_native_raw_mode() :: {:ok, State.t()}
-  def adopt_native_raw_mode do
-    GenServer.call(__MODULE__, :adopt_native_raw_mode)
+  @spec adopt_native_raw_mode(term()) :: {:ok, State.t()}
+  def adopt_native_raw_mode(original_settings) do
+    GenServer.call(__MODULE__, {:adopt_native_raw_mode, original_settings})
   end
 
   @doc """
@@ -254,9 +254,9 @@ defmodule TermUI.Terminal do
   end
 
   @impl true
-  def handle_call(:adopt_native_raw_mode, _from, state) do
+  def handle_call({:adopt_native_raw_mode, original_settings}, _from, state) do
     :ets.insert(@ets_table, {:raw_mode_active, true})
-    new_state = %{state | raw_mode_active: true}
+    new_state = %{state | raw_mode_active: true, original_settings: original_settings}
     {:reply, {:ok, new_state}, new_state}
   end
 
@@ -565,10 +565,9 @@ defmodule TermUI.Terminal do
       try do
         if Platform.native_raw_mode_supported?() do
           # OTP 28 raw mode activation sets character-at-a-time mode with no echo.
-          case start_native_raw_mode() do
-            :ok ->
-              apply_stty_raw_settings()
-              {:ok, original_settings}
+          case NativeMode.acquire() do
+            {:ok, console_settings} ->
+              finish_native_raw_mode(console_settings, original_settings)
 
             {:error, reason} ->
               case apply_stty_raw_settings() do
@@ -593,6 +592,14 @@ defmodule TermUI.Terminal do
       {:error, :not_a_terminal}
     end
   end
+
+  defp finish_native_raw_mode(nil, original_settings) do
+    _result = apply_stty_raw_settings()
+    {:ok, original_settings}
+  end
+
+  defp finish_native_raw_mode(console_settings, _original_settings),
+    do: {:ok, console_settings}
 
   defp enable_raw_mode_with_stty(original_settings) do
     case apply_stty_raw_settings() do
@@ -637,6 +644,20 @@ defmodule TermUI.Terminal do
       {:error, reason} ->
         {:error, {:stty_failed, reason}}
     end
+  end
+
+  defp do_disable_raw_mode({:windows, flags}) do
+    _ = ensure_cooked_mode()
+
+    case NativeMode.restore_console(flags) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Unable to restore Windows console controls: #{inspect(reason)}")
+    end
+
+    :ok
   end
 
   defp do_disable_raw_mode(original_settings) do

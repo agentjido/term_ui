@@ -540,7 +540,8 @@ defmodule TermUI.Runtime do
         attempt_raw_backend(
           fallback_to_tty: true,
           buffer_manager_name: buffer_manager_name,
-          raw_mode_started: raw_state.raw_mode_started
+          raw_mode_started: raw_state.raw_mode_started,
+          original_settings: raw_state.original_settings
         )
 
       {:tty, capabilities} ->
@@ -656,7 +657,7 @@ defmodule TermUI.Runtime do
 
   defp enable_runtime_raw_mode(opts) do
     if match?({:win32, _}, :os.type()) and Keyword.get(opts, :raw_mode_started, false) do
-      Terminal.adopt_native_raw_mode()
+      Terminal.adopt_native_raw_mode(Keyword.get(opts, :original_settings))
     else
       Terminal.enable_raw_mode()
     end
