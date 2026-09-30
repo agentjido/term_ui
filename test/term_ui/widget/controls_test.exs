@@ -1,4 +1,4 @@
-defmodule TermUI.Widget.TUIStudioControlsTest do
+defmodule TermUI.Widget.ControlsTest do
   use ExUnit.Case, async: true
 
   alias TermUI.{Event, Frame}

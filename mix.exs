@@ -1,7 +1,7 @@
 defmodule TermUI.MixProject do
   use Mix.Project
 
-  @version "2.0.0"
+  @version "2.0.0-rc.1"
   @source_url "https://github.com/agentjido/term_ui"
 
   def project do
@@ -12,7 +12,10 @@ defmodule TermUI.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      test_ignore_filters: [&String.ends_with?(&1, "_spex.exs")],
+      test_ignore_filters: [
+        &String.ends_with?(&1, "_spex.exs"),
+        ~r{^test/platform/support/.*_probe\.exs$}
+      ],
       compilers: tty_nif_compilers(),
       make_targets: ["all"],
       make_clean: ["clean"],
@@ -210,6 +213,10 @@ defmodule TermUI.MixProject do
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
+        "guides/README.md": [title: "Guide Index", filename: "guide-index"],
+        "guides/getting-started.md": [title: "Getting Started"],
+        "guides/examples.md": [title: "Example Lessons"],
+        "guides/testing.md": [title: "Testing"],
         "guides/package-quality.md": [title: "Package Quality"],
         "guides/publishing.md": [title: "Publishing"],
         "guides/repository-layout.md": [title: "Repository Layout"],
@@ -229,6 +236,33 @@ defmodule TermUI.MixProject do
         "guides/markdown-and-diffs.md": [title: "Markdown and Diffs"],
         "guides/removed-and-deferred.md": [title: "Removed and Deferred Features"],
         "guides/migration-2.0.md": [title: "Migration from 1.x to 2.0"]
+      ],
+      groups_for_extras: [
+        "Start here": ["guides/README.md", "guides/getting-started.md", "guides/examples.md"],
+        "Build an application": [
+          "guides/architecture.md",
+          "guides/widgets.md",
+          "guides/showcase.md",
+          "guides/interaction.md",
+          "guides/markdown-and-diffs.md",
+          "guides/ui-context.md"
+        ],
+        "Choose a host": ["guides/backend.md", "guides/web.md", "guides/terminal-session.md"],
+        "Test and maintain": [
+          "CONTRIBUTING.md",
+          "guides/testing.md",
+          "guides/terminal-checks.md",
+          "guides/package-quality.md",
+          "guides/repository-layout.md",
+          "guides/linux-releases.md",
+          "guides/publishing.md"
+        ],
+        "Move from v1": [
+          "guides/migration-2.0.md",
+          "guides/widget-parity.md",
+          "guides/feature-parity.md",
+          "guides/removed-and-deferred.md"
+        ]
       ],
       groups_for_modules: [
         Core: [

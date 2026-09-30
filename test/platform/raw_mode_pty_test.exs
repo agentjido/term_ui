@@ -29,9 +29,8 @@ defmodule TermUI.Terminal.RawModePtyTest do
     end
 
     defp open_probe(script, elixir) do
-      root = File.cwd!()
       ebin = Mix.Project.compile_path()
-      probe = Path.join(root, "test/support/raw_mode_pty_probe.exs")
+      probe = Path.expand("support/raw_mode_pty_probe.exs", __DIR__)
       arguments = script_arguments(elixir, ebin, probe)
 
       Port.open(

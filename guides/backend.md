@@ -119,6 +119,7 @@ workflows that benefit from Given-When-Then documentation across input, state,
 and rendered output. Put them in `test/spex/*_spex.exs` and run `mix spex`.
 Use normal ExUnit tests for focused units, edge cases, internal contracts, and
 most regressions; they are faster to write and keep the main suite cohesive.
+See [testing](testing.md) for the acceptance review and platform checks.
 
 The runtime puts each backend behind one serialized owner. State returned by
 input, size, draw, flush, and resize callbacks becomes the state for the next

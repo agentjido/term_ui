@@ -1,3 +1,12 @@
+---
+title: Completed repository cleanup
+type: maintenance
+date: 2026-09-30
+status: completed
+---
+
+> Historical plan. The current work is defined in [the RC1 plan](../2026-09-30-001-refactor-rc1-documentation-plan.md).
+
 # Repository cleanup before further test work
 
 Approved on 30 September 2026. Branch: `chore/v2-repository-layout`.

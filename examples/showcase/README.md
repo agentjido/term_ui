@@ -83,6 +83,10 @@ advances the pure spinner state.
 
 ## Structure
 
+Read [Showcase.App](lib/showcase/app.ex) first, then
+[the Inputs page](lib/showcase/pages/inputs.ex) for widget routing and
+[LiveData](lib/showcase/live_data.ex) for command-owned collection.
+
 `Showcase.App` is the only Elm application. It owns global state, every page
 state, timers, asynchronous collection commands, clipboard commands, terminal
 dimensions, and final frame composition.
@@ -108,3 +112,5 @@ The tests use explicit snapshot mode and render every page at normal and compact
 terminal sizes. They also check live collection, state ownership, input routing,
 timers, and clipboard command output. CI compiles and tests this standalone Mix
 application so the documentation cannot silently drift from the public API.
+
+Next: [run the same contract through a browser host](../web/README.md).

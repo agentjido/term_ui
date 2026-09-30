@@ -40,7 +40,7 @@ See [Package quality](guides/package-quality.md) for the Jido standard and the
 documented compatibility exceptions.
 
 The current release checks and branch transition are in
-[the 2.0 release record](https://github.com/agentjido/term_ui/blob/main/notes/releases/2.0.0.md).
+[the v2 source transition record](https://github.com/agentjido/term_ui/blob/main/docs/releases/2026-09-30-v2-source-transition.md).
 Hex publication is managed separately by the maintainer. Use the exact
 reviewed `main` source for publication. The manual release caller publishes an
 existing annotated tag through the shared Jido workflow. Tag pushes do not
@@ -52,3 +52,9 @@ folder and the package file list. Local toolchain settings belong to the
 contributor; the package and CI declare the supported versions. Run the existing
 checks for an affected example from its own directory. Browser checks need
 Node.js and Chromium; Ghostty checks need its supported native SDK.
+
+The current version is `2.0.0-rc.1`, the first release candidate. It is not the
+final 2.0 release. See [testing](guides/testing.md) for test groups and their
+limits, and [the documentation plan](https://github.com/agentjido/term_ui/blob/main/docs/plans/2026-09-30-001-refactor-rc1-documentation-plan.md)
+for the next guide work. Put plans in `docs/plans` and verified fixes in
+`docs/solutions`. Public user instructions belong in `guides`.

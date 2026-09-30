@@ -1,3 +1,12 @@
+---
+title: Earlier quality and examples proposal
+type: maintenance
+date: 2026-09-30
+status: superseded
+---
+
+> Historical plan. The current work is defined in [the RC1 plan](../2026-09-30-001-refactor-rc1-documentation-plan.md).
+
 # TermUI: quality and examples after v2
 
 Date: 30 September 2026
@@ -5,7 +14,7 @@ Date: 30 September 2026
 Baseline: `main` at `1002f3fc85dc7ed103cf55de243877e4b19c3bac`.
 
 Status: deferred plan. First complete
-[repository cleanup](repository-cleanup.md), as requested on 30 September 2026.
+[repository cleanup](2026-09-30-repository-cleanup.md), as requested on 30 September 2026.
 Do not add property tests, fuzz tests, or new example tests before that cleanup
 is complete. This plan does not create a tracked goal.
 

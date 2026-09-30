@@ -4,7 +4,11 @@ Checked on 29 September 2026 against code candidate `56c1d69caf3f3b8264bf4e1ba96
 
 All 27 required checks pass in [run 36654920854](https://github.com/agentjido/term_ui/actions/runs/36654920854). Local quality passes; 1,041 tests pass, one is excluded, and coverage is 90.6%. The implementation commits recorded in the migration issues are ancestors of the candidate.
 
-This confirms migration implementation. TermUI 2.0 is not published. Physical frontend checks, the separate release decision, required review, and publication remain in PR #67 and `release-2.0.0.md`.
+This confirms migration implementation at that candidate. The later source
+transition is in [the transition record](2026-09-30-v2-source-transition.md).
+The current version is `2.0.0-rc.1`. Publication and remaining physical checks
+still require separate evidence. Paths in the table describe the recorded
+candidate; the current platform probes are under `test/platform/support`.
 
 | Issue | Current evidence |
 | --- | --- |
