@@ -18,6 +18,14 @@ at `f8a363301830ab0bf5ed21088bd0b85680597874`, with its own CI. Clean only
 exact merged-PR heads after a fresh inventory and a verified Git backup.
 Keep active worktrees, unmatched source, release history, and published tags.
 Do not publish a package, push a release tag, or run a publication workflow.
+Current cleanup result: 30 exact merged-PR branch heads were removed after
+a verified backup. The v1 worktree is clean on `maint/1.x`. Final 2.0.0
+metadata, docs, branch rules, and dependency update targets are prepared.
+Local quality and coverage pass. The stable package passes 135 selected
+Jido Console tests and real macOS Raw and TTY Console PTY checks.
+PR #67 still needs its required approving GitHub review from another
+maintainer. The default branch changes only after the merge.
+
 The older stages below are the execution history and initial plan.
 
 ## Goal

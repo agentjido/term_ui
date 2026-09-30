@@ -38,7 +38,13 @@ The baseline archive has 156 files and SHA256
 The fresh extracted package passes the Raw showcase PTY check. The earlier
 package passes 135 selected Jido Console tests and real Raw/TTY Console
 checks. Core runtime, native, and build files are identical between those
-packages. Final release metadata needs a rebuilt package and its own checks.
+packages. The final 2.0.0 preparation passes local quality, 1,041 core tests with
+one excluded test and 90.6% coverage, strict docs, and all 11 showcase
+tests. Its rebuilt 156-file package passes all 135 selected Jido Console
+tests and both real macOS Raw and TTY Console PTY checks. Input, Unicode,
+resize, normal shutdown, and exact saved terminal settings pass. The full
+published v1 changelog entry and its original date are preserved. The final
+archive and exact-head CI results will be recorded on PR #67 before merge.
 
 The copied Oracle Linux 8.5 release runs on glibc 2.28 without host build
 tools. Native Markdown, the TTY NIF, Raw and TTY input, and cleanup pass.

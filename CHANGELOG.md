@@ -51,11 +51,65 @@ managed separately by the maintainer.
 This is a breaking change from 1.x. Use [the migration guide](guides/migration-2.0.md)
 and [widget parity table](guides/widget-parity.md) before changing an application.
 
-## [1.0.0] - 2026-08-31
+## [1.0.0] - 2026-08-28
 
-- Published the v1 runtime on Hex. Its existing `v1.0.0` tag is unchanged.
-- Later repairs on `maint/1.x` are maintenance source changes and are not
-  claimed as part of the published 1.0.0 package.
+TermUI 1.0 establishes the pre-rewrite architecture as the stable release line,
+including the Raw, TTY, and SSH backends, the Elm-style runtime, differential
+rendering, constraint-based layouts, and the complete widget set.
+
+### Added
+
+- SSH backend support for remote terminal sessions.
+- Bracketed-paste parsing into dedicated paste events.
+- Root startup commands and table refresh APIs.
+- Cross-platform terminal testing checklists.
+
+### Changed
+
+- Improved raw terminal output, resilience, and cleanup.
+- Moved input polling outside the runtime process.
+- Added terminal-output run coalescing and linear-time buffer diffing.
+- Improved Markdown rendering and example consistency.
+- Upgraded MDEx to a security-maintained release and removed an unused
+  development dependency that pinned vulnerable HTTP client packages.
+- Added dependency-vulnerability auditing to release CI.
+
+### Fixed
+
+- Constraint tuples in horizontal and vertical stacks now allocate and clip
+  children as documented.
+- macOS Option+Delete no longer stalls the escape-sequence buffer and performs
+  word deletion in text inputs.
+- Concurrent SSH runtimes now use isolated render buffers and avoid mutating
+  local terminal global state.
+- Terminal resize rendering and shutdown races.
+- ANSI style restoration after reset operations.
+- WSL/ConPTY and IEx terminal cleanup behavior.
+- Shift+Tab parsing across CSI variants.
+- Background-color bleeding and overlay rendering artifacts.
+- Elixir 1.18 regular-expression compilation.
+- Safe `stty` execution when no controlling terminal is available.
+- Explicit Raw runtimes now activate OS-level raw flags and restore the exact
+  saved terminal settings on exit.
+- On supported OTP releases, Unix runtimes now receive real `SIGWINCH` resize
+  notifications and restore the cursor and alternate screen synchronously
+  before `SIGTERM` shutdown.
+- Pre-OTP 28 systems now stay on the TTY/`stty` path instead of invoking the
+  OTP 28 native raw/cooked shell-mode contract.
+- Order-dependent tests, singleton cache lifecycles, documentation links, and
+  static-analysis contracts required for a reproducible release build.
+
+### Known limitations
+
+- Native Windows console support is experimental. TermUI 1.0 does not configure
+  Win32 console modes or implement native raw input and resize handling; use WSL
+  where practical and validate the chosen terminal environment.
+- Mouse tracking is disabled under WSL/ConPTY because the required disable
+  sequences are not handled reliably; keyboard, resize, paste, and cleanup
+  remain supported through the Unix backend.
+- OTP 26 TTY applications can query terminal dimensions, but its signal API
+  does not provide automatic `SIGWINCH` resize notifications.
+- A resume or external terminal redraw may require `TermUI.Runtime.force_render/1`.
 
 ## [0.2.0] - 2024-12-01
 
