@@ -19,11 +19,16 @@ git -C "$source_root" fetch --depth 1 origin "$ghostty_ref"
 git -C "$source_root" checkout --detach FETCH_HEAD
 test "$(git -C "$source_root" rev-parse HEAD)" = "$ghostty_ref"
 
-(
-  cd deps/ghostty
-  MIX_DEPS_PATH="$example_root/deps" MIX_BUILD_PATH="$example_root/_build" \
-    GHOSTTY_SOURCE_DIR="$source_root" mix ghostty.setup
-)
+GHOSTTY_SOURCE_DIR="$source_root" mix run --no-start --no-compile -e '
+  options = [
+    deps_path: Mix.Project.deps_path(),
+    build_path: Mix.Project.build_path(),
+    lockfile: Path.expand("mix.lock")
+  ]
+  Mix.Project.in_project(:ghostty, "deps/ghostty", options, fn _project ->
+    Mix.Tasks.Ghostty.Setup.run([])
+  end)
+'
 
 GHOSTTY_BUILD=1 mix deps.compile ghostty --force
 MIX_ENV=test GHOSTTY_BUILD=1 mix deps.compile ghostty --force
