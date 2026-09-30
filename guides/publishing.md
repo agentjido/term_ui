@@ -83,12 +83,20 @@ gh workflow run release.yml --repo agentjido/term_ui --ref main \
 ```
 
 Read the run result and package output in Actions. This mode does not upload
-to Hex or create a GitHub release. When the result is accepted, start the
-publication run:
+to Hex or create a GitHub release. To also check the Hex publish command and
+documentation package, run the Hex dry run:
 
 ```sh
 gh workflow run release.yml --repo agentjido/term_ui --ref main \
-  -f tag_name=v2.0.0 -F dry_run=false
+  -f tag_name=v2.0.0 -F dry_run=false -F hex_dry_run=true
+```
+
+This runs `mix hex.publish --dry-run --yes` and does not upload or create a
+GitHub release. When the results are accepted, start the publication run:
+
+```sh
+gh workflow run release.yml --repo agentjido/term_ui --ref main \
+  -f tag_name=v2.0.0 -F dry_run=false -F hex_dry_run=false
 ```
 
 The caller selects OTP 29 / Elixir 1.20. Its preflight runs source-NIF quality,
@@ -100,6 +108,25 @@ The checked publisher supports recovery for the same existing tag: it checks
 the Hex and GitHub release state before writing. If a step fails after upload,
 read the error and use the same publish operation. Do not create another tag
 or prepare a new version just to retry that publication.
+
+## Jido integration checklist
+
+Checked against the [Jido integration guide](https://github.com/agentjido/github-actions/blob/main/INTEGRATION_GUIDE.md)
+on 30 September 2026:
+
+- [x] Three shared callers: CI, release, and review, pinned to the v5.2.6 commit.
+- [x] CI has read permissions and receives no secrets. Review is advisory.
+- [x] Strict quality checks and package checks pass. No retired workflow inputs remain.
+- [x] `git_ops` has the repository URL and `v` tag prefix.
+- [x] Local Hex publish dry run passes with a placeholder key.
+- [ ] Give Actions access to `HEX_API_KEY`.
+- [ ] Run the remote release and Hex dry runs after a reviewed v2 tag exists.
+
+TermUI uses its supported OTP 28/29 matrix. OTP 27 does not meet the raw
+terminal contract; see [package quality](package-quality.md). Source and web
+tests remain jobs in the CI caller. Version preparation uses a PR. The release
+caller selects only the shared publish operation, with checked tag validation
+enabled by `staged_prepare: true`. It does not use automated prepare staging.
 
 ## Setup record
 

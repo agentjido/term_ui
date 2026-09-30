@@ -18,7 +18,7 @@ still contains some older v4 examples.
 | Tests and coverage | `mix coveralls` runs deterministic tests and enforces at least 90% line coverage without excluding production modules. |
 | CI | The v5 shared CI caller tests each declared Elixir and OTP pair. The native-policy jobs also test the source NIF on the minimum pair. CI checks audit, docs, package content, and unused dependencies. |
 | Dependency updates | Dependabot checks Mix and GitHub Actions dependencies each week with Conventional Commit titles. |
-| Releases | The v5 shared release caller uses `git_ops` for release preparation and Hex publication. |
+| Releases | The v5 shared release caller publishes an existing annotated tag through the Hex CLI. Version and changelog changes go through a release PR. See [publishing](publishing.md). |
 | Review | The v5 shared advisory review caller checks v2 pull requests to `main`. |
 | Examples | Counter, showcase, web, and Ghostty applications are outside `lib/` and have their own Mix projects. Optional host dependencies stay in examples. |
 | Worktree safety | The package does not auto-install Git hooks and does not store local worktree paths. |

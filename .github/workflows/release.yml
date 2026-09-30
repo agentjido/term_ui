@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      hex_dry_run:
+        description: "Run Hex publish packaging without upload or GitHub publication"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -37,5 +42,6 @@ jobs:
         mix hex.audit &&
         mix hex.build --output /tmp/term-ui-release.tar
       dry_run: ${{ inputs.dry_run || false }}
+      hex_dry_run: ${{ inputs.hex_dry_run || false }}
     secrets:
       HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
