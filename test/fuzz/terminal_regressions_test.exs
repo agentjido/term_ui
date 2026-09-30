@@ -59,7 +59,8 @@ defmodule TermUI.Fuzz.TerminalRegressionsTest do
       fn ->
         input = Cases.choose(@corpus)
         offset = Cases.integer(0, byte_size(input))
-        <<before::binary-size(offset), after_bytes::binary>> = input
+        before = binary_part(input, 0, offset)
+        after_bytes = binary_part(input, offset, byte_size(input) - offset)
         before <> <<Cases.integer(0, 255)>> <> after_bytes
       end,
       fn input ->

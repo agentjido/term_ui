@@ -44,7 +44,8 @@ defmodule TermUI.Test.BoundaryCases do
       []
     else
       count = integer(1, min(byte_size(binary), 7))
-      <<chunk::binary-size(count), rest::binary>> = binary
+      chunk = binary_part(binary, 0, count)
+      rest = binary_part(binary, count, byte_size(binary) - count)
       [chunk | chunks(rest)]
     end
   end
