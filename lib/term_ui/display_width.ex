@@ -12,7 +12,10 @@ defmodule TermUI.DisplayWidth do
   """
 
   @doc """
-  Returns the display width of a grapheme cluster.
+  Returns display width for text, counting each grapheme as one terminal cell.
+
+  A grapheme can occupy zero, one, or two columns. Joined emoji and composed
+  characters use the same two-column bound as `TermUI.Cell`.
 
   ## Examples
 
@@ -26,13 +29,10 @@ defmodule TermUI.DisplayWidth do
       1
   """
   @spec width(String.t()) :: non_neg_integer()
-  def width(grapheme) when is_binary(grapheme) do
-    grapheme
-    |> String.to_charlist()
-    |> Enum.reduce(0, fn codepoint, acc ->
-      acc + char_width(codepoint)
-    end)
-    |> max(0)
+  def width(text) when is_binary(text) do
+    text
+    |> String.graphemes()
+    |> Enum.reduce(0, fn grapheme, total -> total + grapheme_width(grapheme) end)
   end
 
   @doc """
@@ -50,13 +50,7 @@ defmodule TermUI.DisplayWidth do
       4
   """
   @spec string_width(String.t()) :: non_neg_integer()
-  def string_width(string) when is_binary(string) do
-    string
-    |> String.graphemes()
-    |> Enum.reduce(0, fn grapheme, acc ->
-      acc + width(grapheme)
-    end)
-  end
+  def string_width(string) when is_binary(string), do: width(string)
 
   @doc """
   Checks if a character is double-width (East Asian Wide/Fullwidth).
@@ -164,6 +158,15 @@ defmodule TermUI.DisplayWidth do
   end
 
   # Private character width calculation
+
+  # A grapheme occupies at most one two-column terminal cell. Joined emoji,
+  # skin-tone modifiers, and Hangul composition do not add separate cells.
+  defp grapheme_width(grapheme) do
+    grapheme
+    |> String.to_charlist()
+    |> Enum.reduce(0, fn codepoint, total -> total + char_width(codepoint) end)
+    |> min(2)
+  end
 
   # Control characters and NULL
   defp char_width(c) when c < 32, do: 0

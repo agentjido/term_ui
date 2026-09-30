@@ -10,6 +10,8 @@ starts a runtime does not establish that input or shutdown works.
 | --- | --- | --- |
 | `test/term_ui` | Focused public API, widget, parser, frame, and backend tests | `mix test test/term_ui` |
 | `test/integration` | Runtime ordering, effects, failure, redraw, color, and SSH contracts | `mix test test/integration` |
+| `test/property` | Bounded generated parser, frame, and browser protocol contracts | `mix test test/property` |
+| `test/fuzz` | Fixed regression corpus and bounded byte mutations | `mix test test/fuzz` |
 | `test/spex` | Readable user acceptance workflows against the real counter and widget recipes | `mix spex` |
 | `test/platform` | Real Unix PTY checks and native-policy or Windows console tools | `mix test test/platform` for the Unix PTY case |
 | `test/mix` | Consumer Mix command behavior | `mix test test/mix` |
@@ -50,6 +52,40 @@ Keep SexySpex for a few readable user workflows. Use ordinary ExUnit for edge
 cases and internal contracts. Neither framework can turn simulated events
 into proof of physical keyboard or terminal mode behavior. The RC1 plan under
 `docs/plans` records the separate property and fuzz test work.
+
+## Replay a generated boundary failure
+
+The property and mutation tests use the private `BoundaryCases` helper and
+the BEAM random generator. They add no package dependency. Eight generated
+checks use 300 cases each: 2,400 bounded cases in the normal test suite. CI
+runs them through the existing core test jobs on all supported toolchains
+and native policies. No time-based input or unbounded generation is used.
+
+The default generation seed is `30092026`. It is separate from ExUnit's
+test-order seed. A failure reports `TERM_UI_PROPERTY_SEED`,
+`TERM_UI_PROPERTY_CASE`, and the full bounded input. Copy those values and
+the reported test file/line to replay one case:
+
+```sh
+TERM_UI_PROPERTY_SEED=30092026 TERM_UI_PROPERTY_CASE=36 \
+  mix test test/fuzz/terminal_regressions_test.exs:57 --warnings-as-errors
+```
+
+Use the file/line from the actual failure; source changes can move the test.
+For another repeatable sample, set only the seed:
+
+```sh
+TERM_UI_PROPERTY_SEED=42 mix test test/property test/fuzz --warnings-as-errors
+```
+
+Inputs stay small: arbitrary parser bytes are at most 128 bytes, chunked
+terminal input has at most 12 tokens, and generated frames have at most
+24 columns and five rows. A fixed corpus preserves malformed UTF-8,
+incomplete/unknown escape sequences, bracketed paste, mouse coordinate limits,
+and joined-grapheme regressions. Tests compare whole versus split parsing,
+reconstruct a frame from backend diffs and browser row deltas, check wide-cell
+ownership, and test exact protocol limits. They do not claim exhaustive
+Unicode conformance or proof of a physical frontend's glyph width.
 
 ## Reliable completion checks
 

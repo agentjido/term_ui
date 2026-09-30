@@ -4,6 +4,8 @@ See [the testing guide](../guides/testing.md) for commands and limits.
 
 - `term_ui`: focused tests, with paths that match `lib/term_ui` where possible.
 - `integration`: runtime and host behavior across module boundaries.
+- `property`: bounded generated parser, frame, and protocol contracts.
+- `fuzz`: a fixed terminal regression corpus and small replayable mutations.
 - `spex`: six user acceptance workflows against the counter and widget recipe
   sources. SexySpex finds this path by default.
 - `platform`: real PTY checks and platform probe scripts under `support`.
