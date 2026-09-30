@@ -53,8 +53,8 @@ defmodule TermUI.MixProject do
   end
 
   defp windows_console_compilers do
-    if match?({:win32, _}, :os.type()) and System.find_executable("nmake") and
-         System.find_executable("cl") do
+    if match?({:win32, _}, :os.type()) and not is_nil(System.find_executable("nmake")) and
+         not is_nil(System.find_executable("cl")) do
       [:elixir_make | Mix.compilers()]
     else
       Mix.compilers()

@@ -570,10 +570,7 @@ defmodule TermUI.Terminal do
               finish_native_raw_mode(console_settings, original_settings)
 
             {:error, reason} ->
-              case apply_stty_raw_settings() do
-                :ok -> {:ok, original_settings}
-                {:error, _stty_reason} -> {:error, reason}
-              end
+              native_raw_fallback(reason, original_settings)
           end
         else
           enable_raw_mode_with_stty(original_settings)
@@ -590,6 +587,17 @@ defmodule TermUI.Terminal do
       end
     else
       {:error, :not_a_terminal}
+    end
+  end
+
+  defp native_raw_fallback(reason, original_settings) do
+    if match?({:win32, _}, :os.type()) do
+      {:error, reason}
+    else
+      case apply_stty_raw_settings() do
+        :ok -> {:ok, original_settings}
+        {:error, _stty_reason} -> {:error, reason}
+      end
     end
   end
 
