@@ -733,15 +733,14 @@ defmodule TermUI.RuntimeContractTest do
                  backend: {DeterministicBackend, owner: self(), events: events}
                )
 
-      reference = Process.monitor(runtime)
-
       if stage == :handle_info do
         assert_receive {:backend, :draw, _frame}, 500
         send(runtime, :application_info)
       end
 
-      assert_receive {:DOWN, ^reference, :process, ^runtime,
-                      {:application, ^stage, {^kind, _reason, _stacktrace}}},
+      # start_link establishes this link before the first view can fail.
+      # A monitor installed after start_link can report :noproc instead.
+      assert_receive {:EXIT, ^runtime, {:application, ^stage, {^kind, _reason, _stacktrace}}},
                      500
     end
   end
