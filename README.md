@@ -15,16 +15,20 @@ Jido, so it also remains useful as a general Elixir terminal package.
 TermUI requires Elixir 1.18.4 or later and Erlang/OTP 28 or later. CI tests
 Elixir 1.18.4, 1.19, and 1.20 on OTP 28, and Elixir 1.20 on OTP 29.
 
-This branch prepares TermUI `2.0.0-rc.1`. The 2.0 series is not yet published
-on Hex. Use the development branch in `mix.exs` until publication:
+This branch contains TermUI `2.0.0`. Hex publication is managed separately
+by the maintainer. Until 2.0 is published on Hex, use `main` in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:term_ui, github: "agentjido/term_ui", branch: "next/v2"}
+    {:term_ui, github: "agentjido/term_ui", branch: "main"}
   ]
 end
 ```
+
+V1 maintenance fixes are on `maint/1.x`. Use that branch for applications
+that still use the v1 runtime contract. See the
+[migration guide](guides/migration-2.0.md) before changing to v2.
 
 TermUI uses MDEx to parse Markdown for terminal display. It uses Zoi schemas
 for public data that crosses application, runtime, backend, or configuration
@@ -218,7 +222,7 @@ pure BEAM TTY backend when a source build is not available.
 - [Migration from 1.x to 2.0](guides/migration-2.0.md)
 - [Interactive showcase](guides/showcase.md)
 - [Runnable showcase application](examples/showcase/README.md)
-- [Counter example](https://github.com/agentjido/term_ui/tree/next/v2/examples/iex_counter)
+- [Counter example](https://github.com/agentjido/term_ui/tree/main/examples/iex_counter)
 
 ## License
 

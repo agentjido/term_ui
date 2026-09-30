@@ -19,17 +19,17 @@ earlier repository or use an older API. Check their version before use.
 | Work | Base and pull request target | Application contract |
 | --- | --- | --- |
 | V1 fixes and examples | `maint/1.x` | Use the v1 render tree, widgets, and commands on that branch. |
-| V2 fixes and examples | `next/v2` | Return a complete `TermUI.Frame`. Keep widgets pure and effects in application commands. |
+| V2 fixes and examples | `main` | Return a complete `TermUI.Frame`. Keep widgets pure and effects in application commands. |
 
-`next/v2` is the v2 development branch. It is not yet a published 2.0 release.
-Keep v2 changes out of `develop` until the separate release decision.
+`main` contains the v2 source. Hex publication is managed separately by the maintainer.
+Keep the v1 and v2 version lines separate.
 
 ## Contribute an example
 
 Start with the example on your target branch. For v2, the
-[IEx counter](https://github.com/agentjido/term_ui/tree/next/v2/examples/iex_counter)
+[IEx counter](https://github.com/agentjido/term_ui/tree/main/examples/iex_counter)
 shows the small application contract. The
-[showcase](https://github.com/agentjido/term_ui/tree/next/v2/examples/showcase)
+[showcase](https://github.com/agentjido/term_ui/tree/main/examples/showcase)
 shows widget composition and application-owned effects.
 
 Put a contributed example in `examples/<name>`. Give it a README with:
@@ -44,14 +44,14 @@ Keep terminal setup and cleanup in the backend. On v2, widgets return values;
 the application owns their state and effects. Do not start a polling process
 from a widget.
 
-Run the checks in [CONTRIBUTING.md](https://github.com/agentjido/term_ui/blob/next/v2/CONTRIBUTING.md)
+Run the checks in [CONTRIBUTING.md](https://github.com/agentjido/term_ui/blob/main/CONTRIBUTING.md)
 before you submit a pull request. A terminal example also needs an interactive
 check of input, resize, quit, and restored terminal settings. Record the
 terminal and result in the pull request.
 
 ## Share a prompt or development plan
 
-The [prompt examples](https://github.com/agentjido/term_ui/tree/next/v2/examples/prompts)
+The [prompt examples](https://github.com/agentjido/term_ui/tree/main/examples/prompts)
 contain a small v2 counter request. You can use it with Claude or another code
 tool. Adapt its namespace, version, and behavior to the application. Read the
 result and run its checks before use.

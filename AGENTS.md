@@ -10,10 +10,13 @@ Keep these runtime boundaries:
 - Widgets are pure. The parent application owns widget state and effects.
 - Commands are data values. Do not run effects in widget code.
 
-Use `next/v2` as the pull request target while the v2 runtime is under
-development. Do not merge v2 work into `develop` until the project makes a
-separate release decision. Preserve the public `TermUI` namespace and the Jido
+Use `main` as the pull request target for v2 work. Use `maint/1.x` for v1
+fixes. The maintainer approved the v2 transition on 30 September 2026.
+Keep the two version lines separate. Preserve the public `TermUI` namespace and the Jido
 Console runtime contract. Run `mix quality` and `mix coveralls` before a commit.
 Terminal lifecycle changes also need a real terminal check.
+
+Hex publication is managed separately by the maintainer. Repository cleanup
+must not publish a package, push a release tag, or run a publication workflow.
 
 Use Conventional Commits. Never mention an AI assistant in a commit message.

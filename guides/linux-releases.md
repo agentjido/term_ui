@@ -49,8 +49,8 @@ against the builder's libc. This variable alone is not sufficient: the
 application must also include Rustler. A downloaded MDExNative 0.2.9 GNU NIF
 requires glibc 2.29 and fails on the tested glibc 2.28 target.
 
-Copy the [Dockerfile](https://github.com/agentjido/term_ui/blob/next/v2/examples/linux_release/Dockerfile)
-and [dockerignore](https://github.com/agentjido/term_ui/blob/next/v2/examples/linux_release/dockerignore)
+Copy the [Dockerfile](https://github.com/agentjido/term_ui/blob/main/examples/linux_release/Dockerfile)
+and [dockerignore](https://github.com/agentjido/term_ui/blob/main/examples/linux_release/dockerignore)
 from `examples/linux_release` into the application as `Dockerfile` and
 `.dockerignore`. Keep any application-specific exclusions too. Exclude
 `_build` and downloaded `deps`, so host build products do not enter the Linux
@@ -128,4 +128,4 @@ exit successfully, and restore the exact original `stty -g` settings.
 
 The image is a compatibility fixture. Production host permissions, SSH
 configuration, and terminal profiles still need the application checks above.
-The v2 test code is on `next/v2`; it is not a published TermUI 2.0 release.
+The v2 test code is on `main`; it is not a published TermUI 2.0 release.

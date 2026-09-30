@@ -2,6 +2,24 @@
 
 Prepared on 29 September 2026.
 
+## Approved source release scope
+
+On 30 September 2026, the maintainer requested that PR #67 merge directly
+into `main`, with a clean supported v1 branch. Hex publication is now the
+maintainer's separate work. This order replaces the older route through
+`develop`, the extra release PR, and publication as part of this cleanup.
+
+Prepare final 2.0.0 source on `release/2.0.0`, based on the tested v2 tree.
+Join the current v1 `main` history while keeping the complete v2 tree. Advance
+`next/v2` to that exact tested descendant, target PR #67 at `main`, and keep
+the required approving review. Do not force-push or bypass a branch rule.
+After merge, use `main` as the default v2 branch. Keep `maint/1.x` unchanged
+at `f8a363301830ab0bf5ed21088bd0b85680597874`, with its own CI. Clean only
+exact merged-PR heads after a fresh inventory and a verified Git backup.
+Keep active worktrees, unmatched source, release history, and published tags.
+Do not publish a package, push a release tag, or run a publication workflow.
+The older stages below are the execution history and initial plan.
+
 ## Goal
 
 Address all 12 open issues and all 3 open pull requests in
@@ -312,7 +330,7 @@ explicit. Do not mark the release complete.
 
 ## Execution state
 
-The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candidate test repairs are merged. The macOS physical check, release decision, required review, and publication remain open. Physical Windows Terminal and Mintty checks are deferred by the maintainer. The fixes for #5 and #6 are merged; their physical frontend results remain unverified follow-up work.
+The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candidate test repairs are merged. The maintainer reports a successful physical macOS Raw check; #35 is closed. The release decision, required review, and publication remain open. Physical Windows Terminal and Mintty checks are deferred by the maintainer. The fixes for #5 and #6 are merged; their physical frontend results remain unverified follow-up work.
 
 | Work | Branch or PR | Evidence and remaining work |
 | --- | --- | --- |
@@ -341,8 +359,9 @@ The v1 and v2 repairs, native Ghostty checks, Windows console checks, and candid
 | V2 signal-handler cleanup | [PR #83](https://github.com/agentjido/term_ui/pull/83), merged into `next/v2` at `9d59f03` | A close call could return before the supervised signal handler was removed. The backend owner now removes it synchronously before terminal cleanup. A delayed-output regression fails on the old implementation and passes after the fix. Real macOS Raw/TTY resume, continued input, and exact nondefault settings pass. Quality, 1,003 warning-strict tests at 90.3% coverage, one acceptance specification, and all 23 required CI checks pass at `f658d67`. |
 | Issue #7 resolution | Published tag `v1.0.0`; [resolution comment](https://github.com/agentjido/term_ui/issues/7#issuecomment-5897486537) | Closed as fixed in 1.0.0. Commit `3b665ff` is an ancestor of the tag. The tag contains private `level_patterns/0` and `timestamp_pattern/0` functions. Clean Elixir 1.19 compilation and tests pass locally and in Linux CI. FreeBSD terminal behavior is not verified. |
 
-Issues #5, #6, and #35 remain open. Final release branch rules, final
-release checks, required review, and publication remain pending. PR #67 stays draft. No v2 code
+Issues #5 and #6 remain open as deferred physical Windows follow-up work.
+Issue #35 is closed with the reported physical macOS result. Final release branch rules, final
+release checks, required review, and publication remain pending. PR #67 is ready for review. No v2 code
 has entered `develop`.
 
 The release workflow has no `HEX_API_KEY` in this repository or its shared
@@ -376,9 +395,30 @@ word-deletion sequences, continued Unicode input, resize, normal owner and
 reader shutdown, and exact saved flags. The key bytes were injected.
 The physical macOS key remains unverified.
 
+PR #97 is merged into `next/v2` at `0b1e38245711069dd576393049d3922ff1dd97f9`.
+All 27 required checks pass at fix head
+`4c683262a9b11847650a16e787ad917e8a6dbf7c` in run `36711766180`.
+The full merged tree matches the tested fix tree. The rebuilt archive has
+156 files and SHA256
+`cb318609993b4040b9f435416cd76f131e77e1375010fb15fc23f2bee4d6fa49`.
+Only the Overview source differs from the previous tested archive. All core
+runtime, native, build, and guide files are identical. The fresh extracted
+package also passes the real Raw showcase PTY check. PR #67 now records the
+current candidate. Both merged-head CI runs, `36712303944` and `36712295717`,
+now pass all 27 required checks. PR #67 is ready for review.
+
+The maintainer then repeated the physical macOS Raw test in the same
+checkout and reported that it worked. The terminal transcript shows a
+return to the shell with no reported error and no output from the saved
+settings comparison. The local before and after files also compare equal.
+This records the reported physical v2 check. The terminal app name and
+version were not supplied; no separate physical v1 profile pass is claimed.
+Issue #35 is closed with this result, the parser and Unicode regressions,
+the published v1 fix, and the merged v2 input repair.
+
 ### Required external input
 
-All available implementation, package, consumer, and CI checks are complete. Issue #35 still needs the physical macOS Option+Delete result. The exact commands are in notes/planning/physical-terminal-checks.md on next/v2. The maintainer has no Windows machine and has accepted #5 and #6 physical frontend checks as follow-up work. Those checks no longer block release. A Hex package publish key is also absent and has been requested through GitHub secrets. Keep the separate release decision and required review after verification. No branch promotion, release tag, or v2 publication has occurred.
+The macOS physical result is recorded and #35 is closed. Implementation, package, consumer, fix-head CI, and both merged-head CI runs pass. The maintainer has no Windows machine and has accepted #5 and #6 physical frontend checks as follow-up work. Those checks no longer block release. PR #67 is ready for review. A Hex package publish key is still absent and has been requested through GitHub secrets. The separate release decision and required review remain required. No branch promotion, release tag, or v2 publication has occurred.
 
 
 ### Historical goal blocked audit

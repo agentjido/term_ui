@@ -3,10 +3,10 @@
 See [Community and examples](guides/community.md) for discussion, issue
 reports, example contributions, and optional prompt examples.
 
-Use `next/v2` as the pull request target for v2 work. Use `maint/1.x` for v1
+Use `main` as the pull request target for v2 work. Use `maint/1.x` for v1
 fixes. Base each change on its target branch. Keep changes focused and include
-tests for behavior changes. Keep v2 out of `develop` until the separate release
-decision is complete.
+tests for behavior changes. Keep the two version lines separate. `develop`
+is a historical v1 integration branch; new work uses the supported targets.
 
 Before you submit a pull request, run:
 
@@ -22,11 +22,10 @@ HEX_API_KEY=dry-run mix hex.publish --dry-run --yes
 
 TermUI uses the shared v5 Jido CI, review, and release workflows. Dependabot
 checks Mix and GitHub Actions dependencies each week for both supported lines:
-`maint/1.x` and `develop`. This configuration becomes active only after the
-reviewed v2 update enters the default branch. Until that release decision,
-send v2 dependency changes to `next/v2`. Use Conventional Commits.
-Do not edit `CHANGELOG.md` in a normal pull request. `git_ops` creates release
-notes from commit history during release preparation.
+`maint/1.x` and `main`. Use Conventional Commits. Do not edit `CHANGELOG.md`
+in a normal pull request. Release preparation can add reviewed version entries.
+Use a `release/` source branch or a `chore(release):` PR title for that work.
+The release changelog check still rejects a new Unreleased section.
 
 Terminal lifecycle changes also need a manual check in a real terminal. Verify
 normal exit, application failure, backend failure, and forced process exit.
@@ -40,8 +39,8 @@ See [Package quality](guides/package-quality.md) for the Jido standard and the
 documented compatibility exceptions.
 
 The current release checks and branch transition are in
-[the 2.0 release record](https://github.com/agentjido/term_ui/blob/next/v2/release-2.0.0.md).
-Publish from the exact reviewed
-`main` commit. The preparation workflow can write commits and tags when its
-dry-run option is false. Prepare the release on `release/2.0.0` and obtain the
-required review before it enters `main`.
+[the 2.0 release record](https://github.com/agentjido/term_ui/blob/main/release-2.0.0.md).
+Hex publication is managed separately by the maintainer. Use the exact
+reviewed `main` commit for publication. Repository cleanup does not push a
+release tag or run the publication workflow. The preparation workflow can
+write commits and tags when its dry-run option is false.

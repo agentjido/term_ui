@@ -5,7 +5,7 @@ This comparison uses the source archive published to Hex as `term_ui
 feature was correct in a real terminal. The rewrite removed shared processes
 and global services that could break state ownership and terminal cleanup.
 
-The after state is the `2.0.0-rc.1` candidate on `next/v2`. `Retained` means that the
+The after state is the `2.0.0` candidate on `main`. `Retained` means that the
 user capability remains. `Replaced` means that the capability has a new API.
 `Partial` means that useful behavior remains, but an advanced function is
 missing. `Deferred` means that the old form is not safe to restore.

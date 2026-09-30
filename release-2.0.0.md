@@ -1,184 +1,75 @@
-# TermUI 2.0.0 release record
+# TermUI 2.0.0 source release record
 
-The working candidate is `2.0.0-rc.1` on `next/v2`. Hex currently has no 2.0
-release. This candidate is not tagged or published. Complete the checks below
-before the separate release decision required by `AGENTS.md`.
+On 30 September 2026, the maintainer approved merging PR #67 into `main`
+and keeping a separate clean v1 branch. The maintainer will handle Hex
+publication separately. This decision replaces the earlier route through
+`develop` and the requirement for publication access during repository cleanup.
 
-## Branches
+## Branches and publication
 
-- `maint/1.x` receives v1 fixes. It includes the reconciled published fixes and
-  the maintenance repairs from this cleanup.
-- `next/v2` receives v2 fixes and candidate preparation.
-- PR #67 remains draft during verification. It targets `develop`.
-- After the release decision and required review, merge #67 into `develop`.
-- Create `release/2.0.0` from that verified code. Set the final version to
-  `2.0.0`, prepare the changelog, and open the release PR against `main`.
-- Merge only the reviewed release. Tag its exact approved commit as `v2.0.0`.
-  Publish that same commit to Hex, HexDocs, and GitHub.
+- PR #67 targets `main`. Its final source uses version `2.0.0`.
+- `maint/1.x` stays at `f8a363301830ab0bf5ed21088bd0b85680597874` and keeps
+  the v1 runtime, fixes, and six required v1 CI checks.
+- `main` will receive the v2 runtime and its 27 required checks.
+- `develop` is a historical v1 integration branch. New work targets the two
+  supported version branches.
+- Dependabot sends v1 changes to `maint/1.x` and v2 changes to `main`.
+- Keep the required approving review and conversation resolution on `main`.
+- Do not publish to Hex, push a release tag, or run a publication workflow
+  during this cleanup. The maintainer owns the separate publication step.
 
-Use squash merges and Conventional Commits. Do not bypass the review or CI
-rules on `main` or `develop`. Keep published tags and unmerged work.
+The preparation branch keeps the tested v2 source and joins the existing
+`main` history. The three later v1 changes on `main` were already reconciled
+on `maint/1.x`; their v2 replacements are in the tested runtime. Old v1
+runtime files are not copied into v2. PR #67 can then use a normal squash
+merge into `main` without the old modify/delete conflicts. Published tags
+and the v1 branch stay unchanged.
 
-## Candidate checks
+## Verified source baseline
 
-Code candidate: `56c1d69caf3f3b8264bf4e1ba968d9a360de70ae`, after PR #95.
-All 27 required checks passed before its merge, at
-`2efba0ec95cb9558a23a42b5582ac8ac71c8a982` in
-[run 36654272959](https://github.com/agentjido/term_ui/actions/runs/36654272959).
-All 27 also pass at the merged code commit in
-[run 36654920854](https://github.com/agentjido/term_ui/actions/runs/36654920854).
-This release-record update needs its own CI result.
+The tested source baseline is `0b1e38245711069dd576393049d3922ff1dd97f9`,
+after PR #97. Both merged-head CI runs, `36712303944` and `36712295717`, pass
+all 27 required checks. Local quality, 1,041 core tests at 90.5% coverage,
+all 11 showcase tests, strict docs, package checks, real macOS and Linux
+PTYs, Windows ConPTY, SSH sessions, Chromium, and native Ghostty checks pass.
 
-- [ ] All 27 required checks pass at the final candidate SHA.
-- [x] `mix quality` and warning-strict `mix coveralls` pass.
-- [x] All declared toolchain pairs pass, with coverage at or above 90%.
-- [x] Raw, TTY, SSH, deterministic, browser, and optional Ghostty checks pass.
-- [x] Real macOS, Linux, and Windows input, resize, and cleanup checks pass
-      in the tested PTY and ConPTY profiles.
-- [ ] Physical macOS Option+Delete is verified.
-- [x] Missing physical Windows frontend checks are accepted as follow-up work.
-- [x] The copied Oracle Linux 8.5 release works without host build tools.
-- [x] Counter, showcase, browser, and Ghostty examples pass their checks.
-- [x] The package contains the guides, browser assets, and required source.
-- [x] The package excludes test output, credentials, and native build output.
-- [x] A clean consumer installs and uses the built package.
-- [x] Jido Console passes its runtime, editor, stream, resize, and shutdown
-      checks with that package and through a real PTY.
-- [x] Migration, parity, installation, source links, and package version agree.
-- [ ] Original issues and PRs have evidence-based final results, apart from
-      the current release review itself.
-- [x] PR #67 has the final scope, migration summary, and current verification
-      record. Update its exact head and CI result after final changes.
+The baseline archive has 156 files and SHA256
+`cb318609993b4040b9f435416cd76f131e77e1375010fb15fc23f2bee4d6fa49`.
+The fresh extracted package passes the Raw showcase PTY check. The earlier
+package passes 135 selected Jido Console tests and real Raw/TTY Console
+checks. Core runtime, native, and build files are identical between those
+packages. Final release metadata needs a rebuilt package and its own checks.
 
-The optional Ghostty 0.5 Linux ARM64 archive contains x86_64 binaries. Its
-verified source build uses the SDK-pinned Ghostty commit, Zig 0.15.2, and the
-native library search path set by `examples/ghostty/run_native.sh`.
-Normal backends do not need Ghostty or Zigler.
+The copied Oracle Linux 8.5 release runs on glibc 2.28 without host build
+tools. Native Markdown, the TTY NIF, Raw and TTY input, and cleanup pass.
+Optional Ghostty checks pass on GNU Linux x86_64, GNU Linux ARM64, and macOS
+ARM64. Windows and Intel macOS Ghostty are unsupported by the tested SDK.
+The Linux ARM64 SDK needs the documented pinned source build.
 
-### Test and package evidence
+## Physical terminal results
 
-- Core checks: 1,041 passed, one excluded, 90.6% coverage. All 37 runtime
-  contract tests pass. PR #95 confirms monitor registration before shutdown;
-  its exact process-exit checks stay in place.
-- SSH: 13 focused tests pass, including real network sessions, bounded output,
-  resize, and cleanup. PR #94 gives the slow-client fixture 30 seconds. A
-  separate one-second test checks output-timeout failure and cleanup.
-  Production timeouts remain unchanged.
-- Windows v2: real Command Prompt and Git Bash ConPTY profiles pass Raw and
-  TTY input, Unicode, wide cells, native control keys, resize, and cleanup
-  with the source NIF and with the NIF disabled.
-- Windows v1: all six TTY, Raw, and automatic-selection profiles pass in
-  [PR #92](https://github.com/agentjido/term_ui/pull/92). All six maintenance
-  CI checks pass; local coverage is 78.8%. This work is on `maint/1.x`.
-- Browser: six Chromium checks pass. The optional Ghostty host adds two
-  browser checks and four native checks on each of GNU Linux x86_64,
-  GNU Linux ARM64, and macOS ARM64. Windows and Intel macOS Ghostty are
-  unsupported by the tested SDK.
-- The `2.0.0-rc.1` archive built for PR #93 contains 156 files. Its SHA256 is
-  `c89766cf5410b22202654feea1470a85c4859f6a41487eb1fae9e2fb284b8476`.
-  All 156 files match code candidate `56c1d69`; PRs #94 and #95 change tests
-  and planning records. Rebuild the final archive after document updates.
-- A clean copy of Jido Console `8b7d988` passes all 135 selected warning-strict
-  tests with that extracted archive. Real macOS Raw and TTY runs also pass
-  Unicode input, provider-free output, resize from 80 by 24 to 100 by 28,
-  durable completed-turn data, normal shutdown, and exact terminal settings.
-  Raw checks completion, backspace, bracketed paste, and Ctrl+C. TTY checks
-  line input and `/cancel`. The original Console checkout stays unchanged.
-- A fresh consumer of the extracted archive builds on Oracle Linux 8.5
-  x86_64 with glibc 2.28, OTP 28.5.0.5, Elixir 1.19.3, and Rust 1.91.0.
-  Native Markdown is built from source. The copied release loads Markdown
-  and the TTY NIF with no host Mix, Elixir, Erlang, or compiler. Real Raw and
-  TTY PTYs pass input, normal exit, and exact saved flags. Copied release
-  SHA256: `829796f3958f7f864b4f0940212364683f84413c29f8b9e24b3113b9f85634fa`.
-- Local release preparation in dry-run mode selects `2.0.0` and creates no
-  commit or tag. Hex package and docs dry runs pass. No 2.x package is
-  published. Remote release dispatch is unavailable until the workflow
-  enters the default branch through the reviewed v2 transition.
+Issue #35 is closed. The maintainer repeated the physical macOS Raw Inputs
+page test and reported success. The application returned to the shell, and
+the saved terminal settings compare equal. The terminal app name and version
+were not supplied. No separate physical v1 profile pass is claimed.
 
-### Open checks and access
+Issues #5 and #6 remain open for physical Windows Terminal and Mintty
+checks. Their v1 and v2 repairs are merged, and Windows Command Prompt and
+Git Bash ConPTY checks pass. The maintainer has accepted the missing physical
+Windows checks as follow-up work. They do not block this source release.
 
-Issues [#5](https://github.com/agentjido/term_ui/issues/5),
-[#6](https://github.com/agentjido/term_ui/issues/6), and
-[#35](https://github.com/agentjido/term_ui/issues/35) remain open. Physical
-macOS Option+Delete still needs a result. On 30 September 2026, the
-maintainer confirmed that no Windows machine is available and chose to
-proceed with the committed fixes. Physical Windows Terminal and Mintty
-profiles are deferred follow-up work and do not block release. Injected key
-bytes and ConPTY results do not establish those frontend settings. Keep the
-issues open for the missing physical results.
-Use the exact commands and result fields in
-`notes/planning/physical-terminal-checks.md` for both version branches.
+## Final merge and cleanup
 
-The first physical macOS attempt stopped before the key test. The live
-Overview table dropped PIDs and used formatted display values as row IDs.
-Different processes can have equal display values. The repair retains the
-PID and uses it as the row ID. A regression test checks equal display values
-and selection through changed and reordered snapshots. All 11 showcase
-tests pass. A real macOS Raw PTY passes three live refreshes, Inputs page
-navigation, ESC+DEL and ESC+Backspace word deletion, continued Unicode
-input, resize, normal shutdown, and exact saved settings. That PTY result
-uses injected bytes; the physical key remains unverified.
+1. Run `mix quality`, warning-strict `mix coveralls`, docs, package, showcase,
+   and consumer checks on the final source.
+2. Run all 27 required CI checks on the exact final PR #67 head.
+3. Obtain the required approving GitHub review and resolve any findings.
+4. Squash merge PR #67 into `main` at its exact tested head.
+5. Make `main` the default branch after the merge.
+6. Remove only exact closed-PR branch heads after a fresh reference check and
+   a verified local Git backup. Keep active worktrees, unmatched work, v1
+   maintenance, release history, and all published tags.
+7. Leave package publication and release tags to the maintainer.
 
-The existing Jido Console lock has Ash and Mint advisories. Its selected
-tests pass with the approved Jidoka reference. The TermUI audit passes.
-This release work does not update the separate Console dependency contract.
-
-The repository has no `HEX_API_KEY` in its repository or shared Actions
-secrets. Hex lists `pcharbon70` as the package owner. Publication needs a key
-that can publish `term_ui`. Configure it in GitHub Actions secrets; do not
-put its value in issues, logs, or chat.
-
-## Release decision and publication
-
-Prepare the complete record and obtain the separate release decision. Then
-mark #67 ready and satisfy the review rules before it enters `develop`.
-
-`AGENTS.md` requires: "Do not merge v2 work into `develop` until the project
-makes a separate release decision." Both `develop` and `main` also require
-one approving review. Their current six v1 status names must change to the
-27 verified v2 names during that transition. Keep the review requirement.
-
-Inspect the release workflow and its resolved implementation before use.
-Run preparation in dry-run mode with an explicit `2.0.0` version and tests
-enabled. Confirm the intended commits, version, changelog, and package files.
-Keep publishing disabled until the reviewed `main` commit is ready.
-
-The shared v5 workflow resolved to
-`fa16d77ff51210b52c1c283e96875eb9d5ca668c` during the candidate check.
-Inspect it again before publication. Its default preparation can commit,
-tag, and push. Use only dry-run preparation until the release-branch changes
-are concrete and reviewed. Tag and publish the exact approved `main` commit.
-CI runs on `main` and `release/**` so the final commit can be checked too.
-
-Inspect the generated changelog before the release commit. The candidate dry
-run uses `v2.0.0-rc.1` as its comparison base, but that candidate tag does not
-exist. Use the verified published `v1.0.0` tag or an exact source commit for
-the comparison link. Lead the release notes with the breaking runtime and
-Frame changes and the migration guide. Some original commit titles still
-say 1.0; the release notes must state that the new architecture ships as 2.0.
-
-Run required checks on the final release commit. Confirm the package version
-and contents, tag that exact commit, and publish it without skipping tests.
-Do not rebuild or publish a different source commit under the same version.
-Verify the public package and docs, then install the published version in a
-clean consumer and check Jido Console again.
-
-## Cleanup
-
-After publication, align `develop` with the released code. Keep `maint/1.x`.
-The dependency update configuration checks Mix and GitHub Actions separately
-on `maint/1.x` and `develop`. It becomes active when it enters the default
-branch through the reviewed v2 transition. Before that decision, manual v2
-dependency fixes still target `next/v2`.
-Retire `next/v2` only after all of its work is merged and no open PR needs it.
-Delete merged work branches only after checking their commits and attachments.
-Preserve the original PR #33 head, other unmerged work, and all published tags.
-Archive finished managed worktrees only after their needed files are saved.
-The cleanup plan and its execution table are in
+The full evidence and execution record are in
 `notes/planning/repository-cleanup-and-v2-release.md`.
-
-The missing [GitHub 1.0.0 release record](https://github.com/agentjido/term_ui/releases/tag/v1.0.0)
-is restored. All 171 files in the published Hex package match the existing
-`v1.0.0` commit `560d99269a41e98d982a3776f341d37cd4bf87ed`. The public
-archive SHA256 is `79f4bd86751ce142c3ce0af2a7323840c72923f864d7ac6270e12218fdf1a9f3`.
-The tag stays unchanged. Later maintenance fixes are not in that package.

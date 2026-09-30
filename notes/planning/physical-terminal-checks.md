@@ -8,7 +8,10 @@ On 30 September 2026, the maintainer confirmed that no Windows machine is
 available and chose to proceed with the committed fixes. Physical Windows
 Terminal and Mintty checks are follow-up work. They do not block release.
 Keep #5 and #6 open, with their passing ConPTY evidence and the missing
-physical frontend results. The macOS check below is still requested.
+physical frontend results. The maintainer later reported a passing v2 macOS check with matching saved
+terminal settings. Issue #35 is closed. The steps below remain available for
+other profiles. The terminal app name and version were not supplied; no
+separate physical v1 profile pass is claimed.
 
 Use separate clean checkouts of `maint/1.x` and `next/v2`. Record the exact
 commit from `git rev-parse HEAD`, OS, terminal name, version, and profile.

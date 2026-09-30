@@ -28,6 +28,7 @@ jobs:
       format_command: mix do format --check-formatted, xref graph --format cycles --fail-above 0
       docs_command: mix docs --warnings-as-errors -f html && mix doctor --raise
       test_command: mix coveralls --warnings-as-errors
+      changelog_guard_mode: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.event.pull_request.title, 'chore(release):')) && 'no_unreleased' || 'no_changes' }}
 
   acceptance:
     name: Acceptance specifications

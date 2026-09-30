@@ -25,7 +25,7 @@ columns and rows. Default browser limits match the backend: 300 columns and
 120 rows. Supply `maxColumns` and `maxRows` when the host selects different
 limits. The backend Frame bounds still apply.
 
-The complete [example](https://github.com/agentjido/term_ui/tree/next/v2/examples/web)
+The complete [example](https://github.com/agentjido/term_ui/tree/main/examples/web)
 has a fixed counter application, a WebSock host, input limits, and browser checks.
 The host owns authentication, authorization, origin, allowed application modules,
 JSON encoding, message bytes, rates, and connection limits. TermUI has no required

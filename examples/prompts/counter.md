@@ -1,6 +1,6 @@
 # V2 counter request
 
-Use a checkout of `agentjido/term_ui` on `next/v2`. Read `AGENTS.md`,
+Use a checkout of `agentjido/term_ui` on `main`. Read `AGENTS.md`,
 `CONTRIBUTING.md`, the README application contract, and `examples/iex_counter`
 before you write code.
 

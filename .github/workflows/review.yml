@@ -3,6 +3,7 @@ name: Jido Review
 on:
   pull_request:
     branches:
+      - main
       - develop
       - next/v2
 

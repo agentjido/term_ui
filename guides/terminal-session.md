@@ -100,7 +100,7 @@ supported, but mouse encoding beyond this area returns an error.
 
 ## Shared display path
 
-The [shell example](https://github.com/agentjido/term_ui/tree/next/v2/examples/ghostty)
+The [shell example](https://github.com/agentjido/term_ui/tree/main/examples/ghostty)
 uses normal Elm callbacks and the browser backend. It stores emulator frames,
 then overlays them in a complete application view. The existing DOM renderer
 displays these frames exactly as it displays ordinary application output.

@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-30
+
+This entry records the v2 source release preparation. Hex publication is
+managed separately by the maintainer.
+
+### Changed
+
+- One Elm runtime owns application state, update order, command execution,
+  and shutdown. Application views return one complete `TermUI.Frame`.
+- Widgets are pure values. The parent owns their state, composes their
+  frames, and turns widget messages into command data.
+- Backend owners control input, output, terminal size, capabilities, and
+  cleanup. Printable input uses `Event.Text`; named and modified keys use
+  `Event.Key`.
+- Elixir 1.18.4 and OTP 28 are the minimum supported versions.
+- V2 changes target `main`. V1 fixes remain on `maint/1.x`. The public
+  `TermUI` namespace and the Jido Console runtime contract remain supported.
+
+### Added
+
+- Complete isolated SSH sessions with bounded output, resize, timeout, and
+  disconnect cleanup.
+- A bounded web frame protocol, browser renderer, and optional web host.
+- Optional Ghostty terminal sessions on the tested GNU Linux and macOS ARM
+  platforms, with pure conversion from emulator output to TermUI frames.
+- Pure input, table, tree, layout, stream, system-data, and feedback widgets.
+- A migration guide, widget parity tables, runnable showcase, source NIF
+  policy, and Oracle Linux release build instructions.
+
+### Fixed
+
+- Option+Delete word removal, continued Unicode input, terminal redraw,
+  suspend and resume, color updates, and terminal and worker cleanup.
+- Windows console input and resize in the tested Command Prompt and Git
+  Bash ConPTY profiles. Physical Windows Terminal and Mintty checks remain
+  open follow-up work.
+- Live showcase process table identities use PIDs, so equal displayed
+  process values do not stop the application.
+
+### Migration
+
+This is a breaking change from 1.x. Use [the migration guide](guides/migration-2.0.md)
+and [widget parity table](guides/widget-parity.md) before changing an application.
+
+## [1.0.0] - 2026-08-31
+
+- Published the v1 runtime on Hex. Its existing `v1.0.0` tag is unchanged.
+- Later repairs on `maint/1.x` are maintenance source changes and are not
+  claimed as part of the published 1.0.0 package.
+
 ## [0.2.0] - 2024-12-01
 
 ### Added
@@ -95,6 +145,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Developer guides (architecture, runtime, rendering, events, buffers, terminal, creating widgets)
 - Widget examples with READMEs
 
-[Unreleased]: https://github.com/pcharbon70/term_ui/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/pcharbon70/term_ui/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/pcharbon70/term_ui/releases/tag/v0.1.0
+[Unreleased]: https://github.com/agentjido/term_ui/compare/main...HEAD
+[2.0.0]: https://github.com/agentjido/term_ui/compare/v1.0.0...main
+[1.0.0]: https://github.com/agentjido/term_ui/releases/tag/v1.0.0
+[0.2.0]: https://github.com/agentjido/term_ui/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/agentjido/term_ui/releases/tag/v0.1.0

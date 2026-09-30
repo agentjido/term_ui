@@ -6,8 +6,8 @@ view returns one complete `TermUI.Frame`. The selected backend owns terminal
 input, output, size, capabilities, and cleanup. Widgets are pure values, and
 commands describe effects that the runtime executes.
 
-The current candidate is `2.0.0-rc.1`. It is not yet published on Hex. V1 fixes
-go to `maint/1.x`; v2 changes go to `next/v2` until the release decision.
+The current candidate is `2.0.0`. It is not yet published on Hex. V1 fixes
+go to `maint/1.x`; v2 changes go to `main`.
 The public `TermUI` namespace remains. The v2 runtime contract used by Jido
 Console remains supported.
 
