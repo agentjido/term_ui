@@ -163,9 +163,7 @@ defmodule TermUI.RuntimeContractTest do
         Command.async(fn ->
           send(owner, {:async_worker, self()})
 
-          receive do
-            :finish -> :finished
-          end
+          await_finish(owner)
         end)
 
       {%{}, [command]}
@@ -174,6 +172,17 @@ defmodule TermUI.RuntimeContractTest do
     def event_to_msg(_event, _state), do: :ignore
     def update(_message, state), do: state
     def view(_state), do: Frame.from_rows(["async"], 20, 2)
+
+    defp await_finish(owner) do
+      receive do
+        {:monitor_ready, reference} ->
+          send(owner, {:async_monitor_ready, self(), reference})
+          await_finish(owner)
+
+        :finish ->
+          :finished
+      end
+    end
   end
 
   defmodule BlockingTerminateApp do
@@ -578,7 +587,7 @@ defmodule TermUI.RuntimeContractTest do
 
     assert_receive {:async_worker, worker}, 500
     assert Process.alive?(worker)
-    worker_ref = Process.monitor(worker)
+    worker_ref = monitor_async_worker(worker)
     Runtime.shutdown(runtime)
     assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, 500
   end
@@ -593,9 +602,16 @@ defmodule TermUI.RuntimeContractTest do
 
     assert_receive {:async_worker, worker}, 500
     assert Process.alive?(worker)
-    worker_ref = Process.monitor(worker)
+    worker_ref = monitor_async_worker(worker)
     Process.exit(runtime, :kill)
     assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, 500
+  end
+
+  defp monitor_async_worker(worker) do
+    reference = Process.monitor(worker)
+    send(worker, {:monitor_ready, reference})
+    assert_receive {:async_monitor_ready, ^worker, ^reference}, 1_000
+    reference
   end
 
   test "backend cleanup completes before application termination can block" do
