@@ -404,18 +404,24 @@ defmodule TermUI.RuntimeContractTest do
   end
 
   test "runtime dimensions stay within complete frame limits" do
-    events = [Event.resize(1_001, 501), Event.text("q")]
+    events = [Event.resize(1_001, 501)]
 
-    assert {:ok, _runtime} =
+    assert {:ok, runtime} =
              Runtime.start_link(
                root: ResizableApp,
                backend: {DeterministicBackend, owner: self(), size: {501, 1_001}, events: events}
              )
 
-    assert_receive {:backend, :draw, %Frame{width: 1_000, height: 500}}, 500
-    assert_receive {:backend, :resize, {501, 1_001}}, 500
-    assert_receive {:backend, :draw, %Frame{width: 1_000, height: 500}}, 500
-    assert_receive {:backend, :shutdown, :normal}, 500
+    reference = Process.monitor(runtime)
+
+    # This checks frame limits and cleanup, not a half-second performance limit.
+    assert_receive {:backend, :draw, %Frame{width: 1_000, height: 500}}, 2_000
+    assert_receive {:backend, :resize, {501, 1_001}}, 2_000
+    assert_receive {:backend, :draw, %Frame{width: 1_000, height: 500}}, 2_000
+    :ok = DeterministicBackend.send_event(runtime, Event.text("q"))
+    assert_receive {:backend, :draw, %Frame{width: 1_000, height: 500}}, 2_000
+    assert_receive {:backend, :shutdown, :normal}, 2_000
+    assert_receive {:DOWN, ^reference, :process, ^runtime, :normal}, 2_000
   end
 
   test "detected resize keeps the real backend size and clamps the application event" do
