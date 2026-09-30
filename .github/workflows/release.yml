@@ -35,8 +35,8 @@ jobs:
       elixir_version: "1.20"
       preflight_command: >-
         TERM_UI_TTY_NIF=source mix quality &&
-        mix coveralls --warnings-as-errors &&
-        mix spex &&
+        MIX_ENV=test mix coveralls --warnings-as-errors &&
+        MIX_ENV=test mix spex &&
         mix docs --warnings-as-errors -f html &&
         mix deps.unlock --check-unused &&
         mix hex.audit &&
