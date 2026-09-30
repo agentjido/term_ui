@@ -54,8 +54,10 @@ stay outside the core library.
 Dependabot covers core and example Mix projects, the web npm project, and
 GitHub Actions. V1 updates target `maint/1.x`; v2 updates target `main`.
 
-Hex publication belongs to the maintainer. The release caller remains available
-for that work. Normal cleanup builds and checks a package locally.
+Hex publication belongs to the maintainer. The manual release caller publishes
+an existing annotated tag with an explicitly passed `HEX_API_KEY`. Version
+changes go through PR checks. See [publishing](publishing.md) for the flow.
+Normal cleanup builds and checks a package locally.
 
 ## Historical material
 

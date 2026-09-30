@@ -42,9 +42,10 @@ documented compatibility exceptions.
 The current release checks and branch transition are in
 [the 2.0 release record](https://github.com/agentjido/term_ui/blob/main/notes/releases/2.0.0.md).
 Hex publication is managed separately by the maintainer. Use the exact
-reviewed `main` commit for publication. Repository cleanup does not push a
-release tag or run the publication workflow. The preparation workflow can
-write commits and tags when its dry-run option is false.
+reviewed `main` source for publication. The manual release caller publishes an
+existing annotated tag through the shared Jido workflow. Tag pushes do not
+publish. See [publishing](guides/publishing.md) for local login, the GitHub
+secret, tag preparation, validation, and publication.
 
 See [repository layout](guides/repository-layout.md) for the purpose of each
 folder and the package file list. Local toolchain settings belong to the

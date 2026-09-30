@@ -211,6 +211,7 @@ defmodule TermUI.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "guides/package-quality.md": [title: "Package Quality"],
+        "guides/publishing.md": [title: "Publishing"],
         "guides/repository-layout.md": [title: "Repository Layout"],
         "guides/terminal-checks.md": [title: "Physical Terminal Checks"],
         "guides/terminal-session.md": [title: "Optional Terminal Sessions"],
