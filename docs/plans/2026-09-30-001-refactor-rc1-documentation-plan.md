@@ -97,8 +97,13 @@ checks, and all local Markdown links passed.
 The RC1 package has 149 files. It contains the new guides, source NIF build
 inputs, browser assets, and consumer Mix task. It excludes maintainer `docs`,
 examples, tests, repository config, and compiled native libraries. Its SHA256
-is `e6ee0f540d701f1ed4e38f6a2d6025e889e6875e1ac887adba9a9832adda2e5c`.
+is `0eb939abcc3ff113bb8973150be738ce2a22f0d2ea7c6895dc7604fe6ef8ff2b`.
 
-Required GitHub CI remains the final phase 1 check. Keep the later guide
+This source must also pass the required GitHub CI checks before merge. Keep the later guide
 recipes and generated tests as explicit follow-up work. This record does not
 authorize publication.
+
+The full suite also passed locally on Elixir 1.20.4 / OTP 29.1 with a fresh
+build directory: 1,041 tests passed and one was excluded. Platform probe
+filenames are explicitly excluded from test discovery and remain direct CI
+commands. This addresses Elixir 1.20 unmatched-file warnings.

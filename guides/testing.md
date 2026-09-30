@@ -21,6 +21,11 @@ least 90%. Run `mix spex` separately; `_spex.exs` files are excluded from the
 normal ExUnit test search. The SexySpex CLI uses `test/spex` by default, so keep
 that directory unless the caller is also changed.
 
+Platform `*_probe.exs` files are command-line tools. The package excludes that
+exact filename pattern under `test/platform/support` from test discovery.
+Elixir 1.20 otherwise reports those files as unmatched tests. Actual
+`*_test.exs` files remain part of the normal suite.
+
 ## SexySpex review
 
 SexySpex supplies Given-When-Then steps on top of ExUnit. Its original TermUI

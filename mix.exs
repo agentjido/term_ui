@@ -12,7 +12,10 @@ defmodule TermUI.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      test_ignore_filters: [&String.ends_with?(&1, "_spex.exs")],
+      test_ignore_filters: [
+        &String.ends_with?(&1, "_spex.exs"),
+        ~r{^test/platform/support/.*_probe\.exs$}
+      ],
       compilers: tty_nif_compilers(),
       make_targets: ["all"],
       make_clean: ["clean"],
