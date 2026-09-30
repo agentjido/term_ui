@@ -391,6 +391,8 @@ defmodule TermUI.Runtime do
 
     register_runtime_signal_handler(backend_mode)
 
+    if terminal_backend_mode?(backend_mode), do: schedule_size_check()
+
     # Schedule first render
     schedule_render(render_interval)
 
@@ -588,7 +590,8 @@ defmodule TermUI.Runtime do
   defp init_tty_backend(capabilities) do
     backend = TermUI.Backend.TTY
     {:ok, backend_state} = backend.init(capabilities: capabilities, alternate_screen: true)
-    {:tty, backend, backend_state, capabilities, false, nil, nil}
+    {:ok, {rows, cols}} = backend.size(backend_state)
+    {:tty, backend, backend_state, capabilities, false, nil, {cols, rows}}
   end
 
   defp init_explicit_backend(TermUI.Backend.Raw, _opts, buffer_manager_name) do
@@ -828,6 +831,16 @@ defmodule TermUI.Runtime do
     {:stop, :normal, state}
   end
 
+  @impl true
+  def handle_info(:check_terminal_size, %{shutting_down: false, backend_mode: mode} = state)
+      when mode in [:raw, :tty] do
+    state = refresh_local_size(state)
+    unless state.shutting_down, do: schedule_size_check()
+    {:noreply, state}
+  end
+
+  def handle_info(:check_terminal_size, state), do: {:noreply, state}
+
   # Handle linked process exits (input handler reader, etc.)
   @impl true
   def handle_info({:EXIT, pid, reason}, state) do
@@ -914,6 +927,7 @@ defmodule TermUI.Runtime do
     # Step 4: Terminal restore and resize callback cleanup
     cleanup_resize_callback(state)
     cleanup_shutdown(state)
+    cleanup_command_executor(state)
     cleanup_terminal_restore(state)
 
     # Only runtimes that initialized a physical terminal should attempt escape
@@ -983,6 +997,15 @@ defmodule TermUI.Runtime do
   rescue
     _ -> :ok
   end
+
+  defp cleanup_command_executor(%{command_executor: executor}) when is_pid(executor) do
+    if Process.alive?(executor), do: GenServer.stop(executor, :normal)
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp cleanup_command_executor(_state), do: :ok
 
   defp cleanup_terminal_restore(state) do
     # Only restore Terminal singleton for local backends (Raw/TTY).
@@ -1588,6 +1611,29 @@ defmodule TermUI.Runtime do
   defp normalize_color(color), do: color
 
   # --- Resize Handling ---
+
+  # Windows does not send SIGWINCH. TTY can also run without the Terminal
+  # singleton. Query the active local backend without changing custom sessions.
+  defp schedule_size_check, do: Process.send_after(self(), :check_terminal_size, 250)
+
+  defp refresh_local_size(%{backend_mode: mode} = state) when mode in [:raw, :tty] do
+    case state.backend.refresh_size(state.backend_state) do
+      {:ok, {rows, cols} = size, backend_state} ->
+        state =
+          if size != state.backend_state.size,
+            do: %{state | backend_state: backend_state},
+            else: state
+
+        if {cols, rows} != state.dimensions,
+          do: handle_resize(rows, cols, state),
+          else: state
+
+      {:error, _reason} ->
+        state
+    end
+  end
+
+  defp refresh_local_size(state), do: state
 
   defp handle_resize(rows, cols, state) do
     cond do

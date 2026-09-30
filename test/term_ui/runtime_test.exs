@@ -3,6 +3,8 @@ defmodule TermUI.RuntimeTest do
 
   import ExUnit.CaptureIO
 
+  alias TermUI.Command
+  alias TermUI.Command.Executor
   alias TermUI.Event
   alias TermUI.Runtime
 
@@ -266,6 +268,38 @@ defmodule TermUI.RuntimeTest do
   end
 
   describe "shutdown/1" do
+    test "stops its command executor, task supervisor, and running task" do
+      {:ok, runtime} = start_test_runtime(root: Counter)
+      executor = Runtime.get_state(runtime).command_executor
+      supervisor = :sys.get_state(executor).task_supervisor
+
+      {:ok, interval_id} =
+        Executor.execute(executor, Command.interval(60_000, :tick), runtime, :root)
+
+      interval_timer = :sys.get_state(executor).intervals[interval_id].timer_ref
+      command = Command.timer(60_000, :finished)
+      {:ok, _id} = Executor.execute(executor, command, runtime, :root)
+      [task] = Task.Supervisor.children(supervisor)
+
+      references =
+        for {process, reason} <- [
+              {runtime, :normal},
+              {executor, :normal},
+              {supervisor, :normal},
+              {task, :shutdown}
+            ],
+            do: {process, Process.monitor(process), reason}
+
+      :ok = Runtime.shutdown(runtime)
+
+      Enum.each(references, fn {process, reference, reason} ->
+        assert_receive {:DOWN, ^reference, :process, ^process, ^reason}, 1000
+        refute Process.alive?(process)
+      end)
+
+      assert Process.read_timer(interval_timer) == false
+    end
+
     test "initiates graceful shutdown" do
       {:ok, runtime} = start_test_runtime(root: Counter)
 
