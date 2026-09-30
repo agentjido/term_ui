@@ -24,10 +24,11 @@ ARM64, install Zig 0.15.2, then build the pinned native sources before running:
 
 ```sh
 sh build_native.sh
-GHOSTTY_BUILD=1 TERM=xterm-256color mix run --no-halt
+TERM=xterm-256color sh run_native.sh run --no-halt
 ```
 
-Use `GHOSTTY_BUILD=1` for its tests too. macOS ARM64 and Linux x86_64 use the
+Use `sh run_native.sh test --warnings-as-errors` for its tests. The script sets
+`GHOSTTY_BUILD=1` and the native library search path. macOS ARM64 and Linux x86_64 use the
 published native assets. Zigler is an example dependency for the source build.
 
 The host binds to loopback and checks the exact origin. Shell commands and

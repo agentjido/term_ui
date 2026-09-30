@@ -21,7 +21,10 @@ The Ghostty 0.5.0 Linux ARM64 archive is mislabeled: its ELF libraries are
 x86_64. Use the example's `build_native.sh` with Zig 0.15.2 on a native Linux
 ARM64 host. It builds the SDK's pinned Ghostty source and both NIFs. Install
 Zigler as a consumer build dependency and keep `GHOSTTY_BUILD=1` while compiling
-or running that source build. The other supported targets use the published
+or running that source build. The source NIF links `libghostty-vt.so.0` by name.
+Set `LD_LIBRARY_PATH` to the SDK's `priv/lib` directory before starting the VM;
+the example's `run_native.sh` sets both variables. For a release, use the SDK's
+`priv/lib` directory inside that release. The other supported targets use the published
 assets. CI checks the source build on Linux ARM64; it does not treat the broken
 precompiled archive as a pass.
 
