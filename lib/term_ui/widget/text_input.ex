@@ -28,7 +28,7 @@ defmodule TermUI.Widget.TextInput do
 
   @behaviour TermUI.Widget
 
-  alias TermUI.{DisplayWidth, Event, Frame, Selection, Style}
+  alias TermUI.{Cell, Event, Frame, Selection, Style}
   alias TermUI.Widget.Helpers
 
   @type t :: %__MODULE__{
@@ -65,9 +65,12 @@ defmodule TermUI.Widget.TextInput do
   def update(%Event.Paste{content: text}, state), do: insert(state, text)
 
   def update(%Event.Key{key: "a", modifiers: modifiers}, state) do
-    if :ctrl in modifiers,
-      do: {%{state | selection: Selection.select_all(state.selection, state.value)}, []},
-      else: {state, []}
+    if :ctrl in modifiers do
+      selection = Selection.select_all(state.selection, state.value)
+      {%{state | selection: selection, cursor: selection.head}, []}
+    else
+      {state, []}
+    end
   end
 
   def update(%Event.Key{key: "c", modifiers: modifiers}, state) do
@@ -252,7 +255,12 @@ defmodule TermUI.Widget.TextInput do
   end
 
   defp changed(state) do
-    state = %{state | cursor: min(state.cursor, String.length(state.value))}
+    state = %{
+      state
+      | cursor: min(state.cursor, String.length(state.value)),
+        selection: Selection.clear(state.selection)
+    }
+
     {state, [{:changed, state.value}]}
   end
 
@@ -264,7 +272,7 @@ defmodule TermUI.Widget.TextInput do
 
   defp visible_before_cursor(graphemes, width) do
     Enum.reduce_while(Enum.reverse(graphemes), {[], 0}, fn grapheme, {visible, used} ->
-      grapheme_width = max(DisplayWidth.width(grapheme), 0)
+      grapheme_width = Cell.width(Cell.new(grapheme))
 
       if used + grapheme_width <= width do
         {:cont, {[grapheme | visible], used + grapheme_width}}
@@ -277,7 +285,7 @@ defmodule TermUI.Widget.TextInput do
   defp take_width(graphemes, width) do
     graphemes
     |> Enum.reduce_while({[], 0}, fn grapheme, {visible, used} ->
-      grapheme_width = max(DisplayWidth.width(grapheme), 0)
+      grapheme_width = Cell.width(Cell.new(grapheme))
 
       if used + grapheme_width <= width do
         {:cont, {[grapheme | visible], used + grapheme_width}}
@@ -315,7 +323,7 @@ defmodule TermUI.Widget.TextInput do
 
     layout.entries
     |> Enum.reduce_while({layout.start, 0}, fn {grapheme, index}, {_position, column} ->
-      grapheme_width = max(DisplayWidth.width(grapheme), 1)
+      grapheme_width = Cell.width(Cell.new(grapheme))
 
       if x < column + grapheme_width do
         {:halt, position_in_grapheme(index, grapheme_width, x - column)}

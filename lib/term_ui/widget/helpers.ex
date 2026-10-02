@@ -1,7 +1,7 @@
 defmodule TermUI.Widget.Helpers do
   @moduledoc false
 
-  alias TermUI.{DisplayWidth, Frame, Layout, Style}
+  alias TermUI.{Cell, Frame, Layout, Style}
 
   @doc "Builds a frame from widget rows and dimensions."
   @spec frame([Frame.row()], TermUI.Widget.dimensions(), keyword()) :: Frame.t()
@@ -43,14 +43,14 @@ defmodule TermUI.Widget.Helpers do
     {before_cursor, _after_cursor} = String.split_at(value, cursor)
 
     before_cursor
-    |> String.replace(~r/[^\S\n]+\z/u, "")
+    |> String.replace(~r/[^\S\r\n]+\z/u, "")
     |> String.replace(~r/\S+\z/u, "")
     |> String.length()
   end
 
   @doc "Returns the terminal display width of text."
   @spec text_width(iodata()) :: non_neg_integer()
-  def text_width(text), do: max(DisplayWidth.width(IO.iodata_to_binary(text)), 0)
+  def text_width(text), do: Cell.text_width(text)
 
   @doc "Fits and aligns text in a fixed display width."
   @spec align(iodata(), non_neg_integer(), :left | :center | :right) :: String.t()
@@ -58,7 +58,7 @@ defmodule TermUI.Widget.Helpers do
 
   def align(text, width, alignment) do
     text = Frame.fit(text, width)
-    used = text |> String.trim_trailing() |> DisplayWidth.width() |> max(0)
+    used = text |> String.trim_trailing() |> Cell.text_width()
     room = max(width - used, 0)
 
     case alignment do
@@ -125,9 +125,7 @@ defmodule TermUI.Widget.Helpers do
 
   @doc "Converts one frame row to a list of spans."
   @spec normalize_row(Frame.row()) :: [Frame.span()]
-  def normalize_row(row) when is_binary(row), do: [row]
-  def normalize_row(row) when is_list(row), do: row
-  def normalize_row(other), do: [to_string(other)]
+  def normalize_row(row), do: Frame.normalize_row(row)
 
   @doc "Clips one styled row to a display width."
   @spec fit_row(Frame.row(), non_neg_integer()) :: [Frame.span()]
@@ -149,7 +147,7 @@ defmodule TermUI.Widget.Helpers do
 
   defp fit_span(span, rendered, used, remaining) do
     {text, style} = split_span(span)
-    {visible, visible_width} = DisplayWidth.truncate(IO.iodata_to_binary(text), remaining)
+    {visible, visible_width} = Cell.truncate(IO.iodata_to_binary(text), remaining)
     rendered_span = if style, do: {visible, style}, else: visible
     {:cont, {[rendered_span | rendered], used + visible_width}}
   end

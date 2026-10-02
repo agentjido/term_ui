@@ -138,7 +138,7 @@ defmodule TermUI.Widget.Toast do
     @doc "Removes a toast by ID. Missing IDs are safe."
     @spec dismiss(t(), term()) :: t()
     def dismiss(manager, id),
-      do: %{manager | toasts: Enum.reject(manager.toasts, &(&1.id == id))}
+      do: %{manager | toasts: Enum.reject(manager.toasts, &(&1.id === id))}
 
     @doc "Applies one expiration timer message when its area and token still match."
     @spec expire(t(), term()) :: t()
@@ -151,7 +151,7 @@ defmodule TermUI.Widget.Toast do
         | toasts:
             Enum.reject(
               manager.toasts,
-              &(&1.id == toast_id and &1.expiry_token == expiry_token)
+              &(&1.id === toast_id and &1.expiry_token == expiry_token)
             )
       }
     end
@@ -180,12 +180,12 @@ defmodule TermUI.Widget.Toast do
       toast = Toast.init(Keyword.merge(opts, message: message, type: type))
 
       toasts =
-        case {mode, Enum.find_index(manager.toasts, &(&1.id == toast.id))} do
+        case {mode, Enum.find_index(manager.toasts, &(&1.id === toast.id))} do
           {:replace, index} when is_integer(index) ->
             List.replace_at(manager.toasts, index, toast)
 
           _add_or_missing ->
-            [toast | Enum.reject(manager.toasts, &(&1.id == toast.id))]
+            [toast | Enum.reject(manager.toasts, &(&1.id === toast.id))]
         end
 
       {%{manager | toasts: Enum.take(toasts, manager.limit)}, toast}

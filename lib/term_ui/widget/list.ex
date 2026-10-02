@@ -136,18 +136,18 @@ defmodule TermUI.Widget.List do
   end
 
   defp select(state) do
-    case current(state) do
-      nil -> {state, []}
-      item -> {%{state | selected: MapSet.new([state.cursor])}, [{:selected, item}]}
+    case Enum.fetch(state.items, state.cursor) do
+      :error -> {state, []}
+      {:ok, item} -> {%{state | selected: MapSet.new([state.cursor])}, [{:selected, item}]}
     end
   end
 
   defp toggle(state) do
-    case current(state) do
-      nil ->
+    case Enum.fetch(state.items, state.cursor) do
+      :error ->
         {state, []}
 
-      item ->
+      {:ok, item} ->
         selected =
           if MapSet.member?(state.selected, state.cursor),
             do: MapSet.delete(state.selected, state.cursor),

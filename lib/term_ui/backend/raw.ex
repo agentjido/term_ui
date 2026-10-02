@@ -8,8 +8,6 @@ defmodule TermUI.Backend.Raw do
   alias TermUI.Terminal.{RawMode, SizeDetector}
   alias TermUI.{TerminalOutput, TermUtils}
 
-  require Logger
-
   @type mouse_mode :: :none | :click | :drag | :all
   @type t :: %__MODULE__{
           size: TermUI.Backend.size(),
@@ -65,20 +63,25 @@ defmodule TermUI.Backend.Raw do
           {:ok, state}
 
         {:error, reason} ->
-          cleanup_terminal(state)
+          _cleanup_result = cleanup_terminal(state)
           {:error, {:terminal_write_failed, reason}}
       end
     end
   end
 
   @impl true
-  @spec shutdown(t(), term()) :: :ok
+  @spec shutdown(t(), term()) :: :ok | {:error, term()}
   def shutdown(state, _reason) do
     EventStream.stop(state)
-    cleanup_terminal(state)
+    output_result = cleanup_terminal(state)
     drain_pending_input()
-    restore_raw_mode(state)
-    :ok
+    restore_result = restore_raw_mode(state)
+
+    failures =
+      for {step, {:error, reason}} <- [output: output_result, raw_mode: restore_result],
+          do: {step, reason}
+
+    if failures == [], do: :ok, else: {:error, {:cleanup_failed, failures}}
   end
 
   @impl true
@@ -232,25 +235,21 @@ defmodule TermUI.Backend.Raw do
   end
 
   defp restore_raw_mode(%{raw_mode_session: session}) when not is_nil(session) do
-    case RawMode.exit(session) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning("TermUI: Raw mode restoration failed: #{inspect(reason)}")
-    end
+    RawMode.exit(session)
   end
 
   defp restore_raw_mode(%{raw_mode_started: true}), do: restore_legacy_raw_mode()
   defp restore_raw_mode(_state), do: :ok
 
   defp restore_legacy_raw_mode do
-    _result = :shell.start_interactive({:noshell, :cooked})
-    :ok
+    case :shell.start_interactive({:noshell, :cooked}) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:cooked_mode, reason}}
+    end
   rescue
-    _exception -> :ok
+    exception -> {:error, {:shell_exception, exception}}
   catch
-    _kind, _reason -> :ok
+    kind, reason -> {:error, {:shell_failure, kind, reason}}
   end
 
   defp drain_pending_input do

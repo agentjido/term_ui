@@ -8,7 +8,7 @@ defmodule TermUI.Markdown do
   control data. Fenced blocks can use an optional syntax-highlighter adapter.
   """
 
-  alias TermUI.{DisplayWidth, Frame, Style, SyntaxHighlighter}
+  alias TermUI.{Cell, Frame, Style, SyntaxHighlighter}
   alias TermUI.Markdown.Document
   alias TermUI.Markdown.Parser
 
@@ -181,7 +181,7 @@ defmodule TermUI.Markdown do
         {item_lines, item_elements} =
           render_list_item(
             item,
-            max(width - DisplayWidth.width(marker), 1),
+            max(width - Cell.text_width(marker), 1),
             code_options(opts, elements),
             line_index + length(lines)
           )
@@ -269,7 +269,7 @@ defmodule TermUI.Markdown do
   defp align(text, width, alignment) do
     text = Frame.fit(text, width)
     content = String.trim_trailing(text)
-    room = max(width - DisplayWidth.width(content), 0)
+    room = max(width - Cell.text_width(content), 0)
 
     case alignment do
       :right -> String.duplicate(" ", room) <> content
@@ -346,7 +346,7 @@ defmodule TermUI.Markdown do
         {[Enum.reverse(current) | lines], [], 0}
 
       grapheme, {lines, current, used} ->
-        grapheme_width = max(DisplayWidth.width(grapheme), 0)
+        grapheme_width = Cell.width(Cell.new(grapheme))
 
         if current != [] and used + grapheme_width > width,
           do: {[Enum.reverse(current) | lines], [{grapheme, style}], grapheme_width},

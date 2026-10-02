@@ -165,6 +165,27 @@ defmodule TermUI.Cell do
   @spec width(t()) :: non_neg_integer()
   def width(%__MODULE__{width: w}), do: w
 
+  @doc false
+  @spec text_width(iodata()) :: non_neg_integer()
+  def text_width(text) do
+    text |> IO.iodata_to_binary() |> String.graphemes() |> Enum.reduce(0, &(width(new(&1)) + &2))
+  end
+
+  @doc false
+  @spec truncate(String.t(), non_neg_integer()) :: {String.t(), non_neg_integer()}
+  def truncate(text, limit) do
+    text
+    |> String.graphemes()
+    |> Enum.reduce_while({[], 0}, fn grapheme, {kept, used} ->
+      next_width = width(new(grapheme))
+
+      if used + next_width <= limit,
+        do: {:cont, {[grapheme | kept], used + next_width}},
+        else: {:halt, {kept, used}}
+    end)
+    |> then(fn {kept, used} -> {kept |> Enum.reverse() |> Enum.join(), used} end)
+  end
+
   @doc """
   Returns true if this cell is a wide character placeholder.
   """

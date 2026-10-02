@@ -356,10 +356,7 @@ defmodule TermUI.Widget.Viewport do
   defp normalize_content(content), do: [to_string(content)]
 
   defp row_cells(row) do
-    spans =
-      if is_list(row) and :io_lib.printable_unicode_list(row),
-        do: [IO.iodata_to_binary(row)],
-        else: Helpers.normalize_row(row)
+    spans = Helpers.normalize_row(row)
 
     Enum.flat_map(spans, fn span ->
       {text, style} =

@@ -247,7 +247,7 @@ defmodule TermUI.Widget.SplitPane do
   @doc "Collapses a named pane."
   @spec collapse(t(), term()) :: t()
   def collapse(state, id) do
-    if Enum.any?(state.panes, &(&1.id == id)),
+    if Enum.any?(state.panes, &(&1.id === id)),
       do: %{state | collapsed: Enum.uniq(state.collapsed ++ [id])},
       else: state
   end
@@ -270,7 +270,7 @@ defmodule TermUI.Widget.SplitPane do
   def put_pane(state, id, content) do
     panes =
       Enum.map(state.panes, fn pane ->
-        if pane.id == id, do: %{pane | content: content}, else: pane
+        if pane.id === id, do: %{pane | content: content}, else: pane
       end)
 
     case id do
@@ -388,7 +388,7 @@ defmodule TermUI.Widget.SplitPane do
   end
 
   defp validate_pane_ids(state, pane_ids) when is_list(pane_ids) do
-    if pane_ids == Enum.map(state.panes, & &1.id),
+    if pane_ids === Enum.map(state.panes, & &1.id),
       do: :ok,
       else: {:error, :pane_mismatch}
   end
@@ -420,7 +420,7 @@ defmodule TermUI.Widget.SplitPane do
   defp validate_collapsed(collapsed, pane_ids) when is_list(collapsed) do
     valid_ids = MapSet.new(pane_ids)
 
-    if collapsed == Enum.uniq(collapsed) and Enum.all?(collapsed, &MapSet.member?(valid_ids, &1)),
+    if collapsed === Enum.uniq(collapsed) and Enum.all?(collapsed, &MapSet.member?(valid_ids, &1)),
       do: :ok,
       else: {:error, :invalid_state}
   end

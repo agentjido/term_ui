@@ -18,7 +18,7 @@ defmodule TermUI.Widget.TextArea do
 
   @behaviour TermUI.Widget
 
-  alias TermUI.{DisplayWidth, Event, Frame, Selection, Style}
+  alias TermUI.{Cell, Event, Frame, Selection, Style}
   alias TermUI.Widget.Helpers
 
   @type t :: %__MODULE__{
@@ -54,9 +54,12 @@ defmodule TermUI.Widget.TextArea do
   def update(%Event.Paste{content: text}, state), do: insert(state, text)
 
   def update(%Event.Key{key: "a", modifiers: modifiers}, state) do
-    if :ctrl in modifiers,
-      do: {%{state | selection: Selection.select_all(state.selection, state.value)}, []},
-      else: {state, []}
+    if :ctrl in modifiers do
+      selection = Selection.select_all(state.selection, state.value)
+      {%{state | selection: selection, cursor: selection.head}, []}
+    else
+      {state, []}
+    end
   end
 
   def update(%Event.Key{key: "c", modifiers: modifiers}, state) do
@@ -255,7 +258,12 @@ defmodule TermUI.Widget.TextArea do
   end
 
   defp changed(state) do
-    state = %{state | cursor: min(state.cursor, String.length(state.value))}
+    state = %{
+      state
+      | cursor: min(state.cursor, String.length(state.value)),
+        selection: Selection.clear(state.selection)
+    }
+
     {state, [{:changed, state.value}]}
   end
 
@@ -320,7 +328,7 @@ defmodule TermUI.Widget.TextArea do
           }
 
         {grapheme, index}, layout ->
-          grapheme_width = max(DisplayWidth.width(grapheme), 1)
+          grapheme_width = Cell.width(Cell.new(grapheme))
 
           {column, row} =
             if layout.column > 1 and layout.column - 1 + grapheme_width > width,

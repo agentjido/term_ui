@@ -66,13 +66,13 @@ defmodule TermUI.Backend.TTY do
         {:ok, state}
 
       {:error, reason} ->
-        shutdown(state, {:init_failed, reason})
+        _cleanup_result = shutdown(state, {:init_failed, reason})
         {:error, {:terminal_write_failed, reason}}
     end
   end
 
   @impl true
-  @spec shutdown(t(), term()) :: :ok
+  @spec shutdown(t(), term()) :: :ok | {:error, term()}
   def shutdown(state, _reason) do
     EventStream.stop(state)
 
@@ -83,8 +83,10 @@ defmodule TermUI.Backend.TTY do
         alternate_screen: state.alternate_screen
       )
     )
-
-    :ok
+    |> case do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:terminal_write_failed, reason}}
+    end
   end
 
   @impl true

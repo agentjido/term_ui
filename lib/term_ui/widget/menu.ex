@@ -263,7 +263,7 @@ defmodule TermUI.Widget.Menu do
     closed_id = List.last(state.open_path)
     parent_path = Enum.drop(state.open_path, -1)
     parent_items = level_items(state, parent_path)
-    cursor = Enum.find_index(parent_items, &(&1.id == closed_id)) || first_enabled(parent_items)
+    cursor = Enum.find_index(parent_items, &(&1.id === closed_id)) || first_enabled(parent_items)
     %{state | open_path: parent_path, cursor: cursor}
   end
 
@@ -365,7 +365,7 @@ defmodule TermUI.Widget.Menu do
 
   defp level_items(state, path) do
     Enum.reduce_while(path, state.items, fn id, items ->
-      case Enum.find(items, &(&1.id == id and &1.kind == :submenu)) do
+      case Enum.find(items, &(&1.id === id and &1.kind == :submenu)) do
         nil -> {:halt, []}
         item -> {:cont, item.children}
       end
@@ -422,7 +422,7 @@ defmodule TermUI.Widget.Menu do
     style =
       cond do
         item.disabled -> disabled_style
-        path == state.open_path and index == state.cursor -> cursor_style
+        path === state.open_path and index == state.cursor -> cursor_style
         true -> Style.new()
       end
 
@@ -449,7 +449,7 @@ defmodule TermUI.Widget.Menu do
       cond do
         item.disabled -> disabled_style
         state.open_path == [] and index == state.cursor -> cursor_style
-        List.first(state.open_path) == item.id -> cursor_style
+        List.first(state.open_path) === item.id -> cursor_style
         true -> Style.new()
       end
 
@@ -496,7 +496,7 @@ defmodule TermUI.Widget.Menu do
          state,
          :press
        ) do
-    if path == state.open_path,
+    if path === state.open_path,
       do: {%{state | cursor: index}, []},
       else: {state, []}
   end

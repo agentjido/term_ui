@@ -178,6 +178,17 @@ defmodule TermUI.DisplayWidth do
   # Combining characters (common ranges)
   # Combining Diacritical Marks
   defp char_width(c) when c >= 0x0300 and c <= 0x036F, do: 0
+  # Hebrew points and accents
+  defp char_width(c) when c >= 0x0591 and c <= 0x05BD, do: 0
+  defp char_width(c) when c in [0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7], do: 0
+  # Arabic signs, vowel marks, and combining hamza
+  defp char_width(c) when c >= 0x0610 and c <= 0x061A, do: 0
+  defp char_width(c) when c >= 0x064B and c <= 0x065F, do: 0
+  defp char_width(0x0670), do: 0
+  defp char_width(c) when c >= 0x06D6 and c <= 0x06DC, do: 0
+  defp char_width(c) when c >= 0x06DF and c <= 0x06E4, do: 0
+  defp char_width(c) when c in [0x06E7, 0x06E8], do: 0
+  defp char_width(c) when c >= 0x06EA and c <= 0x06ED, do: 0
   # Combining Diacritical Marks Extended
   defp char_width(c) when c >= 0x1AB0 and c <= 0x1AFF, do: 0
   # Combining Diacritical Marks Supplement

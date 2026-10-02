@@ -262,3 +262,15 @@ cells use the default terminal background. A style-only change is a frame
 change and reaches the remote screen through the normal draw path.
 
 See [Linux releases](linux-releases.md) for older Linux targets and native library checks.
+
+Local cleanup returns an error if all terminal output paths fail or Raw mode
+restoration fails. Raw cleanup attempts output and mode restoration before it
+returns the collected errors. The manager passes this error to application
+termination through the existing backend error result.
+
+The internal `write_to_tty` helper now returns `:ok | {:error, reason}`.
+This is an additive helper result. Suppressed output and a successful fallback
+still return `:ok`. If all output paths fail, the reason is the primary write
+failure. TTY shutdown reports `{:terminal_write_failed, reason}`. Raw shutdown
+reports `{:cleanup_failed, failures}`, with `:output` and `:raw_mode` entries
+for the failed steps.

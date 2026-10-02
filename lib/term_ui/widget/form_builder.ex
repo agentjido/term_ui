@@ -175,7 +175,7 @@ defmodule TermUI.Widget.FormBuilder do
   @doc "Validates one field and replaces only errors from that field rule."
   @spec validate_field(t(), term()) :: t()
   def validate_field(state, id) do
-    case Enum.find(state.fields, &(&1.id == id)) do
+    case Enum.find(state.fields, &(&1.id === id)) do
       nil -> state
       field -> put_source_errors(state, {:field, id}, field_errors(field, state.values))
     end
@@ -184,7 +184,7 @@ defmodule TermUI.Widget.FormBuilder do
   @doc "Validates one group and replaces only errors from that group."
   @spec validate_group(t(), term()) :: t()
   def validate_group(state, id) do
-    case Enum.find(state.groups, &(&1.id == id)) do
+    case Enum.find(state.groups, &(&1.id === id)) do
       nil ->
         state
 
@@ -262,7 +262,7 @@ defmodule TermUI.Widget.FormBuilder do
   defp cycle(state, delta) do
     case Enum.at(state.fields, state.active) do
       %{type: :select, id: id, options: options} when options != [] ->
-        current = Enum.find_index(options, &(&1 == Map.get(state.values, id))) || 0
+        current = Enum.find_index(options, &(&1 === Map.get(state.values, id))) || 0
         index = rem(current + delta + length(options), length(options))
         changed(state, id, Enum.at(options, index))
 

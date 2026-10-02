@@ -176,7 +176,7 @@ defmodule TermUI.Widget.RadioGroup do
   end
 
   defp option_row({option, index}, state) do
-    selected? = option.value == state.selected
+    selected? = option.value === state.selected
     icon = if selected?, do: state.selected_icon, else: state.unselected_icon
     mark = if state.show_brackets, do: "(" <> icon <> ")", else: icon
     [{mark <> " " <> option.label, option_style(option, index, selected?, state)}]
@@ -235,7 +235,7 @@ defmodule TermUI.Widget.RadioGroup do
   defp valid_value(options, value), do: if(enabled_index(options, value), do: value)
 
   defp enabled_index(options, value),
-    do: Enum.find_index(options, &(&1.value == value and enabled?(&1)))
+    do: Enum.find_index(options, &(&1.value === value and enabled?(&1)))
 
   defp enabled_indices(options),
     do:

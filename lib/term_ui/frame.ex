@@ -8,7 +8,7 @@ defmodule TermUI.Frame do
   `{column, row}`.
   """
 
-  alias TermUI.{Cell, DisplayWidth, Style}
+  alias TermUI.{Cell, Style}
 
   @max_rows 500
   @max_columns 1000
@@ -180,7 +180,7 @@ defmodule TermUI.Frame do
         %Cell{char: char} -> char
       end
     end)
-    |> DisplayWidth.pad(frame.width)
+    |> then(&(&1 <> String.duplicate(" ", max(frame.width - Cell.text_width(&1), 0))))
   end
 
   def row_text(%__MODULE__{}, _row), do: ""
@@ -233,8 +233,8 @@ defmodule TermUI.Frame do
 
   def fit(text, width) when width > 0 do
     text = text |> IO.iodata_to_binary() |> String.replace(["\r", "\n"], " ")
-    {content, _width} = DisplayWidth.truncate(text, width)
-    DisplayWidth.pad(content, width)
+    {content, used} = Cell.truncate(text, width)
+    content <> String.duplicate(" ", width - used)
   end
 
   @doc "Wraps text at display-width boundaries."
@@ -245,20 +245,35 @@ defmodule TermUI.Frame do
     |> Enum.flat_map(&wrap_line(&1, width))
   end
 
-  defp normalize_spans(content) when is_binary(content), do: [{content, Style.new()}]
+  @doc false
+  @spec normalize_row(row()) :: [span()]
+  def normalize_row(content) when is_binary(content), do: [content]
 
-  defp normalize_spans(content) when is_list(content) do
-    if :io_lib.printable_unicode_list(content) do
-      [{IO.iodata_to_binary(content), Style.new()}]
-    else
-      Enum.map(content, fn
-        {text, %Style{} = style} -> {text, style}
-        text -> {text, Style.new()}
-      end)
-    end
+  def normalize_row(content) when is_list(content) do
+    binary = IO.iodata_to_binary(content)
+    plain_spans(content, binary)
+  rescue
+    ArgumentError -> content
   end
 
-  defp normalize_spans(content), do: [{to_string(content), Style.new()}]
+  def normalize_row(content), do: [to_string(content)]
+
+  # A row can also be a list of complete plain spans. Keep their established
+  # grapheme boundaries. Bytes, split UTF-8 chunks, and binary tails use the
+  # complete iodata value instead.
+  defp plain_spans(content, binary) do
+    spans = Enum.map(content, &IO.iodata_to_binary/1)
+    if Enum.all?(spans, &String.valid?/1), do: spans, else: [binary]
+  rescue
+    _exception in [ArgumentError, FunctionClauseError] -> [binary]
+  end
+
+  defp normalize_spans(content) do
+    Enum.map(normalize_row(content), fn
+      {text, %Style{} = style} -> {text, style}
+      text -> {text, Style.new()}
+    end)
+  end
 
   defp write_text(cells, width, row, start_column, text, style) do
     text
@@ -408,7 +423,7 @@ defmodule TermUI.Frame do
     line
     |> String.graphemes()
     |> Enum.reduce({[], "", 0}, fn grapheme, {lines, current, current_width} ->
-      grapheme_width = max(DisplayWidth.width(grapheme), 0)
+      grapheme_width = Cell.width(Cell.new(grapheme))
 
       if current != "" and current_width + grapheme_width > width do
         {[current | lines], grapheme, grapheme_width}

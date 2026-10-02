@@ -29,7 +29,12 @@ defmodule TermUI.Widget.Tabs do
   @impl true
   def init(opts) do
     tabs = opts |> Keyword.get(:tabs, []) |> Enum.map(&normalize_tab/1)
-    selected = selected_index(tabs, Keyword.get(opts, :selected), 0)
+
+    selected =
+      case Keyword.fetch(opts, :selected) do
+        {:ok, id} -> selected_index(tabs, id, 0)
+        :error -> enabled_fallback(tabs, 0)
+      end
 
     %__MODULE__{
       tabs: tabs,
@@ -212,13 +217,10 @@ defmodule TermUI.Widget.Tabs do
 
   defp tab_at(_tabs, _x, _width, _alignment), do: nil
 
-  defp selected_index(tabs, nil, fallback),
-    do: enabled_fallback(tabs, fallback)
-
   defp selected_index(tabs, id, fallback),
     do:
-      Enum.find_index(tabs, &(&1.id == id and enabled?(&1))) ||
-        selected_index(tabs, nil, fallback)
+      Enum.find_index(tabs, &(&1.id === id and enabled?(&1))) ||
+        enabled_fallback(tabs, fallback)
 
   defp enabled_fallback(tabs, fallback) do
     fallback = Helpers.clamp(fallback, 0, max(length(tabs) - 1, 0))

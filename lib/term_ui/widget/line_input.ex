@@ -3,7 +3,7 @@ defmodule TermUI.Widget.LineInput do
 
   @behaviour TermUI.Widget
 
-  alias TermUI.{DisplayWidth, Event, Frame, Style}
+  alias TermUI.{Cell, Event, Frame, Style}
   alias TermUI.Widget.TextInput
 
   @type t :: %__MODULE__{
@@ -50,7 +50,7 @@ defmodule TermUI.Widget.LineInput do
     input_row = if state.label, do: 1, else: 0
 
     if y == input_row do
-      prompt_width = max(DisplayWidth.width(state.prompt), 0)
+      prompt_width = Cell.text_width(state.prompt)
       input_width = max(width - prompt_width, 1)
       local_event = %{event | x: max(event.x - prompt_width, 0), y: 0}
       {input, messages} = TextInput.mouse(local_event, state.input, {input_width, 1})
@@ -66,7 +66,7 @@ defmodule TermUI.Widget.LineInput do
       if state.label, do: [[{state.label, Style.new(fg: :cyan, attrs: [:bold])}]], else: []
 
     label_height = length(label_rows)
-    prompt_width = max(DisplayWidth.width(state.prompt), 0)
+    prompt_width = Cell.text_width(state.prompt)
     input_width = max(width - prompt_width, 1)
     {spans, cursor} = TextInput.row_spans(state.input, input_width)
     input_row = [state.prompt | List.wrap(spans)]

@@ -267,7 +267,7 @@ defmodule TermUI.Widget.Select do
       cond do
         option.disabled -> state.disabled_style
         index == state.cursor -> state.focus_style
-        option.value == state.selected -> state.selected_style
+        option.value === state.selected -> state.selected_style
         true -> state.style
       end
 
@@ -275,7 +275,7 @@ defmodule TermUI.Widget.Select do
   end
 
   defp selected_label(state) do
-    case Enum.find(state.options, &(&1.value == state.selected)) do
+    case Enum.find(state.options, &(&1.value === state.selected)) do
       nil -> state.placeholder
       option -> option.label
     end
@@ -312,7 +312,7 @@ defmodule TermUI.Widget.Select do
   defp valid_value(options, value), do: if(enabled_index(options, value), do: value)
 
   defp enabled_index(options, value),
-    do: Enum.find_index(options, &(&1.value == value and enabled?(&1)))
+    do: Enum.find_index(options, &(&1.value === value and enabled?(&1)))
 
   defp enabled_indices(options),
     do:

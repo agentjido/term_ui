@@ -143,7 +143,7 @@ defmodule TermUI.Color.Converter do
 
   defp to_grayscale_256(r, g, b) do
     gray = div(r + g + b, 3)
-    232 + div(gray * 23, 255)
+    232 + (round((gray - 8) / 10) |> max(0) |> min(23))
   end
 
   defp to_color_cube_256(r, g, b) do

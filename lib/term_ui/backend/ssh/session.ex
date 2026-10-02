@@ -211,7 +211,7 @@ defmodule TermUI.Backend.SSH.Session do
       match?(%{worker_monitor: ^reference, worker: ^pid}, state.in_flight) ->
         case reason do
           :normal -> {:noreply, state}
-          _other -> {:noreply, fail_output(state, {:writer_exit, reason})}
+          _other -> state |> fail_output({:writer_exit, reason}) |> session_reply()
         end
 
       true ->

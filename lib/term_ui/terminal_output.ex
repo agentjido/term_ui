@@ -57,8 +57,14 @@ defmodule TermUI.TerminalOutput do
     end
   end
 
-  @doc "Writes cleanup data with bounded fallbacks to the TTY or standard error."
-  @spec write_to_tty(iodata()) :: :ok
+  @doc """
+  Writes cleanup data with fallbacks to the TTY or standard error.
+
+  Returns `:ok` if output is suppressed or any write succeeds. If all writes
+  fail, returns `{:error, reason}` with the primary write failure. This error
+  result is an additive change to the previous success-only helper contract.
+  """
+  @spec write_to_tty(iodata()) :: :ok | {:error, term()}
   def write_to_tty(data) do
     if enabled?() do
       write_enabled_to_tty(data)
@@ -66,9 +72,9 @@ defmodule TermUI.TerminalOutput do
       :ok
     end
   rescue
-    _ -> :ok
+    exception -> {:error, exception}
   catch
-    _, _ -> :ok
+    kind, reason -> {:error, {kind, reason}}
   end
 
   @doc "Builds the ANSI sequence that restores enabled terminal modes."
@@ -155,6 +161,8 @@ defmodule TermUI.TerminalOutput do
     end
   rescue
     _ -> false
+  catch
+    _, _ -> false
   end
 
   defp write_enabled_to_tty(data) do
@@ -164,20 +172,21 @@ defmodule TermUI.TerminalOutput do
       :ok ->
         :ok
 
-      {:error, _reason} ->
+      {:error, reason} ->
         cond do
           write_to_tty_device(binary) -> :ok
           write_to_stderr(binary) -> :ok
-          true -> :ok
+          true -> {:error, reason}
         end
     end
   end
 
   defp write_to_stderr(binary) do
-    IO.write(:standard_error, binary)
-    true
+    IO.write(:standard_error, binary) == :ok
   rescue
     _ -> false
+  catch
+    _, _ -> false
   end
 
   defp standard_io_group_leader? do

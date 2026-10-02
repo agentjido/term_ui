@@ -289,7 +289,7 @@ defmodule TermUI.Widget.TreeView do
 
   defp replace_children(nodes, id, children) do
     Enum.map(nodes, fn node ->
-      if node.id == id,
+      if node.id === id,
         do: %{node | children: children},
         else: %{node | children: replace_children(node.children, id, children)}
     end)

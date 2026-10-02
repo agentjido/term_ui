@@ -70,12 +70,17 @@ defmodule TermUI.Widget.Canvas do
     if x < state.width and y < state.height do
       cell = Style.to_cell(style || state.style, char)
 
+      cells =
+        Map.reject(state.cells, fn {{old_x, old_y}, old_cell} ->
+          old_y == y and old_x < x + Cell.width(cell) and x < old_x + Cell.width(old_cell)
+        end)
+
       %{
         state
         | cells:
             if(Cell.empty?(cell),
-              do: Map.delete(state.cells, {x, y}),
-              else: Map.put(state.cells, {x, y}, cell)
+              do: Map.delete(cells, {x, y}),
+              else: Map.put(cells, {x, y}, cell)
             )
       }
     else

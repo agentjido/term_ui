@@ -48,9 +48,9 @@ defmodule TermUI.Widget.PickList do
   def update(%Event.Key{key: :end}, state), do: move_to_end(state)
 
   def update(%Event.Key{key: :enter}, state) do
-    case Enum.at(filtered(state), state.cursor) do
-      nil -> {state, []}
-      item -> {state, [{:picked, item}]}
+    case Enum.fetch(filtered(state), state.cursor) do
+      :error -> {state, []}
+      {:ok, item} -> {state, [{:picked, item}]}
     end
   end
 
@@ -64,8 +64,11 @@ defmodule TermUI.Widget.PickList do
     index = offset + y - 1
 
     if y >= 1 and y < height and index < length(filtered(state)) do
-      state = %{state | cursor: index}
-      if action == :release, do: update(Event.key(:enter), state), else: {state, []}
+      cond do
+        action == :release -> update(Event.key(:enter), %{state | cursor: index})
+        visible_offset(index, list_height) == offset -> {%{state | cursor: index}, []}
+        true -> {state, []}
+      end
     else
       {state, []}
     end

@@ -196,7 +196,7 @@ defmodule TermUI.Selection do
 
   defp category(grapheme) do
     cond do
-      String.match?(grapheme, ~r/^[\p{L}\p{N}_]\p{M}*$/u) -> :word
+      String.match?(grapheme, ~r/^[\p{L}\p{N}_]/u) -> :word
       String.match?(grapheme, ~r/^\s$/u) -> :space
       true -> :punctuation
     end

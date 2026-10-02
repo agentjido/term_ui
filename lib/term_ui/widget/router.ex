@@ -22,7 +22,7 @@ defmodule TermUI.Widget.Router do
   @schema Zoi.struct(__MODULE__, %{
             id: Zoi.any(),
             module: Zoi.atom(),
-            path: Zoi.array(Zoi.any()),
+            path: Zoi.array(Zoi.any()) |> Zoi.min(1),
             map_message: Zoi.function(arity: 2)
           })
 

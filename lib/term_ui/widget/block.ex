@@ -101,7 +101,9 @@ defmodule TermUI.Widget.Block do
   end
 
   defp styled_graphemes(row, default_style) do
-    Enum.flat_map(row, fn
+    row
+    |> Helpers.normalize_row()
+    |> Enum.flat_map(fn
       {text, %Style{} = style} -> graphemes_with_style(text, style)
       text -> graphemes_with_style(text, default_style)
     end)

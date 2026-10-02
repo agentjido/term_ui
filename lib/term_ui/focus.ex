@@ -82,7 +82,7 @@ defmodule TermUI.Focus do
         do: %{state | disabled: Enum.uniq(state.disabled ++ [id])},
         else: state
 
-    if state.current == id, do: next(state), else: state
+    if state.current === id, do: next(state), else: state
   end
 
   @doc "Enables one id."
@@ -91,7 +91,7 @@ defmodule TermUI.Focus do
 
   @doc "Returns true when an id owns active focus."
   @spec focused?(t(), term()) :: boolean()
-  def focused?(state, id), do: state.active and state.current == id
+  def focused?(state, id), do: state.active and state.current === id
 
   defp move_with_message(state, delta), do: move(state, delta)
 
@@ -103,7 +103,7 @@ defmodule TermUI.Focus do
         change(state, nil)
 
       _items ->
-        current_index = Enum.find_index(enabled, &(&1 == state.current))
+        current_index = Enum.find_index(enabled, &(&1 === state.current))
         next_index = next_index(current_index, delta, length(enabled), state.wrap)
         change(state, Enum.at(enabled, next_index))
     end
@@ -114,7 +114,7 @@ defmodule TermUI.Focus do
 
     cond do
       not valid? -> {state, []}
-      state.current == id -> {state, []}
+      state.current === id -> {state, []}
       true -> {%{state | current: id}, [{:focus_changed, state.current, id}]}
     end
   end

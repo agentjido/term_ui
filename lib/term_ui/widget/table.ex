@@ -232,11 +232,11 @@ defmodule TermUI.Widget.Table do
   defp select_cursor(%{selection_mode: :none} = state), do: {state, []}
 
   defp select_cursor(state) do
-    case Enum.at(state.display_rows, state.cursor) do
-      nil ->
+    case Enum.fetch(state.display_rows, state.cursor) do
+      :error ->
         {state, []}
 
-      row ->
+      {:ok, row} ->
         identity = row_identity(state, row)
 
         case state.selection_mode do
@@ -353,7 +353,7 @@ defmodule TermUI.Widget.Table do
 
   defp header_values(state) do
     Enum.map(state.columns, fn column ->
-      case {state.sort_column == column.key, state.sort_direction} do
+      case {state.sort_column === column.key, state.sort_direction} do
         {true, :asc} -> column.label <> " ↑"
         {true, :desc} -> column.label <> " ↓"
         _other -> column.label
