@@ -168,25 +168,22 @@ defmodule TermUI.Widget.TextInput do
   end
 
   defp insert(state, text) do
-    inserted = text |> String.replace(~r/[\x00-\x1F\x7F]/u, "") |> String.graphemes()
+    inserted = text |> String.replace(~r/[\x00-\x1F\x7F]/u, "")
 
-    {value, cursor} =
-      if Selection.empty?(state.selection) do
-        {state.value, state.cursor}
-      else
-        {value, cursor, _selection} = Selection.replace(state.selection, state.value, "")
-        {value, cursor}
-      end
+    selection =
+      if Selection.empty?(state.selection),
+        do: Selection.start(state.selection, state.cursor),
+        else: state.selection
 
-    {before, after_cursor} = Enum.split(String.graphemes(value), cursor)
+    {value, cursor, selection} = Selection.replace(selection, state.value, inserted)
+    graphemes = value |> String.graphemes() |> limit(state.max_length)
 
-    value_graphemes =
-      (before ++ inserted ++ after_cursor)
-      |> limit(state.max_length)
-
-    value = Enum.join(value_graphemes)
-    cursor = min(length(before) + length(inserted), length(value_graphemes))
-    changed(%{state | value: value, cursor: cursor, selection: Selection.clear(state.selection)})
+    changed(%{
+      state
+      | value: Enum.join(graphemes),
+        cursor: min(cursor, length(graphemes)),
+        selection: selection
+    })
   end
 
   defp horizontal(state, delta, modifiers) do
@@ -254,7 +251,11 @@ defmodule TermUI.Widget.TextInput do
     changed(%{state | value: value})
   end
 
-  defp changed(state), do: {state, [{:changed, state.value}]}
+  defp changed(state) do
+    state = %{state | cursor: min(state.cursor, String.length(state.value))}
+    {state, [{:changed, state.value}]}
+  end
+
   defp grapheme_count(text), do: text |> String.graphemes() |> length()
   defp limit(graphemes, :infinity), do: graphemes
 

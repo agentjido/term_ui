@@ -137,4 +137,42 @@ defmodule TermUI.Backend.RendererTest do
     refute monochrome =~ "\e[31m"
     assert Renderer.render([], :true_color, :unicode) |> IO.iodata_to_binary() == "\e[0m"
   end
+
+  test "ASCII replacements keep complete frames and diffs inside their cell coordinates" do
+    alias TermUI.Frame
+    alias TermUI.Test.AnsiScreen
+
+    for {old, frame} <- [
+          {nil, Frame.from_rows(["…x", "x…"], 2, 2)},
+          {Frame.from_rows(["ax", "xa"], 2, 2), Frame.from_rows(["…x", "x…"], 2, 2)}
+        ] do
+      changes = Frame.diff(old, frame)
+
+      output = Renderer.render(changes, :color_16, :ascii) |> IO.iodata_to_binary()
+      refute output =~ "..."
+      screen = AnsiScreen.feed(AnsiScreen.new(), output)
+      assert elem(screen.cells[{1, 1}], 0) == "."
+      assert elem(screen.cells[{2, 2}], 0) == "."
+      if old == nil, do: assert(elem(screen.cells[{1, 2}], 0) == "x")
+    end
+
+    assert TermUI.CharacterSet.get(:ascii).ellipsis == "..."
+  end
+
+  test "every indexed foreground and background respects the selected color mode" do
+    alias TermUI.Color.Converter
+    alias TermUI.Style
+
+    for index <- 0..255 do
+      output =
+        Renderer.render([{{1, 1}, {"x", index, index, []}}], :color_16, :unicode)
+        |> IO.iodata_to_binary()
+
+      refute output =~ ";5;"
+      refute output =~ ";2;"
+      rgb = Style.to_rgb({:indexed, index})
+      assert output =~ "\e[#{Converter.rgb_to_16(rgb, :fg)}m"
+      assert output =~ "\e[#{Converter.rgb_to_16(rgb, :bg)}m"
+    end
+  end
 end

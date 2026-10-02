@@ -47,7 +47,8 @@ defmodule IExCounter.Recipes.Stream do
     do: %{state | loading: false, status: "Load failed; press L to retry"}
 
   def update({:event, event}, state) do
-    {stream, _messages} = Stream.update(event, state.stream)
+    {width, height} = state.dimensions
+    {stream, _messages} = Stream.update(event, state.stream, {width, max(height - 2, 1)})
     %{state | stream: stream}
   end
 

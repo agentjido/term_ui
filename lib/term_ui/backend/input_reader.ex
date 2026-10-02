@@ -40,7 +40,7 @@ defmodule TermUI.Backend.InputReader do
   @doc false
   def handle_call({:take, _timeout}, _from, %{result: result} = state) when not is_nil(result) do
     continue_reader(state.worker, result)
-    {:reply, result, %{state | result: nil}}
+    {:reply, result, %{state | result: retained_result(result)}}
   end
 
   def handle_call({:take, 0}, _from, state), do: {:reply, :timeout, state}
@@ -64,7 +64,7 @@ defmodule TermUI.Backend.InputReader do
     _cancelled = Process.cancel_timer(timer)
     GenServer.reply(from, result)
     continue_reader(worker, result)
-    {:noreply, %{state | waiter: nil}}
+    {:noreply, %{state | waiter: nil, result: retained_result(result)}}
   end
 
   def handle_info({:take_timeout, token}, %{waiter: {from, token, _timer}} = state) do
@@ -91,6 +91,9 @@ defmodule TermUI.Backend.InputReader do
       end
     end
   end
+
+  defp retained_result({:ok, _data}), do: nil
+  defp retained_result(result), do: result
 
   defp continue_reader(worker, {:ok, _data}), do: send(worker, :continue)
   defp continue_reader(_worker, _result), do: :ok

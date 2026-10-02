@@ -13,6 +13,10 @@ defmodule Showcase.Pages.Architecture do
   def update(event, state), do: MarkdownViewer.update(event, state)
 
   @impl true
+  def update(event, state, {width, height}),
+    do: MarkdownViewer.update(event, state, {max(width - 2, 1), max(height - 2, 1)})
+
+  @impl true
   def view(state, {width, height}, theme) do
     content = MarkdownViewer.view(state, {max(width - 2, 1), max(height - 2, 1)})
     Layout.panel(content, "Why the seams matter", {width, height}, active: true, theme: theme)

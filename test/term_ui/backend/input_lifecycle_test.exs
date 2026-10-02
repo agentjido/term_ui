@@ -147,4 +147,43 @@ defmodule TermUI.Backend.InputLifecycleTest do
 
     {read_fun, agent}
   end
+
+  test "EOF remains available after a pending Escape is reported" do
+    {read_fun, agent} = queued_reader([{:ok, "\e"}, :eof])
+
+    assert {:ok, %Event.Key{key: :escape}, state} =
+             EventStream.poll(stream_state(), 100, read_fun, __MODULE__)
+
+    assert {:error, :eof, state} = EventStream.poll(state, 10, read_fun, __MODULE__)
+    EventStream.stop(state)
+    Agent.stop(agent)
+  end
+
+  test "reader retains EOF received before and during a waiting take" do
+    owner = self()
+
+    for cached? <- [true, false] do
+      {:ok, reader} =
+        InputReader.start_link(fn ->
+          send(owner, {:eof_worker, self()})
+          receive do: (:finish -> :eof)
+        end)
+
+      assert_receive {:eof_worker, worker}
+
+      if cached? do
+        send(worker, :finish)
+        :sys.get_state(reader)
+        assert :eof = InputReader.take(reader, 100)
+      else
+        task = Task.async(fn -> InputReader.take(reader, 100) end)
+        send(worker, :finish)
+        assert :eof = Task.await(task)
+      end
+
+      assert :eof = InputReader.take(reader, 0)
+      assert :eof = InputReader.take(reader, 10)
+      InputReader.stop(reader)
+    end
+  end
 end

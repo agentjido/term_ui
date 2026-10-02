@@ -48,6 +48,7 @@ defmodule TermUI.Snapshot.SupervisionTreeProvider do
   end
 
   defp normalize_child({id, process, type, _modules}, path, children, max_depth, depth, visited) do
+    id = if id == :undefined and is_pid(process), do: process, else: id
     child_path = path ++ [id]
     node_id = {:supervision, child_path}
 

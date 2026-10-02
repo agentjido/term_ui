@@ -36,6 +36,7 @@ defmodule TermUI.Widget.AdvancedBehaviorTest do
           "four",
           "界wide"
         ],
+        dimensions: {1, 2},
         page_size: 2
       )
 
@@ -65,7 +66,9 @@ defmodule TermUI.Widget.AdvancedBehaviorTest do
     frame = Viewport.view(viewport, {5, 2})
     assert Frame.row_text(frame, 2) == " wide"
 
-    followed = Viewport.init(content: "a\nb\nc", follow_end: true, page_size: 2)
+    followed =
+      Viewport.init(content: "a\nb\nc", follow_end: true, page_size: 2, dimensions: {3, 2})
+
     followed = Viewport.set_content(followed, "a\nb\nc\nd")
     assert Viewport.position(followed) == {0, 2}
     assert Frame.row_text(Viewport.view(followed, {3, 2}), 1) == "c  "
@@ -211,11 +214,12 @@ defmodule TermUI.Widget.AdvancedBehaviorTest do
           %{message: "error", level: :error},
           "info"
         ],
+        dimensions: {8, 2},
         page_size: 2,
         follow: false
       )
 
-    assert %Frame{} = LogViewer.view(logs, {8, 3})
+    assert %Frame{} = LogViewer.view(logs, {8, 2})
     assert {logs, [{:scrolled, 1}]} = LogViewer.update(Event.key(:down), logs)
     assert {logs, [{:scrolled, 2}]} = LogViewer.update(Event.key(:page_down), logs)
     assert logs.follow
@@ -346,7 +350,16 @@ defmodule TermUI.Widget.AdvancedBehaviorTest do
     assert button.focused
     refute Button.focus(button, false).focused
 
-    stream = Stream.init(items: Enum.to_list(1..8), page_size: 2, formatter: &inspect/1)
+    stream = %{
+      Stream.init(
+        items: Enum.to_list(1..8),
+        page_size: 2,
+        dimensions: {8, 3},
+        formatter: &inspect/1
+      )
+      | paused: true
+    }
+
     assert {stream, [{:scrolled, 1}]} = Stream.update(Event.key(:down), stream)
     assert stream.paused
     assert Stream.push(stream, 9) == stream

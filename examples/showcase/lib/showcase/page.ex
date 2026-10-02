@@ -8,6 +8,9 @@ defmodule Showcase.Page do
 
   @callback init() :: state()
   @callback update(term(), state()) :: {state(), [message()]}
+  @callback update(term(), state(), dimensions()) :: {state(), [message()]}
+  @optional_callbacks update: 3
+
   @callback view(state(), dimensions(), theme()) :: TermUI.Frame.t()
   @callback help() :: String.t()
 end

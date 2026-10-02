@@ -59,6 +59,14 @@ defmodule TermUI.Widget.Router do
     {store_child!(parent, route.path, child), map_messages(route, messages)}
   end
 
+  @doc "Updates the child with its current dimensions."
+  @spec update(t(), Event.t(), term(), TermUI.Widget.dimensions()) :: {term(), [term()]}
+  def update(%__MODULE__{} = route, event, parent, dimensions) do
+    child = fetch_child!(parent, route.path)
+    {child, messages} = TermUI.Widget.update(route.module, event, child, dimensions)
+    {store_child!(parent, route.path, child), map_messages(route, messages)}
+  end
+
   @doc "Applies a mouse route only when its ID belongs to this child."
   @spec mouse(
           t(),

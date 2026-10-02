@@ -1,7 +1,7 @@
 defmodule TermUI.Backend.Renderer do
   @moduledoc false
 
-  alias TermUI.{ANSI, Cell}
+  alias TermUI.{ANSI, Cell, Style}
   alias TermUI.Color.Converter
 
   @unicode_chars TermUI.CharacterSet.get(:unicode)
@@ -131,12 +131,19 @@ defmodule TermUI.Backend.Renderer do
   end
 
   defp map_character(char, :unicode), do: char
-  defp map_character(char, :ascii), do: Map.get(@unicode_to_ascii_map, char, char)
+
+  defp map_character(char, :ascii) do
+    @unicode_to_ascii_map |> Map.get(char, char) |> Cell.new() |> Map.fetch!(:char)
+  end
 
   defp color(_type, _color, :monochrome), do: []
   defp color(_type, :default, _mode), do: []
   defp color(:fg, color, _mode) when is_atom(color), do: ANSI.foreground(color)
   defp color(:bg, color, _mode) when is_atom(color), do: ANSI.background(color)
+
+  defp color(type, index, :color_16) when is_integer(index),
+    do: color(type, Style.to_rgb({:indexed, index}), :color_16)
+
   defp color(:fg, index, _mode) when is_integer(index), do: ANSI.foreground_256(index)
   defp color(:bg, index, _mode) when is_integer(index), do: ANSI.background_256(index)
   defp color(:fg, {red, green, blue}, :true_color), do: ANSI.foreground_rgb(red, green, blue)

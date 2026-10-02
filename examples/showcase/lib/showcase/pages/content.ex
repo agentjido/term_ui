@@ -53,6 +53,19 @@ defmodule Showcase.Pages.Content do
   end
 
   @impl true
+  def update(event, state, {width, height}) do
+    inner = {max(width - 2, 1), max(height - 3, 1)}
+
+    state = %{
+      state
+      | markdown: MarkdownViewer.set_dimensions(state.markdown, inner),
+        stream: Stream.set_dimensions(state.stream, inner)
+    }
+
+    update(event, state)
+  end
+
+  @impl true
   def view(state, {width, height}, theme) do
     selector =
       Layout.selector([markdown: "Markdown", diff: "Diff", stream: "Stream"], state.active, width)

@@ -117,6 +117,9 @@ defmodule TermUI.Theme do
 
   defp merge_entry(%Style{} = left, %Style{} = right), do: Style.merge(left, right)
 
+  defp merge_entry(%Style{}, right), do: right
+  defp merge_entry(_left, %Style{} = right), do: right
+
   defp merge_entry(left, right) when is_map(left) and is_map(right) do
     Map.merge(left, right, fn _variant, base, override -> Style.merge(base, override) end)
   end

@@ -144,4 +144,38 @@ defmodule TermUI.Widget.TextInputTest do
     assert dragged.cursor == 2
     assert Selection.active?(dragged.selection)
   end
+
+  test "text and paste insertion measure joined Unicode before cursor and length limits" do
+    alias TermUI.{Event, Frame, Selection}
+    alias TermUI.Widget.TextInput
+
+    for event <- [Event.text("\u0301"), Event.paste("\u0301")] do
+      {state, [{:changed, "e\u0301"}]} =
+        TextInput.update(event, TextInput.init(value: "e", max_length: 1))
+
+      assert state.cursor == 1
+      assert %Frame{} = TextInput.view(state, {10, 2})
+      {state, _} = TextInput.update(Event.key(:backspace), state)
+      assert state.value == "" and state.cursor == 0
+    end
+
+    for {initial, cursor, inserted, expected, expected_cursor} <- [
+          {"ex", 1, "\u0301", "e\u0301x", 1},
+          {"👩x", 1, "\u200D💻", "👩‍💻x", 1},
+          {"👩💻x", 1, "\u200D", "👩‍💻x", 1},
+          {"🇺x", 1, "🇸", "🇺🇸x", 1}
+        ] do
+      initial = %{TextInput.init(value: initial) | cursor: cursor}
+      {state, _} = TextInput.update(Event.paste(inserted), initial)
+      assert state.value == expected
+      assert state.cursor == expected_cursor
+      assert %Frame{} = TextInput.view(state, {10, 2})
+    end
+
+    selection = Selection.new() |> Selection.start(1) |> Selection.extend(2)
+    state = %{TextInput.init(value: "eXx") | selection: selection}
+    {state, _} = TextInput.update(Event.text("\u0301"), state)
+    assert state.value == "e\u0301x" and state.cursor == 1
+    assert Selection.empty?(state.selection)
+  end
 end

@@ -211,4 +211,26 @@ defmodule TermUI.TermUtilsTest do
       end
     end
   end
+
+  test "saved Linux and BSD settings and bounded numbers pass argument validation" do
+    for args <- [
+          ["9600:5:cbf3a3b:bf:8a3b:3d"],
+          ["gfmt1:cflag=4b00:iflag=6b02:lflag=200005cb"],
+          ["min", "10"],
+          ["time", "255"]
+        ] do
+      refute TermUtils.safe_stty(args) == {:error, :invalid_arguments}
+    end
+
+    for args <- [
+          ["min", "65536"],
+          ["time", "-1"],
+          ["x"],
+          ["10x"],
+          ["gfmt1:cflag=zz"],
+          ["9600:5;echo"]
+        ] do
+      assert TermUtils.safe_stty(args) == {:error, :invalid_arguments}
+    end
+  end
 end

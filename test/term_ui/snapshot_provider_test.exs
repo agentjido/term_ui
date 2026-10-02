@@ -1,10 +1,10 @@
 defmodule TermUI.SnapshotProviderTest do
   use ExUnit.Case, async: true
 
-  alias TermUI.{Frame, Snapshot}
+  alias TermUI.{Event, Frame, Snapshot}
 
   alias TermUI.Snapshot.{ClusterProvider, ProcessProvider, SupervisionTreeProvider}
-  alias TermUI.Widget.{ClusterDashboard, ProcessMonitor, SupervisionTree}
+  alias TermUI.Widget.{ClusterDashboard, ProcessMonitor, SupervisionTree, TreeView}
 
   test "snapshot status reports complete, partial, and failed collections" do
     assert %Snapshot{status: :ok} = Snapshot.new([:item], [])
@@ -199,5 +199,52 @@ defmodule TermUI.SnapshotProviderTest do
     for provider <- [ProcessProvider, SupervisionTreeProvider, ClusterProvider] do
       refute function_exported?(provider, :start_link, 1)
     end
+  end
+
+  test "real dynamic supervisor children have separate IDs and labels" do
+    supervisor = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
+    {:ok, one} = DynamicSupervisor.start_child(supervisor, {Agent, fn -> 1 end})
+    {:ok, two} = DynamicSupervisor.start_child(supervisor, {Agent, fn -> 2 end})
+    [root] = SupervisionTreeProvider.collect(supervisor).items
+
+    assert Enum.sort(Enum.map(root.children, & &1.id)) ==
+             Enum.sort([
+               {:supervision, [supervisor, one]},
+               {:supervision, [supervisor, two]}
+             ])
+
+    assert Enum.any?(root.children, &String.contains?(&1.label, inspect(one)))
+    assert Enum.any?(root.children, &String.contains?(&1.label, inspect(two)))
+    tree = TreeView.init(nodes: [root], expanded: [root.id])
+    {tree, _} = TreeView.update(Event.key(:down), tree)
+    {tree, _} = TreeView.update(Event.key(:space), tree)
+    assert MapSet.size(tree.selected) == 1
+    assert Enum.count(root.children, &MapSet.member?(tree.selected, &1.id)) == 1
+  end
+
+  test "anonymous nested supervisors keep separate expansion paths" do
+    root = self()
+    one = spawn(fn -> receive do: (:stop -> :ok) end)
+    two = spawn(fn -> receive do: (:stop -> :ok) end)
+
+    on_exit(fn ->
+      send(one, :stop)
+      send(two, :stop)
+    end)
+
+    children = fn
+      ^root -> [{:undefined, one, :supervisor, []}, {:undefined, two, :supervisor, []}]
+      _child -> [{:named, root, :worker, []}]
+    end
+
+    [tree] = SupervisionTreeProvider.collect(root, children: children).items
+    assert [first, second] = tree.children
+    refute first.id == second.id
+    assert hd(first.children).id == {:supervision, [root, one, :named]}
+    assert hd(second.children).id == {:supervision, [root, two, :named]}
+    state = TreeView.init(nodes: [tree], expanded: [tree.id, first.id])
+
+    assert Enum.map(TreeView.visible(state), fn {node, _depth} -> node.id end) ==
+             [tree.id, first.id, hd(first.children).id, second.id]
   end
 end

@@ -168,25 +168,20 @@ defmodule TermUI.Widget.TextArea do
       |> String.replace("\r", "\n")
       |> String.replace("\t", "  ")
       |> String.replace(~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u, "")
-      |> String.graphemes()
 
-    {value, cursor} =
-      if Selection.empty?(state.selection) do
-        {state.value, state.cursor}
-      else
-        {value, cursor, _selection} = Selection.replace(state.selection, state.value, "")
-        {value, cursor}
-      end
+    selection =
+      if Selection.empty?(state.selection),
+        do: Selection.start(state.selection, state.cursor),
+        else: state.selection
 
-    {before, after_cursor} = Enum.split(String.graphemes(value), cursor)
-    all = limit(before ++ inserted ++ after_cursor, state.max_length)
-    cursor = min(length(before) + length(inserted), length(all))
+    {value, cursor, selection} = Selection.replace(selection, state.value, inserted)
+    graphemes = value |> String.graphemes() |> limit(state.max_length)
 
     changed(%{
       state
-      | value: Enum.join(all),
-        cursor: cursor,
-        selection: Selection.clear(state.selection)
+      | value: Enum.join(graphemes),
+        cursor: min(cursor, length(graphemes)),
+        selection: selection
     })
   end
 
@@ -259,7 +254,11 @@ defmodule TermUI.Widget.TextArea do
     changed(%{state | value: value})
   end
 
-  defp changed(state), do: {state, [{:changed, state.value}]}
+  defp changed(state) do
+    state = %{state | cursor: min(state.cursor, String.length(state.value))}
+    {state, [{:changed, state.value}]}
+  end
+
   defp count(text), do: text |> String.graphemes() |> length()
   defp limit(graphemes, :infinity), do: graphemes
   defp limit(graphemes, maximum), do: Enum.take(graphemes, maximum)

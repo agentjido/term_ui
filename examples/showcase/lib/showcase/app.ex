@@ -149,7 +149,14 @@ defmodule Showcase.App do
   defp update_current_page(state, event) do
     {_id, _label, module} = current_page(state)
     page_state = Map.fetch!(state.page_states, state.page)
-    {page_state, messages} = module.update(event, page_state)
+    {width, height} = state.dimensions
+    dimensions = {width, max(height - 3, 1)}
+
+    {page_state, messages} =
+      if function_exported?(module, :update, 3),
+        do: module.update(event, page_state, dimensions),
+        else: module.update(event, page_state)
+
     {%{state | page_states: Map.put(state.page_states, state.page, page_state)}, messages}
   end
 

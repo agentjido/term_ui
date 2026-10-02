@@ -58,7 +58,14 @@ defmodule TermUI.Widget.NavigationCoverageTest do
   end
 
   test "viewport navigation, geometry, and reveal work at all edges" do
-    state = Viewport.init(content: "one\ntwo\nthree\nfour", page_size: 2, scroll_x: 2)
+    state =
+      Viewport.init(
+        content: "one\ntwo\nthree\nfour",
+        page_size: 2,
+        scroll_x: 2,
+        dimensions: {1, 2}
+      )
+
     {state, _} = Viewport.update(Event.key(:down), state)
     {state, _} = Viewport.update(Event.key(:page_down), state)
     assert Viewport.position(state) == {2, 2}
@@ -109,6 +116,7 @@ defmodule TermUI.Widget.NavigationCoverageTest do
       Viewport.init(
         content: Enum.map_join(1..10, "\n", &"row #{&1} long"),
         page_size: 3,
+        dimensions: {10, 5},
         scrollbars: :both
       )
 
@@ -138,7 +146,7 @@ defmodule TermUI.Widget.NavigationCoverageTest do
   end
 
   test "follow-end content replacement moves to the latest page" do
-    state = Viewport.init(content: ["old"], follow_end: true, page_size: 2)
+    state = Viewport.init(content: ["old"], follow_end: true, page_size: 2, dimensions: {4, 2})
     state = Viewport.set_content(state, ["a", "b", "c", "d"])
     assert state.scroll_y == 2
     assert Frame.row_text(Viewport.view(state, {4, 2}), 1) == "c   "

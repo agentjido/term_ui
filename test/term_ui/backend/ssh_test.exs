@@ -41,6 +41,23 @@ defmodule TermUI.Backend.SSHTest do
     end
   end
 
+  defmodule BlockingTerminateApp do
+    use TermUI.Elm
+    @impl true
+    def init(opts), do: %{owner: Keyword.fetch!(opts, :test_owner)}
+    @impl true
+    def event_to_msg(_event, _state), do: :ignore
+    @impl true
+    def update(_message, state), do: state
+    @impl true
+    def view(_state), do: Frame.from_rows(["cleanup"], 20, 3)
+    @impl true
+    def terminate(_reason, state) do
+      send(state.owner, {:terminate_waiting, self()})
+      receive do: (:finish_terminate -> :ok)
+    end
+  end
+
   test "direct sessions parse remote terminal input and resize the v2 runtime" do
     session = start_session(label: "remote", mouse_tracking: :all)
     runtime = session |> SSH.session_info() |> Map.fetch!(:runtime)
@@ -267,5 +284,80 @@ defmodule TermUI.Backend.SSHTest do
     ExUnit.AssertionError ->
       Process.sleep(10)
       eventually(assertion, attempts - 1)
+  end
+
+  test "SSH accepts prefixed and consecutive large pastes without turning CR into Enter" do
+    session = start_session(label: "paste")
+    runtime = SSH.session_info(session).runtime
+    acknowledge_initial_output(session, "paste")
+    body = String.duplicate("p", 2_000)
+    SSH.input(session, "x\e[200~" <> body <> "\e[201~\e[200~second\r\e[201~")
+
+    eventually(fn ->
+      events = Runtime.get_state(runtime).app_state.events
+
+      assert [
+               %Event.Text{text: "x"},
+               %Event.Paste{content: ^body},
+               %Event.Paste{content: "second\r"}
+             ] = events
+    end)
+  end
+
+  test "cleanup is sent once when runtime exit comes before its acknowledgement" do
+    session = start_session(label: "cleanup", output_timeout: 1_000)
+    runtime = SSH.session_info(session).runtime
+    ref = Process.monitor(runtime)
+    acknowledge_initial_output(session, "cleanup")
+    SSH.stop_session(session)
+    {token, cleanup} = receive_output(session)
+    assert cleanup =~ "\e[?1049l"
+    assert_receive {:DOWN, ^ref, :process, ^runtime, :normal}, 500
+    :sys.get_state(session)
+    SSH.ack_output(session, token, :ok)
+    assert_receive {:term_ui_ssh_closed, ^session, :normal}, 500
+    refute_receive {:term_ui_ssh_output, ^session, _, ^cleanup}, 20
+  end
+
+  test "cleanup is not repeated after an early acknowledgement and follows unexpected exit" do
+    for unexpected? <- [false, true] do
+      session = start_session(label: "cleanup", output_timeout: 1_000)
+      runtime = SSH.session_info(session).runtime
+      acknowledge_initial_output(session, "cleanup")
+      if unexpected?, do: Process.exit(runtime, :kill), else: SSH.stop_session(session)
+      {token, cleanup} = receive_output(session)
+      assert cleanup =~ "\e[?1049l"
+      SSH.ack_output(session, token, :ok)
+      assert_receive {:term_ui_ssh_closed, ^session, reason}, 500
+      assert reason == if(unexpected?, do: :killed, else: :normal)
+      refute_receive {:term_ui_ssh_output, ^session, _, ^cleanup}, 20
+    end
+  end
+
+  test "cleanup acknowledgement before runtime exit does not send another cleanup" do
+    assert {:ok, session} =
+             SSH.start_session(BlockingTerminateApp,
+               output: self(),
+               output_timeout: 1_000,
+               runtime_options: [test_owner: self()]
+             )
+
+    runtime = SSH.session_info(session).runtime
+
+    on_exit(fn ->
+      send(runtime, :finish_terminate)
+      disconnect_session(session)
+    end)
+
+    acknowledge_initial_output(session, "cleanup")
+    SSH.stop_session(session)
+    {token, cleanup} = receive_output(session)
+    assert_receive {:terminate_waiting, ^runtime}, 500
+    SSH.ack_output(session, token, :ok)
+    assert :sys.get_state(session).in_flight == nil
+    assert Process.alive?(runtime)
+    send(runtime, :finish_terminate)
+    assert_receive {:term_ui_ssh_closed, ^session, :normal}, 500
+    refute_receive {:term_ui_ssh_output, ^session, _, ^cleanup}, 20
   end
 end

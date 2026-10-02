@@ -271,7 +271,6 @@ defmodule TermUI.Runtime do
     end
   end
 
-  defp handle_async_exit(_task, :normal, state), do: {:noreply, state}
   defp handle_async_exit(nil, _reason, state), do: {:noreply, state}
 
   defp handle_async_exit(%{mapper: mapper}, reason, state) do

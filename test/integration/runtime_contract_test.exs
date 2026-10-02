@@ -959,4 +959,26 @@ defmodule TermUI.RuntimeContractTest do
     assert_receive {:backend, :draw, _frame}, 500
     runtime
   end
+
+  test "async direct normal exits and caught exits each map exactly one error" do
+    for {function, expected} <- [
+          {fn -> :returned end, {:ok, :returned}},
+          {fn -> Process.exit(self(), :kill) end, {:error, {:exit, :killed, []}}},
+          {fn -> Process.exit(self(), :normal) end, {:error, {:exit, :normal, []}}},
+          {fn -> exit(:normal) end, :caught_normal},
+          {fn -> Process.exit(self(), :shutdown) end, {:error, {:exit, :shutdown, []}}}
+        ] do
+      runtime = start_async_app(function)
+
+      if expected == :caught_normal do
+        assert_receive {:async_complete, {:error, {:exit, :normal, [_ | _]}}}, 500
+      else
+        assert_receive {:async_complete, ^expected}, 500
+      end
+
+      refute_receive {:async_complete, _}, 20
+      assert Runtime.get_state(runtime).async_tasks == %{}
+      Runtime.shutdown(runtime)
+    end
+  end
 end

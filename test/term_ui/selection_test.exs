@@ -57,4 +57,14 @@ defmodule TermUI.SelectionTest do
     line = Selection.select_line(empty, "one line", 4)
     assert Selection.range(line) == {0, 8}
   end
+
+  test "replacement cursor follows the joined grapheme before a suffix" do
+    alias TermUI.Selection
+    selection = Selection.new() |> Selection.start(1) |> Selection.extend(2)
+
+    assert {"e\u0301x", 1, %Selection{anchor: nil}} =
+             Selection.replace(selection, "eXx", "\u0301")
+
+    assert {"👩‍💻x", 1, _} = Selection.replace(selection, "👩X💻x", "\u200D")
+  end
 end

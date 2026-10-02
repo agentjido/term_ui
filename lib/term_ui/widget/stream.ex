@@ -14,6 +14,7 @@ defmodule TermUI.Widget.Stream do
 
   @type t :: %__MODULE__{
           items: [term()],
+          dimensions: TermUI.Widget.dimensions() | nil,
           limit: pos_integer(),
           paused: boolean(),
           offset: non_neg_integer(),
@@ -33,7 +34,8 @@ defmodule TermUI.Widget.Stream do
 
   @overflows [:drop_oldest, :drop_newest, :reject]
 
-  defstruct items: [],
+  defstruct dimensions: nil,
+            items: [],
             limit: 1_000,
             paused: false,
             offset: 0,
@@ -50,6 +52,7 @@ defmodule TermUI.Widget.Stream do
     items = Keyword.get(opts, :items, [])
 
     %__MODULE__{
+      dimensions: Keyword.get(opts, :dimensions),
       items: Enum.take(items, -limit),
       limit: limit,
       page_size: max(Keyword.get(opts, :page_size, 20), 1),
@@ -62,10 +65,14 @@ defmodule TermUI.Widget.Stream do
 
   @impl true
   def update(%Event.Key{key: :space}, state),
-    do: {%{state | paused: not state.paused}, [{:paused, not state.paused}]}
+    do:
+      {%{state | offset: current_offset(state), paused: not state.paused},
+       [{:paused, not state.paused}]}
 
   def update(%Event.Text{text: " "}, state),
-    do: {%{state | paused: not state.paused}, [{:paused, not state.paused}]}
+    do:
+      {%{state | offset: current_offset(state), paused: not state.paused},
+       [{:paused, not state.paused}]}
 
   def update(%Event.Key{key: :up}, state), do: scroll(state, -1)
   def update(%Event.Key{key: :down}, state), do: scroll(state, 1)
@@ -73,7 +80,7 @@ defmodule TermUI.Widget.Stream do
   def update(%Event.Key{key: :page_down}, state), do: scroll(state, state.page_size)
 
   def update(%Event.Key{key: :end}, state),
-    do: {%{state | offset: max(length(state.items) - state.page_size, 0)}, []}
+    do: {%{state | offset: maximum_offset(state)}, []}
 
   def update(_event, state), do: {state, []}
 
@@ -165,9 +172,28 @@ defmodule TermUI.Widget.Stream do
   @doc false
   def default_format(item), do: to_string(item)
 
+  @doc "Stores the child size and bounds the item offset below the status row."
+  @spec set_dimensions(t(), TermUI.Widget.dimensions()) :: t()
+  def set_dimensions(state, {width, height} = dimensions) when width > 0 and height > 0 do
+    next = %{state | dimensions: dimensions}
+    %{next | offset: current_offset(next)}
+  end
+
+  @impl true
+  def update(event, state, dimensions), do: update(event, set_dimensions(state, dimensions))
+
   defp scroll(state, delta) do
-    offset = Helpers.scroll(state.offset, delta, length(state.items), state.page_size)
+    offset = Helpers.clamp(current_offset(state) + delta, 0, maximum_offset(state))
     {%{state | offset: offset, paused: true}, [{:scrolled, offset}]}
+  end
+
+  defp current_offset(state),
+    do:
+      if(state.paused, do: min(state.offset, maximum_offset(state)), else: maximum_offset(state))
+
+  defp maximum_offset(state) do
+    body_height = if state.dimensions, do: max(elem(state.dimensions, 1) - 1, 0), else: 1
+    max(length(state.items) - body_height, 0)
   end
 
   defp apply_overflow(%{overflow: :drop_oldest} = state, items) do

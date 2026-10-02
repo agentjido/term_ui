@@ -5,6 +5,8 @@ defmodule TermUI.Widget.StreamWidget do
 
   defdelegate init(opts), to: TermUI.Widget.Stream
   defdelegate update(event, state), to: TermUI.Widget.Stream
+  defdelegate update(event, state, dimensions), to: TermUI.Widget.Stream
+  defdelegate set_dimensions(state, dimensions), to: TermUI.Widget.Stream
   defdelegate view(state, dimensions), to: TermUI.Widget.Stream
   defdelegate push(state, item), to: TermUI.Widget.Stream
   defdelegate push_many(state, items), to: TermUI.Widget.Stream

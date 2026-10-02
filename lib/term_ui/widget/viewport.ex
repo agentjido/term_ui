@@ -14,6 +14,7 @@ defmodule TermUI.Widget.Viewport do
 
   @type t :: %__MODULE__{
           rows: [Frame.row()],
+          dimensions: TermUI.Widget.dimensions() | nil,
           scroll_x: non_neg_integer(),
           scroll_y: non_neg_integer(),
           page_size: pos_integer(),
@@ -35,7 +36,8 @@ defmodule TermUI.Widget.Viewport do
           visible_rows: Range.t() | nil
         }
 
-  defstruct rows: [],
+  defstruct dimensions: nil,
+            rows: [],
             scroll_x: 0,
             scroll_y: 0,
             page_size: 10,
@@ -46,6 +48,7 @@ defmodule TermUI.Widget.Viewport do
   @impl true
   def init(opts) do
     %__MODULE__{
+      dimensions: Keyword.get(opts, :dimensions),
       rows: normalize_content(Keyword.get(opts, :content, [])),
       scroll_x: max(Keyword.get(opts, :scroll_x, 0), 0),
       scroll_y: max(Keyword.get(opts, :scroll_y, 0), 0),
@@ -69,7 +72,7 @@ defmodule TermUI.Widget.Viewport do
 
   def update(%Event.Key{key: :end, modifiers: modifiers}, state) do
     if :ctrl in modifiers,
-      do: {%{state | scroll_y: max(length(state.rows) - state.page_size, 0)}, []},
+      do: {%{state | scroll_y: geometry(state, state.dimensions || {1, 1}).max_scroll_y}, []},
       else: {state, []}
   end
 
@@ -80,7 +83,7 @@ defmodule TermUI.Widget.Viewport do
   @impl true
   def mouse(%Event.Mouse{action: :press, button: :left} = event, state, dimensions) do
     case scrollbar_at(state, event, dimensions) do
-      nil -> update(event, state)
+      nil -> update(event, state, dimensions)
       axis -> drag_scrollbar(%{state | dragging: axis}, axis, event, dimensions)
     end
   end
@@ -96,16 +99,13 @@ defmodule TermUI.Widget.Viewport do
   def mouse(%Event.Mouse{action: :release, button: :left}, state, _dimensions),
     do: {%{state | dragging: nil}, []}
 
-  def mouse(event, state, _dimensions), do: update(event, state)
+  def mouse(event, state, dimensions), do: update(event, state, dimensions)
 
   @impl true
   def view(state, {width, height} = dimensions) do
     geometry = geometry(state, dimensions)
 
-    offset =
-      if state.follow_end,
-        do: geometry.max_scroll_y,
-        else: geometry.scroll_y
+    offset = geometry.scroll_y
 
     rows =
       state.rows
@@ -130,12 +130,8 @@ defmodule TermUI.Widget.Viewport do
   def set_content(state, content) do
     rows = normalize_content(content)
 
-    scroll_y =
-      if state.follow_end,
-        do: max(length(rows) - state.page_size, 0),
-        else: min(state.scroll_y, max(length(rows) - 1, 0))
-
-    %{state | rows: rows, scroll_y: scroll_y}
+    next = %{state | rows: rows}
+    set_dimensions(next, state.dimensions || {1, 1})
   end
 
   @doc "Returns the horizontal and vertical scroll offsets."
@@ -153,7 +149,9 @@ defmodule TermUI.Widget.Viewport do
     max_scroll_x = max(content_width - viewport_width, 0)
     max_scroll_y = max(content_height - viewport_height, 0)
     scroll_x = Helpers.clamp(state.scroll_x, 0, max_scroll_x)
-    scroll_y = Helpers.clamp(state.scroll_y, 0, max_scroll_y)
+
+    scroll_y =
+      if state.follow_end, do: max_scroll_y, else: Helpers.clamp(state.scroll_y, 0, max_scroll_y)
 
     %{
       content_width: content_width,
@@ -189,18 +187,26 @@ defmodule TermUI.Widget.Viewport do
 
     scroll_x = reveal(x, geometry.scroll_x, geometry.viewport_width, geometry.max_scroll_x)
     scroll_y = reveal(y, geometry.scroll_y, geometry.viewport_height, geometry.max_scroll_y)
-    %{state | scroll_x: scroll_x, scroll_y: scroll_y, follow_end: false}
+    %{state | dimensions: dimensions, scroll_x: scroll_x, scroll_y: scroll_y, follow_end: false}
   end
 
-  defp scroll(state, dx, dy) do
-    {max_x, _height} = content_dimensions(state)
+  @doc "Stores the current child size and bounds both scroll offsets."
+  @spec set_dimensions(t(), TermUI.Widget.dimensions()) :: t()
+  def set_dimensions(state, {width, height} = dimensions) when width > 0 and height > 0 do
+    geometry = geometry(state, dimensions)
+    %{state | dimensions: dimensions, scroll_x: geometry.scroll_x, scroll_y: geometry.scroll_y}
+  end
 
-    max_y = max(length(state.rows) - state.page_size, 0)
+  @impl true
+  def update(event, state, dimensions), do: update(event, set_dimensions(state, dimensions))
+
+  defp scroll(state, dx, dy) do
+    geometry = geometry(state, state.dimensions || {1, 1})
 
     next = %{
       state
-      | scroll_x: Helpers.clamp(state.scroll_x + dx, 0, max_x),
-        scroll_y: Helpers.clamp(state.scroll_y + dy, 0, max_y),
+      | scroll_x: Helpers.clamp(geometry.scroll_x + dx, 0, geometry.max_scroll_x),
+        scroll_y: Helpers.clamp(geometry.scroll_y + dy, 0, geometry.max_scroll_y),
         follow_end: false
     }
 
@@ -222,7 +228,7 @@ defmodule TermUI.Widget.Viewport do
     {scrollbar, _messages} =
       ScrollBar.mouse(local_event, scrollbar, {1, geometry.viewport_height})
 
-    next = %{state | scroll_y: scrollbar.offset, follow_end: false}
+    next = %{state | dimensions: dimensions, scroll_y: scrollbar.offset, follow_end: false}
     {next, [{:scrolled, {next.scroll_x, next.scroll_y}}]}
   end
 
@@ -239,7 +245,7 @@ defmodule TermUI.Widget.Viewport do
 
     local_event = %{event | y: 0, action: :press}
     {scrollbar, _messages} = ScrollBar.mouse(local_event, scrollbar, {geometry.viewport_width, 1})
-    next = %{state | scroll_x: scrollbar.offset, follow_end: false}
+    next = %{state | dimensions: dimensions, scroll_x: scrollbar.offset, follow_end: false}
     {next, [{:scrolled, {next.scroll_x, next.scroll_y}}]}
   end
 

@@ -149,4 +149,20 @@ defmodule TermUI.RoutingAndThemeTest do
     assert {shortcuts, []} = Shortcut.route(Event.text("g", timestamp: 10), shortcuts)
     assert {_shortcuts, [:top]} = Shortcut.route(Event.text("g", timestamp: 0), shortcuts)
   end
+
+  test "mixed Style and variant entries use the override type in both directions" do
+    style = Theme.new(styles: %{control: Style.new(fg: :red, attrs: [:bold])})
+
+    variants =
+      Theme.new(
+        styles: %{control: %{normal: Style.new(fg: :green), focused: Style.new(fg: :cyan)}}
+      )
+
+    merged = Theme.merge(style, variants)
+    assert Theme.style(merged, :control).fg == :green
+    assert Theme.style(merged, :control, :focused).fg == :cyan
+    assert Theme.style(Theme.for_capabilities(merged, %{colors: :monochrome}), :control).fg == nil
+    assert Theme.merge(variants, style).styles.control == style.styles.control
+    assert Theme.style(Theme.merge(variants, style), :control, :focused).fg == :red
+  end
 end

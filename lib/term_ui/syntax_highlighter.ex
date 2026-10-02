@@ -69,7 +69,8 @@ defmodule TermUI.SyntaxHighlighter do
   def style(type), do: token_style(type)
 
   defp adapter_spans(adapter, source, language) when is_atom(adapter) do
-    with true <- function_exported?(adapter, :highlight, 2),
+    with true <- Code.ensure_loaded?(adapter),
+         true <- function_exported?(adapter, :highlight, 2),
          {:ok, tokens} when is_list(tokens) <- adapter.highlight(source, language),
          {:ok, spans} <- normalize_tokens(tokens),
          true <- spans_text(spans) == source do

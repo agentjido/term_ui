@@ -3,6 +3,8 @@ defmodule TermUI.Backend.InputBuffer do
 
   require Logger
 
+  alias TermUI.Terminal.EscapeParser
+
   # Maximum buffer size before truncation (1KB)
   @max_buffer_size 1024
 
@@ -164,27 +166,40 @@ defmodule TermUI.Backend.InputBuffer do
 
   defp append_regular_terminal_input(state, data, field, opts) do
     buffer = append(Map.get(state, field, ""), data)
+    scan_terminal_input(state, buffer, "", field, opts)
+  end
 
-    cond do
-      String.starts_with?(buffer, @paste_start) ->
+  defp scan_terminal_input(state, buffer, complete, field, opts) do
+    case :binary.match(buffer, @paste_start) do
+      {position, marker_size} ->
+        prefix = binary_part(buffer, 0, position)
+
         body =
-          binary_part(
-            buffer,
-            byte_size(@paste_start),
-            byte_size(buffer) - byte_size(@paste_start)
-          )
+          binary_part(buffer, position + marker_size, byte_size(buffer) - position - marker_size)
 
         state
-        |> Map.put(field, @paste_start)
-        |> Map.put(:paste_state, %{mode: :collecting, chunks: [], size: 0, end_buffer: ""})
-        |> append_terminal_input(body, field, opts)
+        |> Map.put(field, complete <> prefix <> @paste_start)
+        |> append_paste_data(
+          %{mode: :collecting, chunks: [], size: 0, end_buffer: ""},
+          body,
+          field,
+          opts
+        )
 
-      byte_size(buffer) > @max_buffer_size ->
-        maybe_log_terminal_overflow(opts, byte_size(buffer))
-        Map.put(state, field, "")
+      :nomatch ->
+        {_events, remaining} = EscapeParser.parse(buffer)
+        prefix_size = byte_size(buffer) - byte_size(remaining)
+        prefix = binary_part(buffer, 0, prefix_size)
 
-      true ->
-        Map.put(state, field, buffer)
+        remaining =
+          if byte_size(remaining) > @max_buffer_size do
+            maybe_log_terminal_overflow(opts, byte_size(remaining))
+            ""
+          else
+            remaining
+          end
+
+        Map.put(state, field, complete <> prefix <> remaining)
     end
   end
 
@@ -207,9 +222,7 @@ defmodule TermUI.Backend.InputBuffer do
         if body_size > @max_paste_size do
           discard_paste(state, body_size, end_buffer, field, opts)
         else
-          state
-          |> Map.put(field, @paste_start)
-          |> Map.put(:paste_state, %{
+          Map.put(state, :paste_state, %{
             paste
             | chunks: prepend_chunk(paste.chunks, body),
               size: body_size,
@@ -231,20 +244,23 @@ defmodule TermUI.Backend.InputBuffer do
         |> Enum.reverse()
         |> IO.iodata_to_binary()
 
-      {trailing, _overflowed} = apply_limit(trailing, opts)
+      complete = Map.get(state, field, "") <> content <> @paste_end
 
       state
-      |> Map.put(field, @paste_start <> content <> @paste_end <> trailing)
       |> Map.put(:paste_state, nil)
+      |> scan_terminal_input(trailing, complete, field, opts)
     end
   end
 
   defp discard_paste(state, body_size, end_buffer, field, opts, remaining \\ "") do
     maybe_log_terminal_overflow(opts, body_size)
 
+    buffer = Map.get(state, field, "")
+    complete = binary_part(buffer, 0, max(byte_size(buffer) - byte_size(@paste_start), 0))
+
     state =
       state
-      |> Map.put(field, "")
+      |> Map.put(field, complete)
       |> Map.put(:paste_state, %{mode: :discarding, end_buffer: end_buffer})
 
     if remaining == "" do
@@ -262,17 +278,16 @@ defmodule TermUI.Backend.InputBuffer do
         trailing =
           binary_part(data, position + marker_size, byte_size(data) - position - marker_size)
 
+        complete = Map.get(state, field, "")
+
         state
-        |> Map.put(field, "")
         |> Map.put(:paste_state, nil)
-        |> append_terminal_input(trailing, field, opts)
+        |> scan_terminal_input(trailing, complete, field, opts)
 
       :nomatch ->
         {_discarded, end_buffer} = split_end_marker_prefix(data)
 
-        state
-        |> Map.put(field, "")
-        |> Map.put(:paste_state, %{mode: :discarding, end_buffer: end_buffer})
+        Map.put(state, :paste_state, %{mode: :discarding, end_buffer: end_buffer})
     end
   end
 

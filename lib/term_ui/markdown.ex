@@ -88,7 +88,7 @@ defmodule TermUI.Markdown do
     end
   end
 
-  @doc "Returns code blocks in source order without rendering the document."
+  @doc "Returns code blocks in source order with row metadata measured at width 80."
   @spec code_blocks(String.t() | Document.t()) :: [element()]
   def code_blocks(markdown) do
     render_with_elements(markdown, 80).elements
@@ -97,7 +97,9 @@ defmodule TermUI.Markdown do
   defp render_nodes(nodes, width, opts, start_index \\ 0) do
     {lines, elements, _index} =
       Enum.reduce(nodes, {[], [], start_index}, fn node, {lines, elements, line_index} ->
-        {node_lines, node_elements} = render_block(node, width, opts, line_index)
+        {node_lines, node_elements} =
+          render_block(node, width, code_options(opts, elements), line_index)
+
         separator = if lines == [] or node_lines == [], do: [], else: [[""]]
         start_shift = length(separator)
         node_elements = Enum.map(node_elements, &shift_element(&1, start_shift))
@@ -107,6 +109,9 @@ defmodule TermUI.Markdown do
 
     {lines, elements}
   end
+
+  defp code_options(opts, elements),
+    do: Keyword.put(opts, :code_offset, Keyword.get(opts, :code_offset, 0) + length(elements))
 
   defp pending_group(pending) do
     case parse(pending) do
@@ -123,7 +128,7 @@ defmodule TermUI.Markdown do
       {group_lines, group_elements} =
         case group do
           {:nodes, nodes} ->
-            render_nodes(nodes, width, opts, start_index)
+            render_nodes(nodes, width, code_options(opts, elements), start_index)
 
           {:source, source} ->
             rendered =
@@ -167,7 +172,7 @@ defmodule TermUI.Markdown do
           render_list_item(
             item,
             max(width - DisplayWidth.width(marker), 1),
-            opts,
+            code_options(opts, elements),
             line_index + length(lines)
           )
 
@@ -181,7 +186,7 @@ defmodule TermUI.Markdown do
 
   defp render_block(%MDEx.CodeBlock{literal: code, info: info}, width, opts, line_index) do
     language = info |> to_string() |> String.trim() |> empty_to_nil()
-    id = "code-" <> Integer.to_string(:erlang.phash2({code, line_index}))
+    id = "code-" <> Integer.to_string(Keyword.get(opts, :code_offset, 0))
     focused_id = Keyword.get(opts, :focused_element_id)
     focused? = id == focused_id
     border_style = if focused?, do: Style.new(fg: :cyan, attrs: [:bold]), else: @code_border
@@ -275,7 +280,9 @@ defmodule TermUI.Markdown do
   defp render_nodes_without_spacing(nodes, width, opts, line_index) do
     {lines, elements, _index} =
       Enum.reduce(nodes, {[], [], line_index}, fn node, {lines, elements, index} ->
-        {node_lines, node_elements} = render_block(node, width, opts, index)
+        {node_lines, node_elements} =
+          render_block(node, width, code_options(opts, elements), index)
+
         {lines ++ node_lines, elements ++ node_elements, index + length(node_lines)}
       end)
 
@@ -283,6 +290,8 @@ defmodule TermUI.Markdown do
   end
 
   defp inline(nodes, style), do: Enum.flat_map(nodes, &inline_node(&1, style))
+  defp inline_node(%MDEx.SoftBreak{}, style), do: [{" ", style}]
+  defp inline_node(%MDEx.LineBreak{}, style), do: [{"\n", style}]
   defp inline_node(%MDEx.Text{literal: literal}, style), do: [{literal, style}]
 
   defp inline_node(%MDEx.Code{literal: literal}, style),

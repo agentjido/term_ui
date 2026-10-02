@@ -344,4 +344,70 @@ defmodule TermUI.Backend.InputBufferTest do
       end
     end
   end
+
+  test "complete input and consecutive pastes keep their events at every split point" do
+    alias TermUI.Event
+    content = String.duplicate("p", 2_000) <> "\r"
+    data = "x\e[200~" <> content <> "\e[201~\e[200~second\r\e[201~z"
+    expected = [Event.text("x"), Event.paste(content), Event.paste("second\r"), Event.text("z")]
+
+    for split <- 0..byte_size(data) do
+      first = binary_part(data, 0, split)
+      second = binary_part(data, split, byte_size(data) - split)
+
+      {events, state} =
+        Enum.reduce([first, second], {[], %{input_buffer: "", paste_state: nil}}, fn chunk,
+                                                                                     {events,
+                                                                                      state} ->
+          state =
+            InputBuffer.append_with_limit(state, chunk, :input_buffer,
+              paste_aware: true,
+              log: false
+            )
+
+          {parsed, remaining} = EscapeParser.parse(state.input_buffer)
+          {events ++ parsed, %{state | input_buffer: remaining}}
+        end)
+
+      assert Enum.map(events, &event_value/1) == Enum.map(expected, &event_value/1),
+             "split #{split}"
+
+      assert state.input_buffer == ""
+      assert state.paste_state == nil
+    end
+  end
+
+  test "only an incomplete remainder is limited after complete regular input" do
+    state =
+      InputBuffer.append_with_limit(
+        %{input_buffer: "", paste_state: nil},
+        String.duplicate("a", 2_000) <> "\e[",
+        :input_buffer,
+        paste_aware: true,
+        log: false
+      )
+
+    {events, remaining} = EscapeParser.parse(state.input_buffer)
+    assert length(events) == 2_000
+    assert remaining == "\e["
+  end
+
+  test "an oversized paste keeps earlier input and recovers into a second paste" do
+    data = "x\e[200~" <> :binary.copy("p", 8 * 1024 * 1024 + 1) <> "\e[201~\e[200~ok\r\e[201~"
+
+    state =
+      InputBuffer.append_with_limit(%{input_buffer: "", paste_state: nil}, data, :input_buffer,
+        paste_aware: true,
+        log: false
+      )
+
+    assert {[text, paste], ""} = EscapeParser.parse(state.input_buffer)
+    assert event_value(text) == {:text, "x"}
+    assert event_value(paste) == {:paste, "ok\r"}
+    assert state.paste_state == nil
+  end
+
+  defp event_value(%TermUI.Event.Text{text: text}), do: {:text, text}
+  defp event_value(%TermUI.Event.Paste{content: content}), do: {:paste, content}
+  defp event_value(event), do: event
 end

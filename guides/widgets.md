@@ -390,3 +390,34 @@ not read or write layout files.
 routes traversal events through an application-owned order. `TermUI.Shortcut`
 routes chords and timestamp-bounded sequences to application messages. These
 modules do not use registries or services.
+
+## Scroll dimensions
+
+Pass the current child dimensions to scrollable widgets. Use the same size
+for input and rendering:
+
+```elixir
+{viewport, messages} = TermUI.Widget.Viewport.update(event, viewport, dimensions)
+frame = TermUI.Widget.Viewport.view(viewport, dimensions)
+```
+
+`TermUI.Widget.update(module, event, state, dimensions)` calls the optional
+`update/3` callback. It falls back to `update/2` for other widgets.
+`TermUI.Widget.Router.update(route, event, parent, dimensions)` supplies this
+size through a child route. Existing `update/2` calls remain supported.
+`set_dimensions/2` stores the size for later calls. Set it again after resize.
+Views do not change state.
+
+Viewport bounds exclude reserved scrollbar rows and columns. LogViewer uses
+entry offsets. Stream uses item offsets and reserves one status row. Wrapped
+entries and items can use more than one display row; these two offsets still
+count entries and items. Before a size is supplied, navigation uses a one-row
+body. `page_size` controls Page Up and Page Down movement only.
+
+MarkdownViewer code IDs identify blocks in document order. Their IDs do not
+change with view width. Render metadata reports the rows at the supplied
+width. A focus anchor resolves against that result. Scroll messages contain
+a row offset, `:end`, `{:end, distance}`, or `{:element, id, relative_rows}`.
+Distance is measured in rows from the last page. This lets Up after End and
+append stay near the end through resize. Applications must treat code IDs as
+opaque values.

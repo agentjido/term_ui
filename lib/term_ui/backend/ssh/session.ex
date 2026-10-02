@@ -52,6 +52,7 @@ defmodule TermUI.Backend.SSH.Session do
             in_flight: nil,
             pending_frame: nil,
             cleanup: nil,
+            cleanup_sent?: false,
             last_frame: nil,
             redraw?: false
           }
@@ -413,6 +414,7 @@ defmodule TermUI.Backend.SSH.Session do
   defp queue_frame(state, frame), do: %{state | pending_frame: frame}
 
   defp queue_cleanup(%{connected?: false} = state), do: state
+  defp queue_cleanup(%{cleanup_sent?: true} = state), do: state
   defp queue_cleanup(%{cleanup: cleanup} = state) when not is_nil(cleanup), do: state
 
   defp queue_cleanup(state) do
@@ -484,7 +486,10 @@ defmodule TermUI.Backend.SSH.Session do
   end
 
   defp dispatch_next(%{cleanup: cleanup} = state) when is_binary(cleanup) do
-    state |> Map.put(:cleanup, nil) |> start_output(:cleanup, cleanup, nil)
+    state
+    |> Map.put(:cleanup, nil)
+    |> Map.put(:cleanup_sent?, true)
+    |> start_output(:cleanup, cleanup, nil)
   end
 
   defp dispatch_next(state), do: maybe_finish(state)

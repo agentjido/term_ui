@@ -13,13 +13,15 @@ defmodule TermUI.Widget.LogViewer do
         }
   @type t :: %__MODULE__{
           entries: [entry()],
+          dimensions: TermUI.Widget.dimensions() | nil,
           limit: pos_integer(),
           offset: non_neg_integer(),
           follow: boolean(),
           filter: String.t() | nil,
           page_size: pos_integer()
         }
-  defstruct entries: [],
+  defstruct dimensions: nil,
+            entries: [],
             limit: 10_000,
             offset: 0,
             follow: true,
@@ -29,6 +31,7 @@ defmodule TermUI.Widget.LogViewer do
   @impl true
   def init(opts) do
     %__MODULE__{
+      dimensions: Keyword.get(opts, :dimensions),
       entries:
         opts
         |> Keyword.get(:entries, [])
@@ -49,10 +52,12 @@ defmodule TermUI.Widget.LogViewer do
   def update(%Event.Key{key: :home}, state), do: {%{state | offset: 0, follow: false}, []}
 
   def update(%Event.Key{key: :end}, state),
-    do: {%{state | offset: max(length(filtered(state)) - state.page_size, 0), follow: true}, []}
+    do: {%{state | offset: maximum_offset(state), follow: true}, []}
 
   def update(%Event.Text{text: "f"}, state),
-    do: {%{state | follow: not state.follow}, [{:follow, not state.follow}]}
+    do:
+      {%{state | offset: current_offset(state), follow: not state.follow},
+       [{:follow, not state.follow}]}
 
   def update(_event, state), do: {state, []}
 
@@ -83,26 +88,37 @@ defmodule TermUI.Widget.LogViewer do
   def append(state, entry) do
     entries = Enum.take(state.entries ++ [normalize(entry)], -state.limit)
 
-    %{
-      state
-      | entries: entries,
-        offset:
-          if(state.follow, do: max(length(entries) - state.page_size, 0), else: state.offset)
-    }
+    next = %{state | entries: entries}
+    %{next | offset: current_offset(next)}
   end
 
   @doc "Changes the case-insensitive text filter."
   @spec set_filter(t(), String.t() | nil) :: t()
   def set_filter(state, filter), do: %{state | filter: filter, offset: 0}
 
-  defp scroll(state, delta) do
-    offset = Helpers.scroll(state.offset, delta, length(filtered(state)), state.page_size)
+  @doc "Stores the current child size and bounds the entry offset."
+  @spec set_dimensions(t(), TermUI.Widget.dimensions()) :: t()
+  def set_dimensions(state, {width, height} = dimensions) when width > 0 and height > 0 do
+    next = %{state | dimensions: dimensions}
+    %{next | offset: current_offset(next)}
+  end
 
-    {%{
-       state
-       | offset: offset,
-         follow: offset == Helpers.max_scroll(length(filtered(state)), state.page_size)
-     }, [{:scrolled, offset}]}
+  @impl true
+  def update(event, state, dimensions), do: update(event, set_dimensions(state, dimensions))
+
+  defp scroll(state, delta) do
+    maximum = maximum_offset(state)
+    offset = Helpers.clamp(current_offset(state) + delta, 0, maximum)
+    {%{state | offset: offset, follow: offset == maximum}, [{:scrolled, offset}]}
+  end
+
+  defp current_offset(state),
+    do:
+      if(state.follow, do: maximum_offset(state), else: min(state.offset, maximum_offset(state)))
+
+  defp maximum_offset(state) do
+    height = if state.dimensions, do: elem(state.dimensions, 1), else: 1
+    max(length(filtered(state)) - height, 0)
   end
 
   defp filtered(%{filter: filter} = state) when filter in [nil, ""], do: state.entries

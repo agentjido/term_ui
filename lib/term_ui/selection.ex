@@ -107,11 +107,11 @@ defmodule TermUI.Selection do
   def replace(%__MODULE__{} = selection, text, replacement)
       when is_binary(text) and is_binary(replacement) do
     graphemes = String.graphemes(text)
-    inserted = String.graphemes(replacement)
 
     {start, finish} = clamped_range(selection, Kernel.length(graphemes)) || {0, 0}
-    value = Enum.take(graphemes, start) ++ inserted ++ Enum.drop(graphemes, finish)
-    {Enum.join(value), start + Kernel.length(inserted), new()}
+    prefix = Enum.join(Enum.take(graphemes, start)) <> replacement
+    value = prefix <> Enum.join(Enum.drop(graphemes, finish))
+    {value, min(grapheme_count(prefix), grapheme_count(value)), new()}
   end
 
   @doc "Selects all text."

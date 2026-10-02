@@ -316,7 +316,7 @@ defmodule TermUI.TermUtils do
       # Either it's a known safe flag
       # Or it's a numeric argument (for min/time)
       arg in safe_flags or
-        (match?(<<_::utf8>>, arg) and String.length(arg) < 32)
+        valid_stty_number?(arg) or valid_saved_stty_settings?(arg)
     end)
     |> if do
       :ok
@@ -325,6 +325,23 @@ defmodule TermUI.TermUtils do
       {:error, :invalid_arguments}
     end
   end
+
+  defp valid_stty_number?(arg) when is_binary(arg) do
+    byte_size(arg) <= 6 and Regex.match?(~r/^[0-9]+$/, arg) and
+      String.to_integer(arg) <= 65_535
+  end
+
+  defp valid_stty_number?(_arg), do: false
+
+  defp valid_saved_stty_settings?(arg) when is_binary(arg) do
+    byte_size(arg) < 256 and
+      Regex.match?(
+        ~r/^(?:[0-9a-fA-F]+(?::[0-9a-fA-F]+)+|gfmt1(?::[a-z][a-z0-9]*=[0-9a-fA-F]+)+)$/,
+        arg
+      )
+  end
+
+  defp valid_saved_stty_settings?(_arg), do: false
 
   # Validates test command arguments.
   #

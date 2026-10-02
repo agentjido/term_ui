@@ -153,10 +153,10 @@ defmodule TermUI.Widget.MarkdownViewerTest do
     assert {state, []} = MarkdownViewer.update(Event.key(:end), state)
     assert state.scroll == :end
 
-    assert {state, [{:scrolled, 3}]} =
+    assert {state, [{:scrolled, :end}]} =
              MarkdownViewer.update(Event.mouse(:scroll_down, nil, 0, 0), state)
 
-    assert {state, [{:scrolled, 0}]} =
+    assert {state, [{:scrolled, {:end, 3}}]} =
              MarkdownViewer.update(Event.mouse(:scroll_up, nil, 0, 0), state)
 
     assert {state, []} = MarkdownViewer.update(Event.key(:home), state)
@@ -224,5 +224,87 @@ defmodule TermUI.Widget.MarkdownViewerTest do
     document = Document.new("old", content_limit: 4) |> Document.replace("new value")
     assert document.content == "alue"
     assert String.valid?(document.content)
+  end
+
+  test "soft and hard Markdown breaks survive paragraphs lists quotes and emphasis" do
+    for {source, expected} <- [
+          {"one\ntwo", ["one two"]},
+          {"one  \ntwo", ["one", "two"]},
+          {"- one\n  two", ["• one two"]},
+          {"> one  \n> two", ["│ one", "│ two"]},
+          {"*one\ntwo*", ["one two"]},
+          {"**one  \ntwo**", ["one", "two"]}
+        ] do
+      rows = Markdown.render(source, 30)
+      frame = Frame.from_rows(rows, 30, length(rows))
+
+      assert Enum.map(1..frame.height, &String.trim_trailing(Frame.row_text(frame, &1))) ==
+               expected
+    end
+
+    frame = Markdown.render("**one  \ntwo**", 30) |> Frame.from_rows(30, 2)
+    assert :bold in Frame.cell(frame, 2, 1).attrs
+  end
+
+  test "code IDs and focus survive width changes duplicate and nested blocks" do
+    source =
+      String.duplicate("word ", 12) <>
+        "\n\n```elixir\nx\n```\n\n> ```elixir\n> x\n> ```\n\n- ```elixir\n  x\n  ```"
+
+    document = Document.new(source)
+    ids = Enum.map(Markdown.code_blocks(document), & &1.id)
+    assert length(ids) == 3
+    assert length(Enum.uniq(ids)) == 3
+
+    for width <- [80, 10, 20] do
+      result = Markdown.render_with_elements(document, width)
+      assert Enum.map(result.elements, & &1.id) == ids
+      assert Enum.map(Markdown.render_with_elements(source, width).elements, & &1.id) == ids
+
+      {state, _} =
+        MarkdownViewer.update(
+          Event.key(:tab, modifiers: [:shift]),
+          MarkdownViewer.init(content: source)
+        )
+
+      frame = MarkdownViewer.view(state, {width, 4})
+
+      assert Enum.any?(frame.cells, fn {_position, cell} ->
+               cell.char == "┌" and cell.fg == :cyan
+             end)
+
+      element = List.last(result.elements)
+      offset = min(element.start_line, max(result.content_height - 4, 0))
+      assert Frame.row_text(frame, element.start_line - offset + 1) =~ "┌"
+      assert MarkdownViewer.view(state, {width, 4}) == frame
+    end
+  end
+
+  test "End scroll retains distance through Up wheel page movement append and resize" do
+    content = Enum.map_join(1..20, "\n\n", &Integer.to_string/1)
+    state = MarkdownViewer.init(content: content, page_size: 3)
+    {state, []} = MarkdownViewer.update(Event.key(:end), state)
+    {state, [{:scrolled, {:end, 1}}]} = MarkdownViewer.update(Event.key(:up), state)
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 3}), 2)) == "19"
+
+    {state, [{:scrolled, {:end, 4}}]} =
+      MarkdownViewer.update(Event.mouse(:scroll_up, nil, 0, 0), state)
+
+    {state, [{:scrolled, {:end, 1}}]} = MarkdownViewer.update(Event.key(:page_down), state)
+    {state, [{:scrolled, :end}]} = MarkdownViewer.update(Event.key(:down), state)
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 3}), 3)) == "20"
+    state = MarkdownViewer.append(state, "\n\n21")
+    {state, _} = MarkdownViewer.update(Event.key(:up), state, {10, 3})
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 3}), 2)) == "20"
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 5}), 4)) == "20"
+
+    state =
+      Enum.reduce(1..100, state, fn _, state ->
+        MarkdownViewer.update(Event.key(:up), state, {10, 3}) |> elem(0)
+      end)
+
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 3}), 1)) == "1"
+    {state, _} = MarkdownViewer.update(Event.key(:down), state, {10, 3})
+    assert String.trim(Frame.row_text(MarkdownViewer.view(state, {10, 3}), 2)) == "2"
   end
 end

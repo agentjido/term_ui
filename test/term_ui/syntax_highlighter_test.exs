@@ -91,4 +91,43 @@ defmodule TermUI.SyntaxHighlighterTest do
   test "Makeup adapter skips unsupported languages without requiring Makeup" do
     assert Makeup.highlight("value", "unknown") == :skip
   end
+
+  test "a compiled but unloaded adapter is loaded before callback lookup" do
+    directory =
+      Path.join(System.tmp_dir!(), "term-ui-adapter-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(directory)
+
+    [{module, beam}] =
+      Code.compile_string("""
+      defmodule TermUI.UnloadedTestAdapter do
+        def highlight("raise", _), do: raise("failure")
+        def highlight("invalid", _), do: {:ok, [{:keyword, {:bad}}]}
+        def highlight(source, _), do: {:ok, [{:keyword, source}]}
+      end
+      """)
+
+    File.write!(Path.join(directory, Atom.to_string(module) <> ".beam"), beam)
+    :code.purge(module)
+    :code.delete(module)
+    Code.prepend_path(directory)
+
+    on_exit(fn ->
+      Code.delete_path(directory)
+      :code.purge(module)
+      :code.delete(module)
+      File.rm_rf!(directory)
+    end)
+
+    assert :code.is_loaded(module) == false
+    assert [{"if", %Style{fg: :magenta}}] = SyntaxHighlighter.spans("if", nil, adapter: module)
+
+    assert [{"if", %Style{fg: :yellow}}] =
+             SyntaxHighlighter.spans("if", nil, adapter: TermUI.MissingTestAdapter)
+
+    for source <- ["raise", "invalid"] do
+      assert [{^source, %Style{fg: :yellow}}] =
+               SyntaxHighlighter.spans(source, nil, adapter: module)
+    end
+  end
 end
