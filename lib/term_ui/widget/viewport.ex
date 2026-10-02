@@ -9,7 +9,7 @@ defmodule TermUI.Widget.Viewport do
 
   @behaviour TermUI.Widget
 
-  alias TermUI.{DisplayWidth, Event, Frame}
+  alias TermUI.{Cell, Event, Frame, Style}
   alias TermUI.Widget.{Helpers, ScrollBar}
 
   @type t :: %__MODULE__{
@@ -67,7 +67,9 @@ defmodule TermUI.Widget.Viewport do
   def update(%Event.Key{key: :page_down}, state), do: scroll(state, 0, state.page_size)
 
   def update(%Event.Key{key: :home, modifiers: modifiers}, state) do
-    if :ctrl in modifiers, do: {%{state | scroll_y: 0}, []}, else: {%{state | scroll_x: 0}, []}
+    if :ctrl in modifiers,
+      do: {%{state | scroll_y: 0, follow_end: false}, []},
+      else: {%{state | scroll_x: 0}, []}
   end
 
   def update(%Event.Key{key: :end, modifiers: modifiers}, state) do
@@ -107,17 +109,25 @@ defmodule TermUI.Widget.Viewport do
 
     offset = geometry.scroll_y
 
-    rows =
+    content =
       state.rows
       |> Enum.slice(offset, geometry.viewport_height)
-      |> Enum.map(fn row ->
-        row |> plain_text() |> drop_width(geometry.scroll_x) |> Frame.fit(geometry.viewport_width)
+      |> Enum.with_index(1)
+      |> Enum.reduce(Frame.new(geometry.viewport_width, geometry.viewport_height), fn {row, index},
+                                                                                      frame ->
+        row
+        |> row_cells()
+        |> Enum.reduce({frame, 1}, fn cell, {acc, column} ->
+          {Frame.put_cell(acc, index, column - geometry.scroll_x, cell),
+           column + Cell.width(cell)}
+        end)
+        |> elem(0)
       end)
 
     base =
       Frame.new(width, height)
       |> Frame.overlay(
-        Helpers.frame(rows, {geometry.viewport_width, geometry.viewport_height}),
+        content,
         1,
         1
       )
@@ -172,8 +182,7 @@ defmodule TermUI.Widget.Viewport do
   def content_dimensions(state) do
     width =
       state.rows
-      |> Enum.map(&plain_text/1)
-      |> Enum.map(&DisplayWidth.width/1)
+      |> Enum.map(fn row -> row |> row_cells() |> Enum.map(&Cell.width/1) |> Enum.sum() end)
       |> Enum.max(fn -> 0 end)
 
     {width, length(state.rows)}
@@ -345,26 +354,25 @@ defmodule TermUI.Widget.Viewport do
 
   defp normalize_content(content) when is_list(content), do: content
   defp normalize_content(content), do: [to_string(content)]
-  defp plain_text(row) when is_binary(row), do: row
 
-  defp plain_text(row),
-    do:
-      Enum.map_join(row, fn
-        {text, _style} -> IO.iodata_to_binary(text)
-        text -> IO.iodata_to_binary(text)
-      end)
+  defp row_cells(row) do
+    spans =
+      if is_list(row) and :io_lib.printable_unicode_list(row),
+        do: [IO.iodata_to_binary(row)],
+        else: Helpers.normalize_row(row)
 
-  defp drop_width(text, 0), do: text
-  defp drop_width(text, width), do: text |> String.graphemes() |> do_drop_width(width)
+    Enum.flat_map(spans, fn span ->
+      {text, style} =
+        case span do
+          {text, %Style{} = style} -> {text, style}
+          text -> {text, Style.new()}
+        end
 
-  defp do_drop_width(graphemes, width) when width <= 0, do: Enum.join(graphemes)
-  defp do_drop_width([], _width), do: ""
-
-  defp do_drop_width([grapheme | rest], width) do
-    grapheme_width = max(DisplayWidth.width(grapheme), 0)
-
-    if grapheme_width <= width,
-      do: do_drop_width(rest, width - grapheme_width),
-      else: " " <> Enum.join(rest)
+      text
+      |> IO.iodata_to_binary()
+      |> String.replace(["\r", "\n"], " ")
+      |> String.graphemes()
+      |> Enum.map(&Style.to_cell(style, &1))
+    end)
   end
 end

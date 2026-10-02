@@ -64,7 +64,7 @@ releases the runtime. A reconnect starts a new session with a complete frame.
 @callback poll_event(state(), non_neg_integer()) ::
             {:ok, TermUI.Event.t(), state()} | {:timeout, state()} | {:error, term(), state()}
 @callback resize(state(), {rows, columns}) :: {:ok, state()} | {:error, term()}
-@callback shutdown(state(), term()) :: :ok
+@callback shutdown(state(), term()) :: :ok | {:error, term()}
 ```
 
 `clipboard/2` is optional. The runtime returns a structured unsupported error
@@ -75,7 +75,12 @@ The size at the backend boundary is `{rows, columns}`. The runtime converts it
 to application dimensions `{columns, rows}`.
 
 `init/1` must not leave partial terminal state after an error. `shutdown/2`
-must be safe during error cleanup. `draw/2` must retain the last successful
+must be safe during error cleanup. Local shutdown waits for cleanup to finish.
+SSH shutdown waits until cleanup is sent, after earlier queued output completes
+or fails. Its acknowledgement can arrive after the application terminate
+callback. Each SSH packet uses the configured output deadline. A failed cleanup
+returns an error; a stopped owner does not prove terminal restoration.
+`draw/2` must retain the last successful
 frame or equivalent backend state so that a later frame can clear old cells.
 
 `TermUI.Test.DeterministicBackend` is the public v2 test boundary. It uses a

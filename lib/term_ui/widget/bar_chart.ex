@@ -46,12 +46,15 @@ defmodule TermUI.Widget.BarChart do
       )
 
     label_width =
-      data |> Enum.map(&String.length(&1.label)) |> Enum.max(fn -> 0 end) |> min(div(width, 3))
+      data
+      |> Enum.map(&Helpers.text_width(&1.label))
+      |> Enum.max(fn -> 0 end)
+      |> min(div(width, 3))
 
     rows =
       Enum.map(data, fn datum ->
         value_text = if state.show_values, do: " " <> ChartHelpers.number(datum.value), else: ""
-        bar_width = max(width - label_width - String.length(value_text) - 1, 1)
+        bar_width = max(width - label_width - Helpers.text_width(value_text) - 1, 1)
         fill = round(ChartHelpers.normalize(datum.value, minimum, maximum) * bar_width)
 
         [

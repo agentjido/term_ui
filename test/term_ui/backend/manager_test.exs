@@ -287,7 +287,9 @@ defmodule TermUI.Backend.ManagerTest do
     assert :ok = Manager.activate(manager)
     assert %{active?: true} = :sys.get_state(manager)
     assert :ok = Manager.close(manager, :normal)
-    assert :ok = Manager.close(manager, :already_closed)
+
+    assert {:error, {:backend_manager_exit, {:noproc, _}}} =
+             Manager.close(manager, :already_closed)
   end
 
   test "resume restores through the backend owner and reports callback failures" do
@@ -444,7 +446,10 @@ defmodule TermUI.Backend.ManagerTest do
   test "cleanup contains raised and thrown shutdown failures" do
     for mode <- [:shutdown_raise, :shutdown_throw] do
       manager = start_exercising_manager(mode, size_poll_interval: :disabled)
-      assert :ok = Manager.close(manager, :test_complete)
+
+      assert {:error, {:backend, ExercisingBackend, :shutdown, _reason}} =
+               Manager.close(manager, :test_complete)
+
       assert_receive {:exercising_backend, :shutdown, :test_complete}
     end
   end

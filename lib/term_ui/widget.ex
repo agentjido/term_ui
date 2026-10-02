@@ -69,7 +69,7 @@ defmodule TermUI.Widget do
   @spec mouse(module(), Event.Mouse.t(), state(), dimensions()) :: {state(), [message()]}
   def mouse(module, %Event.Mouse{} = event, state, {width, height} = dimensions)
       when is_atom(module) and width > 0 and height > 0 do
-    if function_exported?(module, :mouse, 3),
+    if Code.ensure_loaded?(module) and function_exported?(module, :mouse, 3),
       do: module.mouse(event, state, dimensions),
       else: update(module, event, state, dimensions)
   end

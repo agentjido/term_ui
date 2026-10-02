@@ -36,7 +36,8 @@ defmodule TermUI.Backend do
               | {:timeout, state()}
               | {:error, term(), state()}
   @callback resize(state(), size()) :: {:ok, state()} | {:error, term()}
-  @callback shutdown(state(), term()) :: :ok
+  @doc "Completes local cleanup, or sends remote cleanup before returning; reports failure."
+  @callback shutdown(state(), term()) :: :ok | {:error, term()}
 
   @optional_callbacks clipboard: 2, invalidate: 1, resume: 1
 end

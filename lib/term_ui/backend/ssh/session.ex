@@ -53,6 +53,7 @@ defmodule TermUI.Backend.SSH.Session do
             pending_frame: nil,
             cleanup: nil,
             cleanup_sent?: false,
+            shutdown_waiter: nil,
             last_frame: nil,
             redraw?: false
           }
@@ -150,14 +151,18 @@ defmodule TermUI.Backend.SSH.Session do
 
   def handle_call({:stop, _reason}, _from, state), do: {:reply, :ok, state}
 
-  def handle_call({:backend_shutdown, reason}, _from, state) do
+  def handle_call({:backend_shutdown, reason}, from, state) do
     state =
       state
       |> Map.put(:status, :stopping)
-      |> Map.put(:stop_reason, reason)
+      |> Map.update!(:stop_reason, fn current ->
+        if current == :normal, do: reason, else: current
+      end)
+      |> Map.put(:shutdown_waiter, from)
       |> queue_cleanup()
+      |> release_shutdown_waiter()
 
-    {:reply, :ok, state}
+    {:noreply, state}
   end
 
   def handle_call(:info, _from, state) do
@@ -268,6 +273,7 @@ defmodule TermUI.Backend.SSH.Session do
     cancel_poll_waiter(state.poll_waiter)
     stop_in_flight(state.in_flight)
     Process.demonitor(state.owner_monitor, [:flush])
+    reply_shutdown_waiter(state, {:error, :session_stopped})
 
     if Process.alive?(state.runtime) do
       Process.unlink(state.runtime)
@@ -490,6 +496,7 @@ defmodule TermUI.Backend.SSH.Session do
     |> Map.put(:cleanup, nil)
     |> Map.put(:cleanup_sent?, true)
     |> start_output(:cleanup, cleanup, nil)
+    |> release_shutdown_waiter()
   end
 
   defp dispatch_next(state), do: maybe_finish(state)
@@ -508,6 +515,7 @@ defmodule TermUI.Backend.SSH.Session do
     }
 
     state = fail_poll_waiter(state, {:output_failed, reason})
+    state = release_shutdown_waiter(state)
     send_backend_failure(state, {:output_failed, reason})
     maybe_finish(state)
   end
@@ -526,6 +534,7 @@ defmodule TermUI.Backend.SSH.Session do
     }
 
     state = release_poll_waiter(state)
+    state = release_shutdown_waiter(state)
     if not state.runtime_stopped?, do: Runtime.shutdown(state.runtime)
     state = maybe_finish(state)
     session_reply(state)
@@ -553,6 +562,21 @@ defmodule TermUI.Backend.SSH.Session do
   end
 
   defp release_poll_waiter(state), do: state
+
+  defp release_shutdown_waiter(%{connected?: false} = state) do
+    reply_shutdown_waiter(state, {:error, state.stop_reason})
+    %{state | shutdown_waiter: nil}
+  end
+
+  defp release_shutdown_waiter(%{cleanup_sent?: true} = state) do
+    reply_shutdown_waiter(state, :ok)
+    %{state | shutdown_waiter: nil}
+  end
+
+  defp release_shutdown_waiter(state), do: state
+
+  defp reply_shutdown_waiter(%{shutdown_waiter: nil}, _result), do: :ok
+  defp reply_shutdown_waiter(%{shutdown_waiter: from}, result), do: GenServer.reply(from, result)
 
   defp ensure_cleanup_after_runtime_exit(%{connected?: true, cleanup: nil} = state),
     do: queue_cleanup(state)

@@ -128,6 +128,10 @@ defmodule TermUI.Widget.TreeView do
   def set_children(state, id, children),
     do: normalize_cursor(%{state | nodes: replace_children(state.nodes, id, children)})
 
+  @doc "Replaces root nodes and keeps the cursor within enabled visible nodes."
+  @spec set_nodes(t(), [tree_node()]) :: t()
+  def set_nodes(state, nodes), do: normalize_cursor(%{state | nodes: nodes})
+
   defp move(state, delta), do: move_to(state, state.cursor + delta)
 
   defp move_by_rows(state, delta) do

@@ -112,7 +112,7 @@ defmodule TermUI.Widget.TextArea do
     text =
       if state.value == "" and state.placeholder != "", do: state.placeholder, else: state.value
 
-    rows = Frame.wrap(text, width)
+    rows = text |> String.replace(["\r\n", "\r"], "\n") |> Frame.wrap(width)
     layout = text_layout(state.value, width)
     {cursor_column, cursor_row} = Map.fetch!(layout.cursors, state.cursor)
     rows = rows ++ List.duplicate("", max(cursor_row - length(rows), 0))
@@ -266,7 +266,7 @@ defmodule TermUI.Widget.TextArea do
   defp line_start(state) do
     before = Enum.take(String.graphemes(state.value), state.cursor)
 
-    case Enum.find_index(Enum.reverse(before), &(&1 == "\n")) do
+    case Enum.find_index(Enum.reverse(before), &line_break?/1) do
       nil -> 0
       distance -> state.cursor - distance
     end
@@ -275,24 +275,30 @@ defmodule TermUI.Widget.TextArea do
   defp line_end(state) do
     after_cursor = Enum.drop(String.graphemes(state.value), state.cursor)
 
-    case Enum.find_index(after_cursor, &(&1 == "\n")) do
+    case Enum.find_index(after_cursor, &line_break?/1) do
       nil -> count(state.value)
       distance -> state.cursor + distance
     end
   end
 
   defp vertical(state, delta) do
-    lines = String.split(state.value, "\n", trim: false)
-    before = Enum.take(String.graphemes(state.value), state.cursor) |> Enum.join()
-    row = before |> String.split("\n", trim: false) |> length() |> Kernel.-(1)
+    graphemes = String.graphemes(state.value)
 
-    column =
-      before |> String.split("\n", trim: false) |> List.last() |> String.graphemes() |> length()
+    starts = [
+      0
+      | for({grapheme, index} <- Enum.with_index(graphemes), line_break?(grapheme), do: index + 1)
+    ]
 
-    target_row = Helpers.clamp(row + delta, 0, length(lines) - 1)
-    prefix = lines |> Enum.take(target_row) |> Enum.map(&(count(&1) + 1)) |> Enum.sum()
-    prefix + min(column, lines |> Enum.at(target_row) |> count())
+    row = Enum.count(starts, &(&1 <= state.cursor)) - 1
+    column = state.cursor - Enum.at(starts, row)
+    target_row = Helpers.clamp(row + delta, 0, length(starts) - 1)
+    start = Enum.at(starts, target_row)
+    finish = Enum.at(starts, target_row + 1, length(graphemes) + 1) - 1
+
+    start + min(column, finish - start)
   end
+
+  defp line_break?(grapheme), do: grapheme in ["\n", "\r\n", "\r"]
 
   defp text_layout(text, width) do
     text
@@ -301,7 +307,7 @@ defmodule TermUI.Widget.TextArea do
     |> Enum.reduce(
       %{cursors: %{0 => {1, 1}}, cells: [], column: 1, row: 1, soft_wrapped: false},
       fn
-        {"\n", index}, layout ->
+        {grapheme, index}, layout when grapheme in ["\n", "\r\n", "\r"] ->
           next_row = if layout.soft_wrapped, do: layout.row, else: layout.row + 1
           next = {1, next_row}
 
@@ -328,7 +334,8 @@ defmodule TermUI.Widget.TextArea do
 
           %{
             layout
-            | cursors: Map.put(layout.cursors, index + 1, next),
+            | cursors:
+                layout.cursors |> Map.put(index, {column, row}) |> Map.put(index + 1, next),
               cells: [{index, grapheme, column, row} | layout.cells],
               column: elem(next, 0),
               row: elem(next, 1),

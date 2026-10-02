@@ -6,6 +6,10 @@ defmodule TermUI.Widget.DiffViewer do
   `:unified_diff`. The viewer supports `:unified` and `:split` modes. Press
   `s` to switch modes. Arrow, Page Up, Page Down, Home, End, and mouse-wheel
   events control scrolling.
+
+  Scroll values are display-row offsets, `:end`, or `{:end, distance}`.
+  Supply the view size with `update/3` or `set_dimensions/2` to bound movement.
+  Before a size is supplied, movement from End retains its end distance.
   """
 
   @behaviour TermUI.Widget
@@ -28,14 +32,16 @@ defmodule TermUI.Widget.DiffViewer do
   @type t :: %__MODULE__{
           rows: [row()],
           mode: :unified | :split,
-          scroll: non_neg_integer() | :end,
+          scroll: non_neg_integer() | :end | {:end, non_neg_integer()},
+          dimensions: TermUI.Widget.dimensions() | nil,
           page_size: pos_integer(),
           old_label: String.t(),
           new_label: String.t(),
           context: non_neg_integer()
         }
 
-  defstruct rows: [],
+  defstruct dimensions: nil,
+            rows: [],
             mode: :unified,
             scroll: 0,
             page_size: 20,
@@ -57,6 +63,7 @@ defmodule TermUI.Widget.DiffViewer do
 
     %__MODULE__{
       rows: rows,
+      dimensions: Keyword.get(opts, :dimensions),
       mode: Keyword.get(opts, :mode, :unified),
       page_size: max(Keyword.get(opts, :page_size, 20), 1),
       old_label: opts |> Keyword.get(:old_label, "before") |> to_string(),
@@ -73,23 +80,18 @@ defmodule TermUI.Widget.DiffViewer do
   def update(%Event.Key{key: :home}, state), do: {%{state | scroll: 0}, []}
   def update(%Event.Key{key: :end}, state), do: {%{state | scroll: :end}, []}
   def update(%Event.Text{text: "s"}, state), do: toggle_mode(state)
-  def update(%Event.Text{text: "u"}, state), do: {%{state | mode: :unified}, [{:mode, :unified}]}
+
+  def update(%Event.Text{text: "u"}, state),
+    do: {bound_state(%{state | mode: :unified}), [{:mode, :unified}]}
+
   def update(%Event.Mouse{action: :scroll_up}, state), do: scroll(state, -3)
   def update(%Event.Mouse{action: :scroll_down}, state), do: scroll(state, 3)
   def update(_event, state), do: {state, []}
 
   @impl true
   def view(state, {width, height} = dimensions) do
-    rendered =
-      case state.mode do
-        :split -> split_rows(state, width)
-        :unified -> unified_rows(state, width)
-      end
-
-    offset =
-      if state.scroll == :end,
-        do: max(length(rendered) - height, 0),
-        else: min(state.scroll, max(length(rendered) - height, 0))
+    rendered = rendered_rows(state, width)
+    offset = resolved_offset(state.scroll, max(length(rendered) - height, 0))
 
     Frame.from_rows(
       Enum.slice(rendered, offset, height),
@@ -97,6 +99,14 @@ defmodule TermUI.Widget.DiffViewer do
       elem(dimensions, 1)
     )
   end
+
+  @doc "Stores the current view size and bounds display-row navigation."
+  @spec set_dimensions(t(), TermUI.Widget.dimensions()) :: t()
+  def set_dimensions(state, {width, height} = dimensions) when width > 0 and height > 0,
+    do: bound_state(%{state | dimensions: dimensions})
+
+  @impl true
+  def update(event, state, dimensions), do: update(event, set_dimensions(state, dimensions))
 
   @doc "Builds comparison rows from two texts."
   @spec compare(String.t(), String.t(), pos_integer()) :: [row()]
@@ -437,10 +447,40 @@ defmodule TermUI.Widget.DiffViewer do
   end
 
   defp scroll(state, delta) do
-    scroll = if state.scroll == :end, do: length(state.rows), else: state.scroll
-    scroll = max(scroll + delta, 0)
-    {%{state | scroll: scroll}, [{:scrolled, scroll}]}
+    scroll =
+      case state.scroll do
+        :end -> end_scroll(max(-delta, 0))
+        {:end, distance} -> end_scroll(max(distance - delta, 0))
+        offset -> max(offset + delta, 0)
+      end
+
+    next = bound_state(%{state | scroll: scroll})
+    {next, [{:scrolled, next.scroll}]}
   end
+
+  defp bound_state(%{dimensions: nil} = state), do: state
+
+  defp bound_state(state) do
+    {width, height} = state.dimensions
+    maximum = max(length(rendered_rows(state, width)) - height, 0)
+
+    scroll =
+      case state.scroll do
+        :end -> :end
+        {:end, distance} -> end_scroll(min(distance, maximum))
+        offset -> min(offset, maximum)
+      end
+
+    %{state | scroll: scroll}
+  end
+
+  defp rendered_rows(%{mode: :split} = state, width), do: split_rows(state, width)
+  defp rendered_rows(state, width), do: unified_rows(state, width)
+  defp resolved_offset(:end, maximum), do: maximum
+  defp resolved_offset({:end, distance}, maximum), do: max(maximum - distance, 0)
+  defp resolved_offset(offset, maximum), do: min(offset, maximum)
+  defp end_scroll(0), do: :end
+  defp end_scroll(distance), do: {:end, distance}
 
   defp row_style(:added), do: Style.new(fg: :green)
   defp row_style(:removed), do: Style.new(fg: :red)

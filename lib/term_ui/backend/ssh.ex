@@ -177,9 +177,9 @@ defmodule TermUI.Backend.SSH do
   @impl true
   @doc false
   def shutdown(%__MODULE__{} = state, reason) do
-    GenServer.call(state.session, {:backend_shutdown, reason})
+    GenServer.call(state.session, {:backend_shutdown, reason}, :infinity)
   catch
-    :exit, _reason -> :ok
+    :exit, reason -> {:error, {:session_exit, reason}}
   end
 
   defp fetch_session(opts) do

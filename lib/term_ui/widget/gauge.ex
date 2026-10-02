@@ -52,7 +52,7 @@ defmodule TermUI.Widget.Gauge do
     ratio = ratio(state)
     label = if state.label, do: state.label <> " ", else: ""
     value = " " <> ChartHelpers.number(state.value)
-    bar_width = max(width - String.length(label <> value), 1)
+    bar_width = max(width - Helpers.text_width(label <> value), 1)
     fill = round(bar_width * ratio)
     style = Style.new(fg: color(state, ratio))
 

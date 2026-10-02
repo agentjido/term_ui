@@ -100,8 +100,8 @@ defmodule TermUI.Markdown.Document do
   defp line_start_offset(_buffer, line) when line <= 1, do: 0
 
   defp line_start_offset(buffer, line) do
-    case buffer |> :binary.matches("\n") |> Enum.at(line - 2) do
-      {position, length} -> position + length
+    case Regex.scan(~r/\r\n|\r|\n/, buffer, return: :index) |> Enum.at(line - 2) do
+      [{position, length}] -> position + length
       nil -> 0
     end
   end

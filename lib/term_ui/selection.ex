@@ -177,7 +177,7 @@ defmodule TermUI.Selection do
     graphemes
     |> Enum.take(position)
     |> Enum.reverse()
-    |> Enum.find_index(&(&1 == "\n"))
+    |> Enum.find_index(&(&1 in ["\n", "\r\n", "\r"]))
     |> case do
       nil -> 0
       distance -> position - distance
@@ -187,7 +187,7 @@ defmodule TermUI.Selection do
   defp line_finish(graphemes, position) do
     graphemes
     |> Enum.drop(position)
-    |> Enum.find_index(&(&1 == "\n"))
+    |> Enum.find_index(&(&1 in ["\n", "\r\n", "\r"]))
     |> case do
       nil -> Kernel.length(graphemes)
       distance -> position + distance
@@ -196,7 +196,7 @@ defmodule TermUI.Selection do
 
   defp category(grapheme) do
     cond do
-      String.match?(grapheme, ~r/^[\p{L}\p{N}_]$/u) -> :word
+      String.match?(grapheme, ~r/^[\p{L}\p{N}_]\p{M}*$/u) -> :word
       String.match?(grapheme, ~r/^\s$/u) -> :space
       true -> :punctuation
     end

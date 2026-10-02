@@ -194,7 +194,7 @@ defmodule TermUI.Runtime do
       :ok ->
         {width, height} = Frame.clamp_dimensions({columns, rows})
         state = %{state | dimensions: {width, height}, dirty: true}
-        dispatch_event(Event.resize(width, height), state)
+        dispatch_resize(Event.resize(width, height), state)
 
       {:error, stop_reason} ->
         {:stop, stop_reason, %{state | stop_reason: stop_reason}}
@@ -284,9 +284,16 @@ defmodule TermUI.Runtime do
   def terminate(reason, state) do
     _state = cancel_render(state)
     stop_async_tasks(state)
-    BackendManager.close(state.backend_manager, effective_reason(reason, state))
+    cleanup_result = BackendManager.close(state.backend_manager, effective_reason(reason, state))
     LoggerControl.resume(state.logger_token)
-    app_terminate(state.app, effective_reason(reason, state), state.app_state)
+
+    stop_reason =
+      case cleanup_result do
+        :ok -> effective_reason(reason, state)
+        {:error, error} -> error
+      end
+
+    app_terminate(state.app, stop_reason, state.app_state)
     :ok
   end
 
@@ -305,7 +312,7 @@ defmodule TermUI.Runtime do
           {:ok, Map.put(state, :logger_token, logger_token), commands}
 
         {:error, reason} ->
-          BackendManager.close(backend_manager, reason)
+          _cleanup_result = BackendManager.close(backend_manager, reason)
           {:error, reason}
       end
     end
@@ -427,7 +434,7 @@ defmodule TermUI.Runtime do
       :ok ->
         {width, height} = Frame.clamp_dimensions({width, height})
         state = %{state | dimensions: {width, height}, dirty: true}
-        dispatch_event(%{event | width: width, height: height}, state)
+        dispatch_resize(%{event | width: width, height: height}, state)
 
       {:error, stop_reason} ->
         {:stop, stop_reason, %{state | stop_reason: stop_reason}}
@@ -442,6 +449,19 @@ defmodule TermUI.Runtime do
   end
 
   defp process_event(event, state), do: dispatch_event(event, state)
+
+  defp dispatch_resize(event, state) do
+    case dispatch_event(event, state) do
+      {:noreply, %{status: :running} = state} ->
+        case render_now(cancel_render(state)) do
+          {:ok, state} -> {:noreply, state}
+          {:error, reason, state} -> {:stop, reason, %{state | stop_reason: reason}}
+        end
+
+      result ->
+        result
+    end
+  end
 
   defp dispatch_event(event, state) do
     case app_event_to_message(state.app, event, state.app_state) do

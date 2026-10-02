@@ -46,7 +46,7 @@ defmodule TermUI.Widget.Sparkline do
     {minimum, maximum} = range(state.values, min: state.minimum, max: state.maximum)
     prefix = prefix(state, minimum)
     suffix = suffix(state, maximum)
-    sample_width = max(width - String.length(prefix <> suffix), 0)
+    sample_width = max(width - Helpers.text_width(prefix <> suffix), 0)
     values = Enum.take(state.values, -sample_width)
 
     chars = render_values(values, minimum, maximum, state)
@@ -97,7 +97,11 @@ defmodule TermUI.Widget.Sparkline do
   @spec natural_width(t()) :: pos_integer()
   def natural_width(state) do
     {minimum, maximum} = range(state.values, min: state.minimum, max: state.maximum)
-    max(String.length(prefix(state, minimum) <> suffix(state, maximum)) + length(state.values), 1)
+
+    max(
+      Helpers.text_width(prefix(state, minimum) <> suffix(state, maximum)) + length(state.values),
+      1
+    )
   end
 
   @doc "Appends one value and retains at most limit values."

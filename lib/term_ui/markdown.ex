@@ -64,13 +64,13 @@ defmodule TermUI.Markdown do
   def render_with_elements(markdown, width, opts \\ [])
 
   def render_with_elements(%Document{} = document, width, opts) when width > 0 do
-    groups =
-      Enum.map(document.segments, &{:nodes, &1.nodes}) ++
-        if(document.pending == "", do: [], else: [pending_group(document.pending)])
-
-    {lines, elements} = render_groups(groups, width, opts)
-    lines = if lines == [], do: [[""]], else: trim_blank_tail(lines)
-    %{lines: lines, elements: elements, content_height: length(lines)}
+    # Every CommonMark reference definition contains this delimiter, including
+    # definitions within quotes and lists. False matches only cost a full parse.
+    if String.contains?(document.content, "]:") do
+      render_with_elements(document.content, width, opts)
+    else
+      render_cached_document(document, width, opts)
+    end
   end
 
   def render_with_elements(markdown, width, opts) when is_binary(markdown) and width > 0 do
@@ -92,6 +92,16 @@ defmodule TermUI.Markdown do
   @spec code_blocks(String.t() | Document.t()) :: [element()]
   def code_blocks(markdown) do
     render_with_elements(markdown, 80).elements
+  end
+
+  defp render_cached_document(document, width, opts) do
+    groups =
+      Enum.map(document.segments, &{:nodes, &1.nodes}) ++
+        if(document.pending == "", do: [], else: [pending_group(document.pending)])
+
+    {lines, elements} = render_groups(groups, width, opts)
+    lines = if lines == [], do: [[""]], else: trim_blank_tail(lines)
+    %{lines: lines, elements: elements, content_height: length(lines)}
   end
 
   defp render_nodes(nodes, width, opts, start_index \\ 0) do

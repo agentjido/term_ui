@@ -495,8 +495,11 @@ defmodule TermUI.Widget.Menu do
          {%{disabled: false, separator: false}, path, index, _depth},
          state,
          :press
-       ),
-       do: {%{state | open_path: path, cursor: index}, []}
+       ) do
+    if path == state.open_path,
+      do: {%{state | cursor: index}, []},
+      else: {state, []}
+  end
 
   defp mouse_entry(_entry, state, _action), do: {state, []}
 

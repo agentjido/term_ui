@@ -136,6 +136,46 @@ defmodule TermUI.Widget.ScrollDimensionsTest do
 
     assert :code.is_loaded(module) == false
     assert {:state, [{10, 3}]} = Widget.update(module, Event.key(:down), :state, {10, 3})
+
+    assert {:state, [{10, 3}]} =
+             Widget.mouse(module, Event.mouse(:release, :left, 0, 0), :state, {10, 3})
+  end
+
+  test "optional mouse callback is found before the first call in an unloaded widget" do
+    directory =
+      Path.join(System.tmp_dir!(), "term-ui-mouse-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(directory)
+
+    [{module, beam}] =
+      Code.compile_string("""
+      defmodule TermUI.UnloadedMouseWidget do
+        @behaviour TermUI.Widget
+        def init(_), do: :state
+        def view(_, {width, height}), do: TermUI.Frame.new(width, height)
+        def update(_, state), do: {state, [:legacy]}
+        def mouse(_, state, size), do: {state, [{:mouse, size}]}
+      end
+      """)
+
+    File.write!(Path.join(directory, Atom.to_string(module) <> ".beam"), beam)
+    :code.purge(module)
+    :code.delete(module)
+    Code.prepend_path(directory)
+
+    on_exit(fn ->
+      Code.delete_path(directory)
+      :code.purge(module)
+      :code.delete(module)
+      File.rm_rf!(directory)
+    end)
+
+    assert :code.is_loaded(module) == false
+
+    for _ <- 1..2 do
+      assert {:state, [{:mouse, {10, 3}}]} =
+               Widget.mouse(module, Event.mouse(:release, :left, 0, 0), :state, {10, 3})
+    end
   end
 
   defp offset(%Viewport{scroll_y: offset}), do: offset

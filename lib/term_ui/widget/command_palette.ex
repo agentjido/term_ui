@@ -36,10 +36,12 @@ defmodule TermUI.Widget.CommandPalette do
   def mouse(_event, %{visible: false} = state, _dimensions), do: {state, []}
 
   def mouse(%Event.Mouse{x: x, y: y} = event, state, {width, height}) do
-    if x >= 1 and x < width - 1 and y >= 1 and y < height - 1 do
-      inner_dimensions = {max(width - 2, 1), max(height - 2, 1)}
-      local_event = %{event | x: x - 1, y: y - 1}
-      {picker, messages} = PickList.mouse(local_event, state.picker, inner_dimensions)
+    {left, top, inner_width, inner_height} = Dialog.content_rect(dialog(state), {width, height})
+
+    if inner_width > 0 and inner_height > 0 and x >= left and x < left + inner_width and
+         y >= top and y < top + inner_height do
+      local_event = %{event | x: x - left, y: y - top}
+      {picker, messages} = PickList.mouse(local_event, state.picker, {inner_width, inner_height})
       finish(state, picker, messages)
     else
       {state, []}
@@ -62,21 +64,15 @@ defmodule TermUI.Widget.CommandPalette do
     do: TermUI.Frame.new(elem(dimensions, 0), elem(dimensions, 1))
 
   def view(state, dimensions) do
-    content =
-      PickList.view(
-        state.picker,
-        {max(elem(dimensions, 0) - 2, 1), max(elem(dimensions, 1) - 2, 1)}
-      )
+    dialog = dialog(state)
+    {_left, _top, width, height} = Dialog.content_rect(dialog, dimensions)
 
-    dialog =
-      Dialog.init(
-        title: state.title,
-        content: Enum.map(1..content.height, &TermUI.Frame.row_text(content, &1)),
-        buttons: []
-      )
-
-    Dialog.view(dialog, dimensions)
+    if width > 0 and height > 0,
+      do: Dialog.compose(dialog, dimensions, PickList.view(state.picker, {width, height})),
+      else: Dialog.view(dialog, dimensions)
   end
+
+  defp dialog(state), do: Dialog.init(title: state.title, buttons: [])
 
   @doc "Shows and resets the palette query."
   @spec show(t()) :: t()

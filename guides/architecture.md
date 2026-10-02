@@ -102,5 +102,8 @@ meaningful render.
 
 Shutdown has three states: running, final render pending, and stopping. A
 shutdown command or external shutdown request cancels a pending timer, renders
-the newest dirty state, stops effect processes, calls the application terminate
-callback, and closes the backend owner so that it restores the terminal.
+the newest dirty state, stops effect processes, and closes the backend owner
+before it calls the application terminate callback. Local cleanup must finish
+first. SSH cleanup must be sent before that callback; the remote acknowledgement
+can arrive afterward. Output failure or disconnect is reported as a cleanup
+error, not a successful terminal restore.

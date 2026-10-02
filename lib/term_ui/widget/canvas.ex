@@ -99,7 +99,10 @@ defmodule TermUI.Widget.Canvas do
   @doc "Draws a character line with Bresenham's algorithm."
   @spec draw_line(t(), integer(), integer(), integer(), integer(), String.t()) :: t()
   def draw_line(state, x0, y0, x1, y1, char \\ "•") do
-    points(x0, y0, x1, y1) |> Enum.reduce(state, fn {x, y}, acc -> set_char(acc, x, y, char) end)
+    points(x0, y0, x1, y1)
+    |> Enum.reduce(state, fn {x, y}, acc ->
+      if x >= 0 and y >= 0, do: set_char(acc, x, y, char), else: acc
+    end)
   end
 
   @doc "Draws a rectangle."

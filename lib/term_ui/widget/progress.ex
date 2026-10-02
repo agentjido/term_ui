@@ -47,7 +47,7 @@ defmodule TermUI.Widget.Progress do
       if state.show_percent and not state.indeterminate, do: " #{round(percent * 100)}%", else: ""
 
     prefix = if state.label, do: state.label <> " ", else: ""
-    bar_width = max(width - String.length(prefix <> suffix) - 2, 1)
+    bar_width = max(width - Helpers.text_width(prefix <> suffix) - 2, 1)
 
     filled =
       if state.indeterminate, do: rem(state.phase, bar_width), else: round(percent * bar_width)

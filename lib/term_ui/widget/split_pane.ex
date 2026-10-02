@@ -451,7 +451,11 @@ defmodule TermUI.Widget.SplitPane do
         after_pane = Enum.find(current_layout.panes, &(&1.index == separator.after_index))
         pointer = if state.direction == :horizontal, do: event.x, else: event.y
         pair_size = before.size + after_pane.size
-        minimum = min(state.min_size, max(div(pair_size, 2), 1))
+        extent = elem(dimensions, if(state.direction == :horizontal, do: 0, else: 1))
+        count = length(current_layout.panes)
+        available = max(extent - max(count - 1, 0), 0)
+        minimum = if available >= count * state.min_size, do: state.min_size, else: 0
+        distributable = pair_size - 2 * minimum
 
         before_size =
           Helpers.clamp(
@@ -460,15 +464,15 @@ defmodule TermUI.Widget.SplitPane do
             max(pair_size - minimum, minimum)
           )
 
-        state =
-          set_pair_share(
-            state,
-            before.index,
-            after_pane.index,
-            before_size / max(pair_size, 1)
-          )
-
-        {state, [{:resized, resize_message(state, separator_index)}]}
+        if distributable > 0 do
+          # Half a cell keeps both weights positive at the minimum boundary.
+          # The allocation rule rounds this to within one cell of the pointer.
+          share = (before_size - minimum) |> max(0.5) |> min(distributable - 0.5)
+          state = set_pair_share(state, before.index, after_pane.index, share / distributable)
+          {state, [{:resized, resize_message(state, separator_index)}]}
+        else
+          {state, []}
+        end
     end
   end
 
@@ -482,8 +486,9 @@ defmodule TermUI.Widget.SplitPane do
       [{_before, before_index}, {_after, after_index}] ->
         weights = effective_ratios(state)
         pair = Enum.at(weights, before_index, 0.5) + Enum.at(weights, after_index, 0.5)
-        share = Enum.at(weights, before_index, 0.5) / max(pair, 0.0001)
-        state = set_pair_share(state, before_index, after_index, share + delta)
+        share = Enum.at(weights, before_index, 0.5) / pair
+        share = (share + delta) |> max(0.1) |> min(0.9)
+        state = set_pair_share(state, before_index, after_index, share)
         {state, [{:resized, resize_message(state, state.focused_separator)}]}
 
       _other ->
@@ -492,7 +497,7 @@ defmodule TermUI.Widget.SplitPane do
   end
 
   defp set_pair_share(state, before_index, after_index, share) do
-    share = share |> max(0.1) |> min(0.9)
+    share = if state.legacy, do: share |> max(0.1) |> min(0.9), else: share
     ratios = effective_ratios(state)
     pair = Enum.at(ratios, before_index, 0.5) + Enum.at(ratios, after_index, 0.5)
 
@@ -612,7 +617,7 @@ defmodule TermUI.Widget.SplitPane do
 
     remaining = max(available - Enum.sum(base), 0)
     total = Enum.sum(weights)
-    raw = Enum.map(weights, &(&1 / max(total, 0.0001) * remaining))
+    raw = Enum.map(weights, &(&1 / total * remaining))
     floors = Enum.map(raw, &floor/1)
     extra = remaining - Enum.sum(floors)
 

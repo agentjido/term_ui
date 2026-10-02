@@ -1,5 +1,12 @@
 defmodule TermUI.Widget.ProcessMonitor do
-  @moduledoc "A pure process-snapshot table. It does not inspect processes itself."
+  @moduledoc """
+  A pure process-snapshot table. It does not inspect processes itself.
+
+  By default, the complete snapshot is the row identity. Repeated PID values
+  with different snapshot data remain valid. Set `row_id: :pid` to retain
+  selection across metric changes when each PID occurs once. `:row_id` also
+  accepts a key or a function of arity one, with Table's unique-identity rule.
+  """
 
   @behaviour TermUI.Widget
 
@@ -35,7 +42,7 @@ defmodule TermUI.Widget.ProcessMonitor do
       snapshots: snapshots,
       sort: sort,
       descending: descending,
-      table: table(sorted(snapshots, sort, descending))
+      table: table(sorted(snapshots, sort, descending), Keyword.get(opts, :row_id))
     }
   end
 
@@ -84,7 +91,7 @@ defmodule TermUI.Widget.ProcessMonitor do
   defp sorted(snapshots, key, true), do: Enum.sort_by(snapshots, &Map.get(&1, key, 0), :desc)
   defp sorted(snapshots, key, false), do: Enum.sort_by(snapshots, &Map.get(&1, key, 0), :asc)
 
-  defp table(rows) do
+  defp table(rows, row_id) do
     Table.init(
       columns: [
         Column.new(:pid, "PID", width: 16),
@@ -93,7 +100,8 @@ defmodule TermUI.Widget.ProcessMonitor do
         Column.new(:reductions, "Reds", align: :right),
         Column.new(:message_queue_len, "Queue", align: :right)
       ],
-      rows: rows
+      rows: rows,
+      row_id: row_id
     )
   end
 end

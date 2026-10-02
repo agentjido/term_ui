@@ -452,6 +452,9 @@ defmodule TermUI.Style do
   - `:color_16` - converts to named
   """
   @spec convert_for_terminal(color(), :true_color | :color_256 | :color_16) :: color()
+  def convert_for_terminal(:default, mode) when mode in [:true_color, :color_256, :color_16],
+    do: :default
+
   def convert_for_terminal(color, :true_color), do: color
 
   def convert_for_terminal(color, :color_256) do

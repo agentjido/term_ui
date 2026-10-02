@@ -49,6 +49,8 @@ defmodule TermUI.Widget.LogViewer do
   def update(%Event.Key{key: :down}, state), do: scroll(state, 1)
   def update(%Event.Key{key: :page_up}, state), do: scroll(state, -state.page_size)
   def update(%Event.Key{key: :page_down}, state), do: scroll(state, state.page_size)
+  def update(%Event.Mouse{action: :scroll_up}, state), do: scroll(state, -3)
+  def update(%Event.Mouse{action: :scroll_down}, state), do: scroll(state, 3)
   def update(%Event.Key{key: :home}, state), do: {%{state | offset: 0, follow: false}, []}
 
   def update(%Event.Key{key: :end}, state),

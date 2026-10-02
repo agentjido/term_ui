@@ -5,7 +5,8 @@ defmodule TermUI.SyntaxHighlighter do
   An adapter implements `highlight/2` and returns ordered `{type, text}`
   tokens. The token text must reproduce the complete source. The renderer uses
   plain code styling when no adapter is set, the adapter fails, its output is
-  invalid, or the source is larger than the configured byte limit.
+  invalid, a token splits a source grapheme, or the source is larger than the
+  configured byte limit.
 
   This module has no lexer dependency and starts no process.
   """
@@ -73,7 +74,8 @@ defmodule TermUI.SyntaxHighlighter do
          true <- function_exported?(adapter, :highlight, 2),
          {:ok, tokens} when is_list(tokens) <- adapter.highlight(source, language),
          {:ok, spans} <- normalize_tokens(tokens),
-         true <- spans_text(spans) == source do
+         true <- spans_text(spans) == source,
+         true <- whole_graphemes?(spans, source) do
       spans
     else
       _not_highlighted -> plain(source)
@@ -85,6 +87,18 @@ defmodule TermUI.SyntaxHighlighter do
   end
 
   defp adapter_spans(_adapter, source, _language), do: plain(source)
+
+  defp whole_graphemes?(spans, source) do
+    boundaries =
+      source
+      |> String.graphemes()
+      |> Enum.scan(0, &(byte_size(&1) + &2))
+      |> then(&MapSet.new([0 | &1]))
+
+    spans
+    |> Enum.scan(0, fn {text, _style}, offset -> offset + byte_size(text) end)
+    |> Enum.all?(&MapSet.member?(boundaries, &1))
+  end
 
   defp normalize_tokens(tokens) do
     Enum.reduce_while(tokens, {:ok, []}, fn

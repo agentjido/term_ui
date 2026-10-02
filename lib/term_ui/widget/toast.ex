@@ -70,7 +70,7 @@ defmodule TermUI.Widget.Toast do
 
   def tick(state, elapsed) do
     elapsed = state.elapsed + max(elapsed, 0)
-    %{state | elapsed: elapsed, visible: elapsed < state.duration}
+    %{state | elapsed: elapsed, visible: state.visible and elapsed < state.duration}
   end
 
   defp normalize_duration(:infinity), do: :infinity

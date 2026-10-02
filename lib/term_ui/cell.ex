@@ -114,6 +114,9 @@ defmodule TermUI.Cell do
   @doc """
   Creates a new cell with the given character and optional styling.
 
+  A standalone zero-width grapheme becomes a space. Composed graphemes
+  keep their original text.
+
   ## Examples
 
       iex> Cell.new("A")
@@ -349,7 +352,7 @@ defmodule TermUI.Cell do
       |> filter_control_chars()
 
     case String.graphemes(sanitized) do
-      [grapheme | _rest] -> grapheme
+      [grapheme | _rest] -> if TermUI.DisplayWidth.width(grapheme) == 0, do: " ", else: grapheme
       [] -> " "
     end
   end

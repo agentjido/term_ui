@@ -83,7 +83,7 @@ defmodule TermUI.Widget.Table do
 
     validate_filter!(state.filter)
     ensure_unique_identities!(state)
-    refresh_display(state, nil)
+    refresh_display(state, :none)
   end
 
   @impl true
@@ -301,17 +301,17 @@ defmodule TermUI.Widget.Table do
   end
 
   defp cursor_for([], _state, _cursor_id), do: 0
-  defp cursor_for(rows, state, nil), do: min(state.cursor, length(rows) - 1)
+  defp cursor_for(rows, state, :none), do: min(state.cursor, length(rows) - 1)
 
-  defp cursor_for(rows, state, cursor_id) do
-    Enum.find_index(rows, &(row_identity(state, &1) == cursor_id)) ||
+  defp cursor_for(rows, state, {:ok, cursor_id}) do
+    Enum.find_index(rows, &(row_identity(state, &1) === cursor_id)) ||
       min(state.cursor, length(rows) - 1)
   end
 
   defp cursor_identity(state) do
-    case Enum.at(state.display_rows, state.cursor) do
-      nil -> nil
-      row -> row_identity(state, row)
+    case Enum.fetch(state.display_rows, state.cursor) do
+      :error -> :none
+      {:ok, row} -> {:ok, row_identity(state, row)}
     end
   end
 

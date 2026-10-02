@@ -1,5 +1,12 @@
 defmodule TermUI.Widget.ClusterDashboard do
-  @moduledoc "A pure cluster snapshot dashboard. It performs no RPC or node monitoring."
+  @moduledoc """
+  A pure cluster snapshot dashboard. It performs no RPC or node monitoring.
+
+  By default, the complete snapshot is the row identity. Repeated node values
+  with different snapshot data remain valid. Set `row_id: :node` to retain
+  selection across metric changes when each node occurs once. `:row_id` also
+  accepts a key or a function of arity one, with Table's unique-identity rule.
+  """
 
   @behaviour TermUI.Widget
 
@@ -26,7 +33,7 @@ defmodule TermUI.Widget.ClusterDashboard do
     %__MODULE__{
       nodes: nodes,
       tabs: Tabs.init(tabs: [{:nodes, "Nodes"}, {:help, "Help"}], selected: :nodes),
-      table: table(nodes)
+      table: table(nodes, Keyword.get(opts, :row_id))
     }
   end
 
@@ -122,7 +129,7 @@ defmodule TermUI.Widget.ClusterDashboard do
   def set_nodes(state, nodes),
     do: %{state | nodes: nodes, table: Table.set_rows(state.table, nodes)}
 
-  defp table(nodes),
+  defp table(nodes, row_id),
     do:
       Table.init(
         columns: [
@@ -132,6 +139,7 @@ defmodule TermUI.Widget.ClusterDashboard do
           Column.new(:memory, "Memory", align: :right),
           Column.new(:uptime, "Uptime", align: :right)
         ],
-        rows: nodes
+        rows: nodes,
+        row_id: row_id
       )
 end

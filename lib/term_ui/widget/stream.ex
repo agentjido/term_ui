@@ -78,6 +78,8 @@ defmodule TermUI.Widget.Stream do
   def update(%Event.Key{key: :down}, state), do: scroll(state, 1)
   def update(%Event.Key{key: :page_up}, state), do: scroll(state, -state.page_size)
   def update(%Event.Key{key: :page_down}, state), do: scroll(state, state.page_size)
+  def update(%Event.Mouse{action: :scroll_up}, state), do: scroll(state, -3)
+  def update(%Event.Mouse{action: :scroll_down}, state), do: scroll(state, 3)
 
   def update(%Event.Key{key: :end}, state),
     do: {%{state | offset: maximum_offset(state)}, []}

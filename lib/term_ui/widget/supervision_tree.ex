@@ -35,5 +35,5 @@ defmodule TermUI.Widget.SupervisionTree do
 
   @doc "Replaces the parent-supplied supervision snapshot."
   @spec set_nodes(t(), [TreeView.tree_node()]) :: t()
-  def set_nodes(state, nodes), do: %{state | tree: %{state.tree | nodes: nodes}}
+  def set_nodes(state, nodes), do: %{state | tree: TreeView.set_nodes(state.tree, nodes)}
 end

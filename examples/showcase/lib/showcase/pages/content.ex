@@ -59,6 +59,7 @@ defmodule Showcase.Pages.Content do
     state = %{
       state
       | markdown: MarkdownViewer.set_dimensions(state.markdown, inner),
+        diff: DiffViewer.set_dimensions(state.diff, inner),
         stream: Stream.set_dimensions(state.stream, inner)
     }
 

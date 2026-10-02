@@ -22,7 +22,10 @@ frame = TermUI.Widget.MarkdownViewer.view(viewer, {80, 24})
 For streaming content, `append/2` uses a bounded `TermUI.Markdown.Document`.
 Completed top-level blocks are parsed once. The final paragraph, list, or fenced
 code block remains pending because more source can still extend it. Rendering
-reparses only that unfinished tail.
+reparses only that unfinished tail for ordinary documents. When retained source
+contains a possible reference definition (`]:`), rendering parses the full
+retained source so that references before and after a cached block stay valid.
+Source bytes and the content limit stay unchanged.
 
 ```elixir
 viewer = TermUI.Widget.MarkdownViewer.init(content_limit: 2_000_000)
@@ -74,3 +77,12 @@ viewer =
 Or supply an existing unified diff with `:unified_diff`. Press `s` to switch
 between unified and side-by-side views. The viewer uses line-based Myers
 comparison and bounds input to 5,000 lines by default.
+
+An adapter must keep token boundaries between complete source graphemes.
+If a token splits a combining sequence, joined emoji, or flag, that code block
+uses plain styling. Its source bytes and row geometry stay the same.
+
+DiffViewer accepts `update(event, state, dimensions)` and `set_dimensions/2`.
+Use the same dimensions for update and view. Its scroll messages contain a
+bounded display-row offset, `:end`, or `{:end, distance}` from the last page.
+`update/2` remains available; an End distance resolves at the next view size.

@@ -58,11 +58,11 @@ defmodule TermUI.Backend.Manager do
   def resize(manager, size), do: GenServer.call(manager, {:resize, size})
 
   @doc "Closes the backend session and waits for cleanup."
-  @spec close(pid(), term()) :: :ok
+  @spec close(pid(), term()) :: :ok | {:error, term()}
   def close(manager, reason) do
-    GenServer.call(manager, {:close, reason}, 5_000)
+    GenServer.call(manager, {:close, reason}, :infinity)
   catch
-    :exit, _reason -> :ok
+    :exit, reason -> {:error, {:backend_manager_exit, reason}}
   end
 
   @impl true
@@ -90,7 +90,7 @@ defmodule TermUI.Backend.Manager do
        }}
     else
       {:opened_error, backend, backend_state, reason} ->
-        close_backend(backend, backend_state, reason)
+        _cleanup_result = close_backend(backend, backend_state, reason)
         {:stop, reason}
 
       {:error, reason} ->
@@ -155,8 +155,8 @@ defmodule TermUI.Backend.Manager do
   end
 
   def handle_call({:close, reason}, _from, state) do
-    close_backend(state.backend, state.backend_state, reason)
-    {:stop, :normal, :ok, %{state | closed?: true, active?: false}}
+    result = close_backend(state.backend, state.backend_state, reason)
+    {:stop, :normal, result, %{state | closed?: true, active?: false}}
   end
 
   @impl true
@@ -234,7 +234,7 @@ defmodule TermUI.Backend.Manager do
   @impl true
   @doc false
   def terminate(reason, %{closed?: false} = state) do
-    close_backend(state.backend, state.backend_state, reason)
+    _cleanup_result = close_backend(state.backend, state.backend_state, reason)
     :ok
   end
 
@@ -458,11 +458,16 @@ defmodule TermUI.Backend.Manager do
 
   defp close_backend(module, state, reason) do
     unregister_resume_handler(module)
-    module.shutdown(state, reason)
+
+    case module.shutdown(state, reason) do
+      :ok -> :ok
+      {:error, error} -> {:error, backend_error(module, :shutdown, error)}
+      other -> {:error, backend_error(module, :shutdown, {:invalid_result, other})}
+    end
   rescue
-    _exception -> :ok
+    exception -> {:error, backend_error(module, :shutdown, exception)}
   catch
-    _kind, _reason -> :ok
+    kind, error -> {:error, backend_error(module, :shutdown, {kind, error})}
   end
 
   defp backend_error(backend, stage, reason), do: {:backend, backend, stage, reason}

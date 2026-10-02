@@ -136,3 +136,7 @@ Interactive catalog widgets support local mouse input. This includes text
 inputs, buttons, lists, menus, pick lists, command palettes, dialogs, forms,
 tabs, tables, trees, scrollbars, and split panes. Scrollable content widgets
 also accept mouse wheel events through `update/2`.
+
+LogViewer wheel input uses its existing scroll path and resumes follow mode
+at the last page. Stream wheel input pauses live following and uses its
+existing item offset. Pass the current child size through `Widget.mouse/4`.
