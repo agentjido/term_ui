@@ -178,6 +178,8 @@ defmodule TermUI.DisplayWidth do
   # Combining characters (common ranges)
   # Combining Diacritical Marks
   defp char_width(c) when c >= 0x0300 and c <= 0x036F, do: 0
+  # Unicode 17 nonspacing marks: Thai MAI EK and Tamil VIRAMA
+  defp char_width(c) when c in [0x0E48, 0x0BCD], do: 0
   # Hebrew points and accents
   defp char_width(c) when c >= 0x0591 and c <= 0x05BD, do: 0
   defp char_width(c) when c in [0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7], do: 0

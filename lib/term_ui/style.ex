@@ -413,7 +413,7 @@ defmodule TermUI.Style do
         gray < 8 -> 16
         # white
         gray > 248 -> 231
-        true -> 232 + div((gray - 8) * 24, 240)
+        true -> min(232 + div((gray - 8) * 24, 240), 255)
       end
     else
       # Color cube (16-231)

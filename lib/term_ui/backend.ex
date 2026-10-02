@@ -39,5 +39,14 @@ defmodule TermUI.Backend do
   @doc "Completes local cleanup, or sends remote cleanup before returning; reports failure."
   @callback shutdown(state(), term()) :: :ok | {:error, term()}
 
-  @optional_callbacks clipboard: 2, invalidate: 1, resume: 1
+  @doc """
+  Releases backend state when application initialization fails before session setup.
+
+  A remote session can use this callback to avoid calling its parent while the
+  parent waits for runtime startup. Without this callback, the owner calls
+  `shutdown/2`. Local backends must still restore any settings changed by `init/1`.
+  """
+  @callback abort_startup(state(), term()) :: :ok | {:error, term()}
+
+  @optional_callbacks clipboard: 2, invalidate: 1, resume: 1, abort_startup: 2
 end

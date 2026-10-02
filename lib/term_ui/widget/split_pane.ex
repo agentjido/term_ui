@@ -375,7 +375,7 @@ defmodule TermUI.Widget.SplitPane do
 
     if state.legacy do
       [before, after_pane] = fields.ratios
-      %{state | ratio: before / (before + after_pane)}
+      %{state | ratio: pair_share(before, after_pane)}
     else
       state
     end
@@ -405,12 +405,14 @@ defmodule TermUI.Widget.SplitPane do
     else
       {:error, :invalid_state}
     end
+  rescue
+    ArithmeticError -> {:error, :invalid_state}
   end
 
   defp validate_saved_ratios(_ratios, _count, _mode), do: {:error, :invalid_state}
 
   defp validate_saved_ratio_mode([before, after_pane] = ratios, :legacy) do
-    share = before / (before + after_pane)
+    share = pair_share(before, after_pane)
     if share >= 0.1 and share <= 0.9, do: {:ok, ratios}, else: {:error, :invalid_state}
   end
 
@@ -485,8 +487,10 @@ defmodule TermUI.Widget.SplitPane do
     case Enum.at(Enum.chunk_every(visible, 2, 1, :discard), state.focused_separator) do
       [{_before, before_index}, {_after, after_index}] ->
         weights = effective_ratios(state)
-        pair = Enum.at(weights, before_index, 0.5) + Enum.at(weights, after_index, 0.5)
-        share = Enum.at(weights, before_index, 0.5) / pair
+
+        share =
+          pair_share(Enum.at(weights, before_index, 0.5), Enum.at(weights, after_index, 0.5))
+
         share = (share + delta) |> max(0.1) |> min(0.9)
         state = set_pair_share(state, before_index, after_index, share)
         {state, [{:resized, resize_message(state, state.focused_separator)}]}
@@ -499,17 +503,44 @@ defmodule TermUI.Widget.SplitPane do
   defp set_pair_share(state, before_index, after_index, share) do
     share = if state.legacy, do: share |> max(0.1) |> min(0.9), else: share
     ratios = effective_ratios(state)
-    pair = Enum.at(ratios, before_index, 0.5) + Enum.at(ratios, after_index, 0.5)
+    {ratios, before, after_pane} = resized_pair(ratios, before_index, after_index, share)
 
     ratios =
       ratios
-      |> List.replace_at(before_index, pair * share)
-      |> List.replace_at(after_index, pair * (1.0 - share))
+      |> List.replace_at(before_index, before)
+      |> List.replace_at(after_index, after_pane)
 
     if state.legacy,
       do: %{state | ratios: ratios, ratio: share},
       else: %{state | ratios: ratios}
   end
+
+  defp pair_share(before, after_pane) do
+    scale = max(before, after_pane)
+    before = before / scale
+    before / (before + after_pane / scale)
+  end
+
+  defp resized_pair(ratios, before_index, after_index, share) do
+    before = Enum.at(ratios, before_index, 0.5)
+    after_pane = Enum.at(ratios, after_index, 0.5)
+    {ratios, pair_weight(before, after_pane, share), pair_weight(before, after_pane, 1.0 - share)}
+  rescue
+    ArithmeticError ->
+      # Rescale only when a changed weight cannot fit in a float. Keep the
+      # smallest representable positive value positive after rounding.
+      ratios = Enum.map(ratios, &max(&1 * 0.5, 5.0e-324))
+      resized_pair(ratios, before_index, after_index, share)
+  end
+
+  defp pair_weight(before, after_pane, share) do
+    positive_weight((before + after_pane) * share)
+  rescue
+    ArithmeticError -> positive_weight(before * share + after_pane * share)
+  end
+
+  defp positive_weight(weight) when weight == 0.0, do: 5.0e-324
+  defp positive_weight(weight), do: weight
 
   defp resize_message(%{legacy: true} = state, _separator_index), do: state.ratio
 
@@ -616,25 +647,13 @@ defmodule TermUI.Widget.SplitPane do
         else: List.duplicate(0, count)
 
     remaining = max(available - Enum.sum(base), 0)
-    total = Enum.sum(weights)
-    raw = Enum.map(weights, &(&1 / total * remaining))
-    floors = Enum.map(raw, &floor/1)
-    extra = remaining - Enum.sum(floors)
 
-    order =
-      raw
-      |> Enum.with_index()
-      |> Enum.sort_by(fn {value, index} -> {-(value - floor(value)), index} end)
-      |> Enum.take(extra)
-      |> Enum.map(&elem(&1, 1))
-      |> MapSet.new()
+    sizes =
+      {0, 0, remaining, 0}
+      |> TermUI.Layout.row(Enum.map(weights, &TermUI.Layout.ratio/1))
+      |> Enum.map(fn {_x, _y, size, _height} -> size end)
 
-    base
-    |> Enum.zip(floors)
-    |> Enum.with_index()
-    |> Enum.map(fn {{base_size, floor_size}, index} ->
-      base_size + floor_size + if(MapSet.member?(order, index), do: 1, else: 0)
-    end)
+    Enum.zip_with(base, sizes, &(&1 + &2))
   end
 
   defp visible_count(state), do: Enum.count(state.panes, &(&1.id not in state.collapsed))

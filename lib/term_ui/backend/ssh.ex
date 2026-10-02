@@ -182,6 +182,10 @@ defmodule TermUI.Backend.SSH do
     :exit, reason -> {:error, {:session_exit, reason}}
   end
 
+  @impl true
+  @doc false
+  def abort_startup(%__MODULE__{}, _reason), do: :ok
+
   defp fetch_session(opts) do
     case Keyword.fetch(opts, :session) do
       {:ok, session} when is_pid(session) -> {:ok, session}

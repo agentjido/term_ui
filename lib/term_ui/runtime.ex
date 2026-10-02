@@ -38,7 +38,8 @@ defmodule TermUI.Runtime do
           async_tasks: map(),
           async_monitors: map(),
           async_links: MapSet.t(pid()),
-          frames_rendered: non_neg_integer()
+          frames_rendered: non_neg_integer(),
+          run_result: {pid(), reference()} | nil
         }
 
   @doc "Starts a linked runtime process."
@@ -61,21 +62,29 @@ defmodule TermUI.Runtime do
     }
   end
 
-  @doc "Runs an application until it exits."
+  @doc """
+  Runs an application until it exits and backend cleanup completes.
+
+  A cleanup failure returns `{:error, reason}` after an otherwise normal exit.
+  An earlier abnormal process exit keeps its original error result. Cleanup
+  does not change the exit reason of a runtime started with `start_link/1`.
+  """
   @spec run([option()]) :: :ok | {:error, term()}
   def run(opts) do
     {name, opts} = Keyword.pop(opts, :name)
+    token = make_ref()
 
-    case start_monitor(name, opts) do
+    case start_monitor(name, {:run, opts, {self(), token}}) do
       {:ok, {runtime, reference}} ->
         receive do
           {:DOWN, ^reference, :process, ^runtime, reason} when reason in [:normal, :shutdown] ->
-            :ok
+            completed_run_result(token)
 
           {:DOWN, ^reference, :process, ^runtime, {:shutdown, :normal}} ->
-            :ok
+            completed_run_result(token)
 
           {:DOWN, ^reference, :process, ^runtime, reason} ->
+            _cleanup_result = completed_run_result(token)
             {:error, reason}
         end
 
@@ -126,13 +135,16 @@ defmodule TermUI.Runtime do
   def capabilities(runtime), do: GenServer.call(runtime, :capabilities)
 
   @impl true
-  def init(opts) do
+  def init({:run, opts, target}), do: init_runtime(opts, target)
+  def init(opts), do: init_runtime(opts, nil)
+
+  defp init_runtime(opts, target) do
     Process.flag(:trap_exit, true)
     logger_token = if suppress_logger?(opts), do: LoggerControl.suspend(), else: nil
 
     case initialize(opts, logger_token) do
       {:ok, state, commands} ->
-        {:ok, state, {:continue, {:start, commands}}}
+        {:ok, Map.put(state, :run_result, target), {:continue, {:start, commands}}}
 
       {:error, reason} ->
         LoggerControl.resume(logger_token)
@@ -294,7 +306,23 @@ defmodule TermUI.Runtime do
       end
 
     app_terminate(state.app, stop_reason, state.app_state)
+    report_run_result(Map.get(state, :run_result), cleanup_result)
     :ok
+  end
+
+  defp report_run_result(nil, _result), do: :ok
+
+  defp report_run_result({caller, token}, result) do
+    send(caller, {:term_ui_run_result, token, result})
+    :ok
+  end
+
+  defp completed_run_result(token) do
+    receive do
+      {:term_ui_run_result, ^token, result} -> result
+    after
+      0 -> :ok
+    end
   end
 
   defp initialize(opts, logger_token) do
@@ -309,10 +337,11 @@ defmodule TermUI.Runtime do
 
       case build_state(app, backend_manager, backend_info, opts) do
         {:ok, state, commands} ->
+          :ok = BackendManager.complete_startup(backend_manager)
           {:ok, Map.put(state, :logger_token, logger_token), commands}
 
         {:error, reason} ->
-          _cleanup_result = BackendManager.close(backend_manager, reason)
+          _cleanup_result = BackendManager.abort_startup(backend_manager, reason)
           {:error, reason}
       end
     end

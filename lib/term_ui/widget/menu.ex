@@ -237,7 +237,8 @@ defmodule TermUI.Widget.Menu do
 
   @doc "Hides the menu and closes every submenu."
   @spec hide(t()) :: t()
-  def hide(state), do: %{state | visible: false, open_path: []}
+  def hide(%{open_path: []} = state), do: %{state | visible: false}
+  def hide(state), do: %{close_all(state) | visible: false}
 
   @doc "Returns the current action or submenu in the active menu level."
   @spec current(t()) :: item() | nil

@@ -32,6 +32,10 @@ defmodule TermUI.Backend.Manager do
   @spec info(pid()) :: info()
   def info(manager), do: GenServer.call(manager, :info)
 
+  @doc "Marks successful application initialization before the first view."
+  @spec complete_startup(pid()) :: :ok
+  def complete_startup(manager), do: GenServer.call(manager, :complete_startup)
+
   @doc "Starts input and size polling after the runtime is ready."
   @spec activate(pid()) :: :ok
   def activate(manager), do: GenServer.call(manager, :activate)
@@ -65,6 +69,14 @@ defmodule TermUI.Backend.Manager do
     :exit, reason -> {:error, {:backend_manager_exit, reason}}
   end
 
+  @doc "Releases backend state before application initialization has completed."
+  @spec abort_startup(pid(), term()) :: :ok | {:error, term()}
+  def abort_startup(manager, reason) do
+    GenServer.call(manager, {:abort_startup, reason}, :infinity)
+  catch
+    :exit, reason -> {:error, {:backend_manager_exit, reason}}
+  end
+
   @impl true
   @doc false
   def init({owner, spec, opts}) do
@@ -86,11 +98,12 @@ defmodule TermUI.Backend.Manager do
          capabilities: capabilities,
          size_poll_interval: resolve_size_poll_interval(backend, requested_size_poll_interval),
          active?: false,
+         startup_complete?: false,
          closed?: false
        }}
     else
       {:opened_error, backend, backend_state, reason} ->
-        _cleanup_result = close_backend(backend, backend_state, reason)
+        _cleanup_result = close_backend(backend, backend_state, reason, :abort_startup)
         {:stop, reason}
 
       {:error, reason} ->
@@ -103,6 +116,9 @@ defmodule TermUI.Backend.Manager do
   def handle_call(:info, _from, state) do
     {:reply, %{backend: state.backend, size: state.size, capabilities: state.capabilities}, state}
   end
+
+  def handle_call(:complete_startup, _from, state),
+    do: {:reply, :ok, %{state | startup_complete?: true}}
 
   def handle_call(:activate, _from, %{active?: false} = state) do
     send(self(), :poll_input)
@@ -156,6 +172,11 @@ defmodule TermUI.Backend.Manager do
 
   def handle_call({:close, reason}, _from, state) do
     result = close_backend(state.backend, state.backend_state, reason)
+    {:stop, :normal, result, %{state | closed?: true, active?: false}}
+  end
+
+  def handle_call({:abort_startup, reason}, _from, state) do
+    result = close_backend(state.backend, state.backend_state, reason, :abort_startup)
     {:stop, :normal, result, %{state | closed?: true, active?: false}}
   end
 
@@ -234,7 +255,8 @@ defmodule TermUI.Backend.Manager do
   @impl true
   @doc false
   def terminate(reason, %{closed?: false} = state) do
-    _cleanup_result = close_backend(state.backend, state.backend_state, reason)
+    callback = if state.startup_complete?, do: :shutdown, else: :abort_startup
+    _cleanup_result = close_backend(state.backend, state.backend_state, reason, callback)
     :ok
   end
 
@@ -456,10 +478,12 @@ defmodule TermUI.Backend.Manager do
   defp normalize_size_result(other, backend),
     do: {:error, backend_error(backend, :size, {:invalid_result, other})}
 
-  defp close_backend(module, state, reason) do
+  defp close_backend(module, state, reason, callback \\ :shutdown) do
     unregister_resume_handler(module)
 
-    case module.shutdown(state, reason) do
+    callback = if function_exported?(module, callback, 2), do: callback, else: :shutdown
+
+    case apply(module, callback, [state, reason]) do
       :ok -> :ok
       {:error, error} -> {:error, backend_error(module, :shutdown, error)}
       other -> {:error, backend_error(module, :shutdown, {:invalid_result, other})}

@@ -117,12 +117,14 @@ defmodule TermUI.Widget.MarkdownViewer do
   @spec append(t(), String.t()) :: t()
   def append(state, fragment) do
     document = Document.append(state.document, fragment)
+    elements = Markdown.code_blocks(document)
 
     %{
       state
       | content: document.content,
         document: document,
-        elements: Markdown.code_blocks(document),
+        elements: elements,
+        focused: min(state.focused, max(length(elements) - 1, 0)),
         scroll: :end
     }
   end

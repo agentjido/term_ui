@@ -107,3 +107,14 @@ before it calls the application terminate callback. Local cleanup must finish
 first. SSH cleanup must be sent before that callback; the remote acknowledgement
 can arrive afterward. Output failure or disconnect is reported as a cleanup
 error, not a successful terminal restore.
+
+Before application initialization completes, the backend owner uses the optional
+`abort_startup/2` callback, with `shutdown/2` as its fallback. SSH and Web have no
+terminal setup to undo at this stage. They release backend data without a call
+to the session that is waiting for runtime startup. After initialization, the
+normal shutdown order applies, including a failure in the first view.
+
+`TermUI.run/2` returns a completed cleanup error after an otherwise normal exit.
+An earlier abnormal exit keeps its original public error. Runtime sends this
+result to the waiting caller; its process exit reason and transient supervisor
+restart policy stay the same. Application terminate still runs after cleanup.

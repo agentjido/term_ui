@@ -54,14 +54,26 @@ defmodule TermUI.Frame do
       end
 
     cells_in_bounds? =
-      Enum.all?(frame.cells, fn {{row, column}, _cell} ->
-        row <= frame.height and column <= frame.width
+      Enum.all?(frame.cells, fn {{row, column}, cell} ->
+        row <= frame.height and column <= frame.width and
+          valid_footprint?(frame, row, column, cell)
       end)
 
     if cursor_in_bounds? and cells_in_bounds?,
       do: :ok,
-      else: {:error, "frame cursor and cells must be inside the frame dimensions"}
+      else: {:error, "frame cursor and complete cell footprints must fit the frame"}
   end
+
+  defp valid_footprint?(frame, row, column, %Cell{width: 2}) do
+    column < frame.width and
+      match?(%Cell{wide_placeholder: true}, Map.get(frame.cells, {row, column + 1}))
+  end
+
+  defp valid_footprint?(frame, row, column, %Cell{wide_placeholder: true}) do
+    match?(%Cell{width: 2}, Map.get(frame.cells, {row, column - 1}))
+  end
+
+  defp valid_footprint?(_frame, _row, _column, _cell), do: true
 
   @doc "Creates an empty frame."
   @spec new(pos_integer(), pos_integer(), keyword()) :: t()

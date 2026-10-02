@@ -131,4 +131,8 @@ defmodule TermUI.WebBackend do
   catch
     :exit, _reason -> :ok
   end
+
+  @impl true
+  @doc false
+  def abort_startup(%__MODULE__{}, _reason), do: :ok
 end

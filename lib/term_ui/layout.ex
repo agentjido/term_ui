@@ -264,7 +264,7 @@ defmodule TermUI.Layout do
     minimums = Enum.map(specs, & &1.min)
 
     if Enum.sum(minimums) > available do
-      largest_remainder(minimums, available, Enum.sum(minimums))
+      largest_remainder(minimums, available)
     else
       {sizes, remaining} = allocate_requested_sizes(specs, minimums, available)
       {sizes, _remaining} = allocate_bounded_flexible(specs, sizes, remaining)
@@ -300,7 +300,7 @@ defmodule TermUI.Layout do
       {sizes, remaining}
     else
       weights = Enum.map(active, fn {spec, _index} -> spec.weight end)
-      additions = largest_remainder(weights, remaining, Enum.sum(weights))
+      additions = largest_remainder(weights, remaining)
 
       {sizes, consumed} =
         active
@@ -320,21 +320,24 @@ defmodule TermUI.Layout do
   defp weighted_sizes(tracks, available) do
     weights = tracks |> Enum.filter(&flexible?/1) |> Enum.map(&weight/1)
 
-    case Enum.sum(weights) do
-      total when total > 0 -> largest_remainder(weights, available, total)
-      _total -> []
-    end
+    if weights == [], do: [], else: largest_remainder(weights, available)
   end
 
-  defp largest_remainder(weights, available, total) do
-    shares = Enum.map(weights, &(available * &1 / total))
-    base = Enum.map(shares, &floor/1)
+  defp largest_remainder(weights, available) do
+    # Float ratios have power-of-two denominators. Integer shares avoid both
+    # overflow and loss of very small positive weights during normalization.
+    ratios = Enum.map(weights, &weight_ratio/1)
+    denominator = ratios |> Enum.map(&elem(&1, 1)) |> Enum.max()
+    weights = Enum.map(ratios, fn {n, d} -> n * div(denominator, d) end)
+    total = Enum.sum(weights)
+    shares = Enum.map(weights, &(&1 * available))
+    base = Enum.map(shares, &div(&1, total))
     remainder = available - Enum.sum(base)
 
     winners =
       shares
       |> Enum.with_index()
-      |> Enum.sort_by(fn {share, index} -> {-(share - floor(share)), index} end)
+      |> Enum.sort_by(fn {share, index} -> {-rem(share, total), index} end)
       |> Enum.take(remainder)
       |> MapSet.new(fn {_share, index} -> index end)
 
@@ -343,13 +346,16 @@ defmodule TermUI.Layout do
     |> Enum.map(fn {size, index} -> size + if(MapSet.member?(winners, index), do: 1, else: 0) end)
   end
 
+  defp weight_ratio(weight) when is_integer(weight), do: {weight, 1}
+  defp weight_ratio(weight), do: Float.ratio(weight)
+
   defp fixed_size(track) when is_integer(track) and track >= 0, do: track
   defp fixed_size(_track), do: 0
   defp flexible?(:fill), do: true
   defp flexible?({:weight, weight}) when is_number(weight) and weight > 0, do: true
   defp flexible?(_track), do: false
   defp weight(:fill), do: 1.0
-  defp weight({:weight, weight}), do: weight * 1.0
+  defp weight({:weight, weight}), do: weight
   defp ceil_div(value, divisor), do: div(value + divisor - 1, divisor)
 
   defp constrained_grid(rect, item_count, opts, column_gap, row_gap) do
@@ -434,7 +440,7 @@ defmodule TermUI.Layout do
     do: %{kind: :flexible, value: 0, weight: 1.0, min: 0, max: :infinity}
 
   defp normalize_base_track!({:weight, weight}) when is_number(weight) and weight > 0,
-    do: %{kind: :flexible, value: 0, weight: weight * 1.0, min: 0, max: :infinity}
+    do: %{kind: :flexible, value: 0, weight: weight, min: 0, max: :infinity}
 
   defp normalize_base_track!({:percentage, value})
        when is_number(value) and value >= 0 and value <= 100,
