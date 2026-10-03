@@ -33,8 +33,8 @@ solution under `solutions`; link it from the plan rather than copy its evidence.
 - [Migration checks](releases/v2-migration-checks.md)
 - [GitHub cleanup](releases/github-cleanup-2026-09-30.md)
 
-These records describe the source transition before RC1. The current version
-is `2.0.0-rc.1`; no final 2.0 release has been published by this work. Older
+These records describe the source transition before RC1. The source version
+is `2.0.0-rc.2`; no final 2.0 release has been published by this work. Older
 feature plans and research remain in Git history at
 `1002f3fc85dc7ed103cf55de243877e4b19c3bac`. A local backup was saved before
 folder changes. Keep backups outside the package.

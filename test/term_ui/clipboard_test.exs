@@ -97,7 +97,7 @@ defmodule TermUI.ClipboardTest do
 
     assert_receive {:backend, :clipboard, %Clipboard.Operation{content: "runtime copy"}}
     assert_receive {:clipboard_done, :ok}
-    assert_receive {:DOWN, ^reference, :process, ^runtime, :normal}
+    assert_receive {:DOWN, ^reference, :process, ^runtime, :normal}, 1_000
   end
 
   test "unsupported custom backends return data instead of crashing the runtime contract" do
