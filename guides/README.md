@@ -1,6 +1,6 @@
 # TermUI guides
 
-This source tree contains `2.0.0-rc.1`, the first v2 release candidate. It is
+This source tree contains `2.0.0-rc.2`, the second v2 release candidate. It is
 not the final 2.0 release. Read the guides by task rather than by module name.
 
 | Task | Read |

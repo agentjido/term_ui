@@ -17,7 +17,8 @@ Elixir 1.18.4, 1.19, and 1.20 on OTP 28, and Elixir 1.20 on OTP 29.
 
 TermUI `2.0.0-rc.1`, the first release candidate, is available on
 [Hex](https://hex.pm/packages/term_ui/2.0.0-rc.1). This is not the final 2.0
-release. Add the Hex dependency to `mix.exs`:
+release. The source tree prepares `2.0.0-rc.2` for the next candidate.
+Add the published Hex dependency to `mix.exs`:
 
 ```elixir
 def deps do

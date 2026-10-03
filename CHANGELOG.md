@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc.2] - 2026-10-02
+
+This is the second v2 release candidate.
+
+### Fixed
+
+- Runtime startup, failure handling, and shutdown release backend resources
+  and preserve structured application errors.
+- Terminal input buffering, redraw, color output, SSH cleanup, and backend
+  lifecycle handling preserve the runtime ownership boundaries.
+- Unicode cell widths, identity-based selection, layout constraints, and
+  complete frame rendering remain consistent across updates.
+- Input, Markdown, diff, viewport, split pane, menu, and other widgets retain
+  parent-owned state and return pure values.
+- Async stream updates and system-data snapshots preserve stable process
+  identities in the runnable examples.
+- The clipboard runtime test allows one second for shutdown on CI hosts.
+
 ## [2.0.0-rc.1] - 2026-09-30
 
 This is the first v2 release candidate. It is not the final 2.0 release.
@@ -205,7 +223,9 @@ rendering, constraint-based layouts, and the complete widget set.
 - Developer guides (architecture, runtime, rendering, events, buffers, terminal, creating widgets)
 - Widget examples with READMEs
 
-[Unreleased]: https://github.com/agentjido/term_ui/compare/main...HEAD
+[Unreleased]: https://github.com/agentjido/term_ui/compare/v2.0.0-rc.2...HEAD
+[2.0.0-rc.2]: https://github.com/agentjido/term_ui/compare/v2.0.0-rc.1...v2.0.0-rc.2
+[2.0.0-rc.1]: https://github.com/agentjido/term_ui/releases/tag/v2.0.0-rc.1
 [2.0.0]: https://github.com/agentjido/term_ui/compare/v1.0.0...main
 [1.0.0]: https://github.com/agentjido/term_ui/releases/tag/v1.0.0
 [0.2.0]: https://github.com/agentjido/term_ui/compare/v0.1.0...v0.2.0

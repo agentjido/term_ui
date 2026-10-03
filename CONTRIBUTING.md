@@ -53,7 +53,7 @@ contributor; the package and CI declare the supported versions. Run the existing
 checks for an affected example from its own directory. Browser checks need
 Node.js and Chromium; Ghostty checks need its supported native SDK.
 
-The current version is `2.0.0-rc.1`, the first release candidate. It is not the
+The source version is `2.0.0-rc.2`, the second release candidate. It is not the
 final 2.0 release. See [testing](guides/testing.md) for test groups and their
 limits, and [the documentation plan](https://github.com/agentjido/term_ui/blob/main/docs/plans/2026-09-30-001-refactor-rc1-documentation-plan.md)
 for the next guide work. Put plans in `docs/plans` and verified fixes in

@@ -6,9 +6,9 @@ Publication is a manual maintainer action. Version changes go through a pull
 request to `main`; the publisher uses an existing annotated release tag.
 V1 publication uses the separate `maint/1.x` line.
 
-The current version is `2.0.0-rc.1`. This is the first release candidate, not
-the final 2.0 release. The commands below describe later maintainer actions;
-the RC1 cleanup does not create a tag or publish a package.
+The source version is `2.0.0-rc.2`, the second release candidate. Hex currently
+provides `2.0.0-rc.1`. Merge the RC2 release pull request and check all required
+CI results before creating the tag or starting publication.
 
 ## Local Hex login
 
@@ -64,14 +64,14 @@ organization package. Publication remains in the public `hexpm` repository.
 Review the version in `mix.exs`, the changelog, package contents, and all required
 CI results. Make version and changelog changes through a release pull request.
 After that pull request merges, use its tested `main` source to create the
-annotated tag. For example, when the reviewed version is `2.0.0-rc.1`:
+annotated tag. For example, when the reviewed version is `2.0.0-rc.2`:
 
 ```sh
 git fetch agentjido main --tags
 git switch main
 git merge --ff-only agentjido/main
-git tag -a v2.0.0-rc.1 -m "Release v2.0.0-rc.1"
-git push agentjido refs/tags/v2.0.0-rc.1
+git tag -a v2.0.0-rc.2 -m "Release v2.0.0-rc.2"
+git push agentjido refs/tags/v2.0.0-rc.2
 ```
 
 Use a new tag for a new version. Tag push does not publish the package.
@@ -84,7 +84,7 @@ The existing tag is required for both runs. First run full validation:
 
 ```sh
 gh workflow run release.yml --repo agentjido/term_ui --ref main \
-  -f tag_name=v2.0.0-rc.1 -F dry_run=true
+  -f tag_name=v2.0.0-rc.2 -F dry_run=true
 ```
 
 Read the run result and package output in Actions. This mode does not upload
@@ -93,7 +93,7 @@ documentation package, run the Hex dry run:
 
 ```sh
 gh workflow run release.yml --repo agentjido/term_ui --ref main \
-  -f tag_name=v2.0.0-rc.1 -F dry_run=false -F hex_dry_run=true
+  -f tag_name=v2.0.0-rc.2 -F dry_run=false -F hex_dry_run=true
 ```
 
 This runs `mix hex.publish --dry-run --yes` and does not upload or create a
@@ -101,7 +101,7 @@ GitHub release. When the results are accepted, start the publication run:
 
 ```sh
 gh workflow run release.yml --repo agentjido/term_ui --ref main \
-  -f tag_name=v2.0.0-rc.1 -F dry_run=false -F hex_dry_run=false
+  -f tag_name=v2.0.0-rc.2 -F dry_run=false -F hex_dry_run=false
 ```
 
 The caller selects OTP 29 / Elixir 1.20. Its preflight runs source-NIF quality,
