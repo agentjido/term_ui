@@ -136,7 +136,7 @@ defmodule TermUI.MixProject do
       {:elixir_make, "~> 0.9", runtime: false},
 
       # Documentation
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40.4", only: :dev, runtime: false},
       {:doctor, "~> 0.23", only: :dev, runtime: false},
 
       # Code quality

@@ -37,7 +37,7 @@ jobs:
         TERM_UI_TTY_NIF=source mix quality &&
         MIX_ENV=test mix coveralls --warnings-as-errors &&
         MIX_ENV=test mix spex &&
-        mix docs --warnings-as-errors -f html &&
+        mix docs --warnings-as-errors -f html -f markdown &&
         mix deps.unlock --check-unused &&
         mix hex.audit &&
         mix hex.build --output /tmp/term-ui-release.tar

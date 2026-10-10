@@ -23,7 +23,7 @@ jobs:
     with:
       test_matrix: '[{"otp":"28","elixir":"1.18.4"},{"otp":"28","elixir":"1.19"},{"otp":"28","elixir":"1.20"},{"otp":"29","elixir":"1.20"}]'
       format_command: mix do format --check-formatted, xref graph --format cycles --fail-above 0
-      docs_command: mix docs --warnings-as-errors -f html && mix doctor --raise
+      docs_command: mix docs --warnings-as-errors -f html -f markdown && mix doctor --raise
       test_command: mix coveralls --warnings-as-errors
       changelog_guard_mode: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.event.pull_request.title, 'chore(release):')) && 'no_unreleased' || 'no_changes' }}
 
