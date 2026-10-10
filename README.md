@@ -234,6 +234,10 @@ pure BEAM TTY backend when a source build is not available.
 - [Counter example](https://github.com/agentjido/term_ui/tree/main/examples/iex_counter)
 - [All examples](https://github.com/agentjido/term_ui/blob/main/examples/README.md)
 
+## Local Documentation
+
+Run `mix docs` to generate HTML and Markdown documentation in `doc/`, including Markdown pages and `llms.txt`.
+
 ## License
 
 TermUI uses the MIT License. The repository includes the license text.
