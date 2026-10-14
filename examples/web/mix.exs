@@ -8,7 +8,9 @@ defmodule TermUIWebExample.MixProject do
       elixir: ">= 1.18.4 and < 2.0.0",
       deps: [
         {:term_ui, path: "../.."},
-        {:bandit, "~> 1.12.5"},
+        # Replace this pin when Hex includes GHSA-69m6-wcv4-rwcf.
+        {:bandit,
+         github: "mtrudel/bandit", ref: "d88b21953c65061f21136ea76a89a4f95a2ac7a1", override: true},
         {:websock_adapter, "~> 0.6.0"},
         {:jason, "~> 1.4.4"}
       ]
