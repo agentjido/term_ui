@@ -130,7 +130,7 @@ defmodule TermUI.MixProject do
       {:mdex, "~> 0.13.5"},
 
       # Public boundary data schemas and struct definitions
-      {:zoi, "~> 0.18.7"},
+      {:zoi, "~> 0.19.0"},
 
       # Native terminal control for OTP 28 and OTP 29
       {:elixir_make, "~> 0.9", runtime: false},
