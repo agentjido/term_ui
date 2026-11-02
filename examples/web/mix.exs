@@ -8,7 +8,7 @@ defmodule TermUIWebExample.MixProject do
       elixir: ">= 1.18.4 and < 2.0.0",
       deps: [
         {:term_ui, path: "../.."},
-        {:bandit, "~> 1.13.1"},
+        {:bandit, "~> 1.14.1"},
         {:websock_adapter, "~> 0.6.0"},
         {:jason, "~> 1.4.4"}
       ]
